@@ -37,7 +37,7 @@ sudosend devices
 sudosend id --name Seif-Arch
 ```
 
-Run from source with `(cd packages/wraith_core && dart run bin/sudosend.dart) …`, or build a native binary with
+Run from source with `cd packages/wraith_core && dart run bin/sudosend.dart …`, or build a native binary with
 `./tool/build_cli.sh sudosend`.
 
 ## Setup
