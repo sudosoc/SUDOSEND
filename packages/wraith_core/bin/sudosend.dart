@@ -14,7 +14,7 @@ import 'package:wraith_core/transfer.dart';
 import 'package:wraith_core/util.dart';
 import 'package:wraith_core/wraith.dart';
 
-const _version = '0.2.0';
+const _version = '0.2.1';
 
 const _usage = '''
 SUDOSEND $_version — secure local file sharing (Wraith Protocol)
@@ -110,6 +110,9 @@ Future<int> _run(_Args args) async {
     stdout.writeln('sudosend $_version');
     return 0;
   }
+  if (args.positional.isEmpty && args.flags.isEmpty && args.options.isEmpty && await _launchApp()) {
+    return 0;
+  }
   if (args.positional.isEmpty || args.flags.contains('help')) {
     stdout.write(_usage);
     return args.positional.isEmpty && !args.flags.contains('help') ? 2 : 0;
@@ -139,6 +142,24 @@ Future<int> _run(_Args args) async {
       stdout.write(_usage);
       return 2;
   }
+}
+
+/// `sudosend` with no arguments opens the desktop app when it is installed
+/// next to the CLI (Windows installer puts the CLI in <app>\\cli\\).
+Future<bool> _launchApp() async {
+  final here = p.dirname(Platform.resolvedExecutable);
+  final candidates = Platform.isWindows
+      ? [p.join(here, '..', 'sudosend.exe')]
+      : [p.join(here, 'sudosend'), '/opt/sudosend/sudosend'];
+  for (final c in candidates) {
+    final f = File(p.normalize(c));
+    if (f.path == Platform.resolvedExecutable) continue;
+    if (await f.exists()) {
+      await Process.start(f.path, const [], mode: ProcessStartMode.detached);
+      return true;
+    }
+  }
+  return false;
 }
 
 // ─────────────────────────── devices ───────────────────────────

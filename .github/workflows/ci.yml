@@ -78,7 +78,7 @@ jobs:
           path: sudosend-android.apk
 
   linux:
-    name: Linux app + CLI
+    name: Linux x64 app + CLI + .deb
     needs: check
     runs-on: ubuntu-latest
     steps:
@@ -93,16 +93,54 @@ jobs:
           cache: true
       - run: ./tool/ci_run.sh ./tool/bootstrap.sh
       - run: ./tool/ci_run.sh flutter build linux --release
-      - run: |
-          mv build/linux/x64/release/bundle build/linux/x64/release/sudosend
-          tar -czf sudosend-linux-x64.tar.gz -C build/linux/x64/release sudosend
-          ./tool/build_cli.sh sudosend-cli-linux-x64
+      - run: ./tool/ci_run.sh ./tool/build_cli.sh sudosend-cli-linux-x64
+      - run: ./tool/package_linux.sh build/linux/x64/release/bundle sudosend-cli-linux-x64 x64
+      - name: Smoke-test the installer
+        run: |
+          mkdir -p /tmp/t && tar -xzf dist/sudosend-linux-x64.tar.gz -C /tmp/t
+          /tmp/t/sudosend/install.sh --yes
+          ~/.local/bin/sudosend id
+          ~/.local/bin/sudosend --uninstall
+          sudo apt-get install -y ./dist/sudosend_*_amd64.deb
+          sudosend id
+      - run: cp sudosend-cli-linux-x64 dist/
       - uses: actions/upload-artifact@v4
         with:
-          name: sudosend-linux
-          path: |
-            sudosend-linux-x64.tar.gz
-            sudosend-cli-linux-x64
+          name: sudosend-linux-x64
+          path: dist/*
+
+  linux-arm64:
+    name: Linux ARM64 app + CLI + .deb (Raspberry Pi)
+    needs: check
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Linux toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev curl git unzip xz-utils
+      - name: Install Flutter (ARM64)
+        run: |
+          git clone --depth 1 -b stable https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - run: flutter --version && flutter config --no-analytics --enable-linux-desktop
+      - run: ./tool/ci_run.sh ./tool/bootstrap.sh
+      - run: ./tool/ci_run.sh flutter build linux --release
+      - run: ./tool/ci_run.sh ./tool/build_cli.sh sudosend-cli-linux-arm64
+      - run: ./tool/package_linux.sh build/linux/arm64/release/bundle sudosend-cli-linux-arm64 arm64
+      - name: Smoke-test the installer
+        run: |
+          mkdir -p /tmp/t && tar -xzf dist/sudosend-linux-arm64.tar.gz -C /tmp/t
+          /tmp/t/sudosend/install.sh --yes
+          ~/.local/bin/sudosend id
+          ~/.local/bin/sudosend --uninstall
+          sudo apt-get install -y ./dist/sudosend_*_arm64.deb
+          sudosend id
+      - run: cp sudosend-cli-linux-arm64 dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sudosend-linux-arm64
+          path: dist/*
 
   windows:
     name: Windows app + CLI
@@ -120,20 +158,31 @@ jobs:
       - run: ./tool/ci_run.sh ./tool/bootstrap.sh
       - run: ./tool/ci_run.sh flutter build windows --release
       - run: ./tool/ci_run.sh ./tool/build_cli.sh sudosend-cli-windows-x64.exe
-      - shell: pwsh
-        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath sudosend-windows-x64.zip
+      - name: Portable zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item sudosend-cli-windows-x64.exe dist/
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath dist/sudosend-windows-x64-portable.zip
+      - name: Installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          $ver = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
+          & $iscc /Q "/DAppVersion=$ver" "/DSourceDir=$pwd\build\windows\x64\runner\Release" "/DCliExe=$pwd\sudosend-cli-windows-x64.exe" "/DOutputDir=$pwd\dist" "/DIconFile=$pwd\windows\runner\resources\app_icon.ico" packaging\windows\sudosend.iss
+          if ($LASTEXITCODE -ne 0) { Write-Output "::error title=ISCC::installer build failed"; exit 1 }
+          Get-ChildItem dist
       - uses: actions/upload-artifact@v4
         with:
           name: sudosend-windows
-          path: |
-            sudosend-windows-x64.zip
-            sudosend-cli-windows-x64.exe
+          path: dist/*
 
   release:
     name: GitHub Release
     # Tag pushes, or any push to main whose pubspec version has no release yet.
     if: github.event_name == 'push'
-    needs: [android, linux, windows]
+    needs: [android, linux, linux-arm64, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -168,10 +217,17 @@ jobs:
           files: dist/*
           generate_release_notes: true
           body: |
-            **Downloads**
-            - `sudosend-android.apk` — Android 5.0+ (debug-signed)
-            - `sudosend-windows-x64.zip` — unzip and run `sudosend.exe`
-            - `sudosend-linux-x64.tar.gz` — extract and run `sudosend/sudosend`
-            - `sudosend-cli-linux-x64`, `sudosend-cli-windows-x64.exe` — standalone CLI
+            ## Which file do I need?
 
-            Protocol: [PROTOCOL.md](https://github.com/${{ github.repository }}/blob/main/PROTOCOL.md)
+            | System | File |
+            |---|---|
+            | Android | `sudosend-android.apk` |
+            | Windows 10/11 | `sudosend-windows-x64-setup.exe` (installer) or `…-portable.zip` |
+            | Kali / Debian / Ubuntu / Raspberry Pi OS — PC (x86_64) | `sudosend_*_amd64.deb` |
+            | Kali / Debian / Ubuntu / Raspberry Pi OS — Raspberry Pi / ARM64 | `sudosend_*_arm64.deb` |
+            | Any other Linux | `sudosend-linux-x64.tar.gz` or `sudosend-linux-arm64.tar.gz` → `./install.sh` |
+            | CLI only | `sudosend-cli-*` |
+
+            Not sure about your CPU on Linux? Run `uname -m`: `x86_64` → x64/amd64, `aarch64` → arm64.
+
+            Full install guide: [README](https://github.com/${{ github.repository }}#install)
