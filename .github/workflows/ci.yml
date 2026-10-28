@@ -66,6 +66,10 @@ jobs:
           channel: stable
           cache: true
       - run: ./tool/ci_run.sh ./tool/bootstrap.sh
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY/CodeQL" || true
+      - name: Pre-install NDK
+        run: ./tool/install_ndk.sh
       - run: ./tool/ci_run.sh flutter build apk --release
       - run: cp build/app/outputs/flutter-apk/app-release.apk sudosend-android.apk
       - uses: actions/upload-artifact@v4
