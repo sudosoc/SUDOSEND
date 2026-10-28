@@ -131,15 +131,47 @@ jobs:
 
   release:
     name: GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Tag pushes, or any push to main whose pubspec version has no release yet.
+    if: github.event_name == 'push'
     needs: [android, linux, windows]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
+      - name: Decide release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF#refs/tags/}"
+          else
+            tag="v$(grep -E '^version:' pubspec.yaml | sed -E 's/version: *([0-9.]+).*/\1/')"
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "release $tag already exists — skipping"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
+        if: steps.tag.outputs.publish == 'true'
         with:
           path: dist
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
+        if: steps.tag.outputs.publish == 'true'
         with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: SUDOSEND ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           files: dist/*
           generate_release_notes: true
+          body: |
+            **Downloads**
+            - `sudosend-android.apk` — Android 5.0+ (debug-signed)
+            - `sudosend-windows-x64.zip` — unzip and run `sudosend.exe`
+            - `sudosend-linux-x64.tar.gz` — extract and run `sudosend/sudosend`
+            - `sudosend-cli-linux-x64`, `sudosend-cli-windows-x64.exe` — standalone CLI
+
+            Protocol: [PROTOCOL.md](https://github.com/${{ github.repository }}/blob/main/PROTOCOL.md)
