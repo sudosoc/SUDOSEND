@@ -10,13 +10,15 @@ import 'models.dart';
 import 'util.dart';
 import 'wraith.dart';
 
+const int kMaxTextLength = 64 * 1024;
+
 class IncomingDecision {
   const IncomingDecision(this.accept, {this.trust = false});
   final bool accept;
   final bool trust;
 }
 
-/// A pending "X wants to send you N files" request shown to the user.
+/// A pending "X wants to send you N files / a text" request shown to the user.
 class IncomingRequest {
   IncomingRequest({
     required this.peerName,
@@ -25,6 +27,7 @@ class IncomingRequest {
     required this.sas,
     required this.trusted,
     required this.files,
+    this.text,
   }) : totalBytes = files.fold<int>(0, (a, f) => a + f.size);
 
   final String peerName;
@@ -33,6 +36,7 @@ class IncomingRequest {
   final String sas;
   final bool trusted;
   final List<FileEntry> files;
+  final String? text;
   final int totalBytes;
 
   final Completer<IncomingDecision> _completer = Completer<IncomingDecision>();
@@ -42,6 +46,14 @@ class IncomingRequest {
   void respond(bool accept, {bool trust = false}) {
     if (!_completer.isCompleted) _completer.complete(IncomingDecision(accept, trust: trust));
   }
+}
+
+class _Target {
+  _Target(this.dir, this.baseName, this.part, this.offset);
+  final Directory dir;
+  final String baseName;
+  final File part;
+  final int offset;
 }
 
 class TransferEngine {
@@ -94,12 +106,18 @@ class TransferEngine {
 
   // ─────────────────────────── Sending ───────────────────────────
 
-  Future<void> send(Peer peer, List<FileEntry> files) async {
+  /// Sends [files] (or a [text] message when [files] is empty) to [peer].
+  /// Completes when the transfer has finished, successfully or not.
+  Future<TransferJob> send(Peer peer, List<FileEntry> files, {String? text}) async {
+    if (text != null && text.length > kMaxTextLength) {
+      throw const WraithException('Text is too long (64 KB max)');
+    }
     final job = TransferJob(
       direction: TransferDirection.outgoing,
       peerName: peer.name,
       peerPlatform: peer.platform,
       files: files,
+      text: text,
       status: TransferStatus.connecting,
     );
     onJob(job);
@@ -130,26 +148,50 @@ class TransferEngine {
 
       await channel.sendJson(Frame.offer, {
         'files': [for (final f in files) {'name': f.name, 'size': f.size}],
+        if (text != null) 'text': text,
       });
 
       final reply = await channel.receive(timeout: _approvalTimeout + const Duration(seconds: 10));
       if (reply.type == Frame.decline) {
         job.finish(TransferStatus.declined);
-        return;
+        return job;
       }
       if (reply.type != Frame.accept) {
         throw const WraithException('Protocol violation (expected accept/decline)');
       }
+      final acceptBody = reply.body.isEmpty ? const <String, dynamic>{} : reply.json();
+      final resume = acceptBody['resume'];
 
       job.update(() => job.status = TransferStatus.transferring);
       final clock = Stopwatch()..start();
 
       for (var i = 0; i < files.length; i++) {
         final f = files[i];
-        await channel.sendJson(Frame.fileStart, {'i': i, 'name': f.name, 'size': f.size});
+        var offset = 0;
+        if (resume is Map) {
+          final o = resume['$i'];
+          if (o is int && o > 0 && o <= f.size) offset = o;
+        }
+
         final hasher = Sha256Stream();
         raf = await File(f.path!).open();
-        var remaining = f.size;
+
+        // Resume: the receiver already holds [offset] bytes. Hash them locally
+        // so the final SHA-256 still covers the whole file, but don't send them.
+        var skipped = 0;
+        while (skipped < offset) {
+          final chunk = await raf.read(min(kChunkSize, offset - skipped));
+          if (chunk.isEmpty) throw WraithException('"${f.name}" changed while sending');
+          hasher.add(chunk);
+          skipped += chunk.length;
+        }
+        if (offset > 0) {
+          job.resumedBytes += offset;
+          job.addProgress(offset, clock);
+        }
+
+        await channel.sendJson(Frame.fileStart, {'i': i, 'name': f.name, 'size': f.size, 'offset': offset});
+        var remaining = f.size - offset;
         while (remaining > 0) {
           if (job.cancelRequested) {
             await channel.send(Frame.cancel);
@@ -185,6 +227,7 @@ class TransferEngine {
         socket?.destroy();
       }
     }
+    return job;
   }
 
   // ─────────────────────────── Receiving ───────────────────────────
@@ -194,6 +237,7 @@ class TransferEngine {
     TransferJob? job;
     RandomAccessFile? raf;
     File? partFile;
+    var keepPartial = false;
     try {
       socket.setOption(SocketOption.tcpNoDelay, true);
       final reader = FrameReader(socket);
@@ -202,16 +246,24 @@ class TransferEngine {
 
       final offer = (await channel.expect(Frame.offer, timeout: _idleTimeout)).json();
       final rawFiles = offer['files'];
-      if (rawFiles is! List || rawFiles.isEmpty || rawFiles.length > 10000) {
-        throw const WraithException('Invalid offer');
+      final rawText = offer['text'];
+      if (rawFiles is! List || rawFiles.length > 100000) throw const WraithException('Invalid offer');
+      if (rawText != null && (rawText is! String || rawText.length > kMaxTextLength)) {
+        throw const WraithException('Invalid text offer');
       }
+      final text = rawText as String?;
+      if (rawFiles.isEmpty && text == null) throw const WraithException('Empty offer');
+
       final files = <FileEntry>[];
+      final segments = <List<String>>[];
       for (final f in rawFiles) {
         if (f is! Map) throw const WraithException('Invalid offer');
         final name = f['name'];
         final size = f['size'];
         if (name is! String || size is! int || size < 0) throw const WraithException('Invalid offer');
-        files.add(FileEntry(name: sanitizeFileName(name), size: size));
+        final segs = sanitizeRelativePath(name);
+        segments.add(segs);
+        files.add(FileEntry(name: segs.join('/'), size: size));
       }
 
       final trusted = trust.isTrusted(hs.peerFingerprint);
@@ -222,6 +274,7 @@ class TransferEngine {
         sas: hs.sas,
         trusted: trusted,
         files: files,
+        text: text,
       );
       onIncoming(request);
       final decision = await request.decision.timeout(
@@ -237,11 +290,37 @@ class TransferEngine {
       }
       if (decision.trust && !trusted) await trust.add(hs.peerFingerprint, hs.peerName);
 
+      // Work out where every file goes and whether a partial copy from an
+      // earlier, interrupted attempt by the same device can be resumed.
+      final root = await saveDir();
+      await root.create(recursive: true);
+      final targets = <_Target>[];
+      final resume = <String, int>{};
+      for (var i = 0; i < files.length; i++) {
+        final segs = segments[i];
+        final dir = Directory(p.joinAll([root.path, ...segs.sublist(0, segs.length - 1)]));
+        final base = segs.last;
+        final part = File(p.join(dir.path, '.$base.${hs.peerFingerprint.substring(0, 8)}-${files[i].size}.sudosend-part'));
+        if (!p.isWithin(root.path, part.path)) throw const WraithException('Unsafe path rejected');
+        var offset = 0;
+        if (await part.exists()) {
+          final len = await part.length();
+          if (len > 0 && len <= files[i].size) {
+            offset = len;
+          } else {
+            await part.delete();
+          }
+        }
+        if (offset > 0) resume['$i'] = offset;
+        targets.add(_Target(dir, base, part, offset));
+      }
+
       final activeJob = TransferJob(
         direction: TransferDirection.incoming,
         peerName: hs.peerName,
         peerPlatform: hs.peerPlatform,
         files: files,
+        text: text,
         status: TransferStatus.transferring,
       )
         ..peerFingerprint = hs.peerFingerprint
@@ -249,10 +328,8 @@ class TransferEngine {
         ..sas = hs.sas;
       job = activeJob;
       onJob(activeJob);
-      await channel.send(Frame.accept);
+      await channel.sendJson(Frame.accept, {'resume': resume});
 
-      final dir = await saveDir();
-      await dir.create(recursive: true);
       final clock = Stopwatch()..start();
       var index = -1;
       var written = 0;
@@ -271,11 +348,24 @@ class TransferEngine {
           if (i is! int || i != index + 1 || i >= files.length || raf != null) {
             throw const WraithException('Protocol violation (file order)');
           }
+          final target = targets[i];
+          if (m['offset'] != target.offset) throw const WraithException('Protocol violation (resume offset)');
           index = i;
-          written = 0;
-          hasher = Sha256Stream();
-          partFile = File(p.join(dir.path, '.${files[i].name}.sudosend-part'));
-          raf = await partFile.open(mode: FileMode.write);
+          written = target.offset;
+          final h = Sha256Stream();
+          hasher = h;
+          await target.dir.create(recursive: true);
+          partFile = target.part;
+          if (target.offset > 0) {
+            await for (final chunk in target.part.openRead(0, target.offset)) {
+              h.add(chunk);
+            }
+            raf = await target.part.open(mode: FileMode.append);
+            activeJob.resumedBytes += target.offset;
+            activeJob.addProgress(target.offset, clock);
+          } else {
+            raf = await target.part.open(mode: FileMode.write);
+          }
         } else if (msg.type == Frame.data) {
           final out = raf;
           final h = hasher;
@@ -302,7 +392,7 @@ class TransferEngine {
           if (!constantTimeEquals(h.close(), expected)) {
             throw WraithException('SHA-256 mismatch on "${files[index].name}" — file discarded');
           }
-          final dest = await uniqueFile(dir, files[index].name);
+          final dest = await uniqueFile(targets[index].dir, targets[index].baseName);
           await part.rename(dest.path);
           partFile = null;
           hasher = null;
@@ -326,13 +416,18 @@ class TransferEngine {
         }
       }
     } catch (e) {
+      // Keep partial data after a dropped connection so the next attempt can
+      // resume; discard it after cancels, integrity or protocol failures.
+      keepPartial = e is SocketException ||
+          e is TimeoutException ||
+          (e is WraithException && e.message.startsWith('Connection closed'));
       job?.fail(e);
     } finally {
       try {
         await raf?.close();
       } catch (_) {}
       final leftover = partFile;
-      if (leftover != null) {
+      if (leftover != null && !keepPartial) {
         try {
           if (await leftover.exists()) await leftover.delete();
         } catch (_) {}

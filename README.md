@@ -1,12 +1,16 @@
 # SUDOSEND
 
+[![CI](https://github.com/sudosoc/SUDOSEND/actions/workflows/ci.yml/badge.svg)](https://github.com/sudosoc/SUDOSEND/actions/workflows/ci.yml)
+
 **Secure. Local. Instant.** — encrypted file sharing between Android, Windows and Linux on
 the same network. No cloud, no accounts, no internet. Built on the
 [Wraith Protocol](PROTOCOL.md).
 
-## Features (v0.1 — MVP)
+## Features (v0.2)
 
 - **Zero-config discovery** over multicast + broadcast, with *Send by IP* as a fallback
+- **Files, whole folders, and text/clipboard** — folder structure is preserved
+- **Resume**: a dropped transfer continues where it stopped, re-verified end to end
 - **End-to-end encryption**: X25519 + ChaCha20-Poly1305, fresh keys per transfer
 - **MITM-proof first contact**: 6-digit verification code backed by a hash commitment
 - **Trusted devices**: verify once, skip the code next time, revoke anytime
@@ -14,6 +18,27 @@ the same network. No cloud, no accounts, no internet. Built on the
 - **Hardened receiver**: path-traversal-safe names, size enforcement, explicit consent
 - **Glassmorphism UI**: frosted glass, animated neon backdrop, live radar; adaptive
   layout (bottom nav on phones, side rail on desktop)
+- **CLI** for Linux and Windows, fully interoperable with the app
+
+## Download
+
+Grab the latest build from **Releases**: `sudosend-android.apk`,
+`sudosend-windows-x64.zip`, `sudosend-linux-x64.tar.gz`, plus standalone CLI binaries.
+Every push to `main` also builds all of them as CI artifacts.
+
+## CLI
+
+```bash
+sudosend receive                       # wait for files (asks before accepting)
+sudosend receive --yes --trust --once  # unattended
+sudosend send report.pdf photos/ --to laptop
+sudosend send --text "https://…" --to 192.168.1.20
+sudosend devices
+sudosend id --name Seif-Arch
+```
+
+Run from source with `dart run bin/sudosend.dart …`, or build a native binary with
+`dart compile exe bin/sudosend.dart -o sudosend`.
 
 ## Setup
 
@@ -26,8 +51,8 @@ Requires Flutter 3.27+ (`flutter doctor` should be green for your targets).
 ./setup.ps1
 ```
 
-The script runs `flutter create` to generate the native folders (your existing files are
-kept), installs packages and runs the test suite. Then:
+The script generates the native folders (your existing files are kept), brands the window
+titles, installs packages, generates the launcher icons and runs the test suite. Then:
 
 ```bash
 flutter run -d linux      # or windows, or an Android device id
@@ -57,12 +82,14 @@ lib/
     identity.dart     Ed25519 identity + trust store
   state/         AppController (ChangeNotifier)
   ui/            glass widgets, radar, tabs, dialogs
-test/            loopback E2E transfer, spoofing and sanitiser tests
+bin/sudosend.dart  command-line client
+tool/            bootstrap + icon generator
+test/            loopback E2E: transfer, resume, tamper, folders, text, spoofing
 ```
 
 ## Roadmap
 
-- **v0.2**: folders, resume, clipboard sync, QR pairing, `sudosend` CLI for Linux
-- **v0.3**: hotspot mode, transfer history, multiple receivers, Rust crypto core
+- **v0.3**: QR pairing, Android share-sheet target, persistent transfer history
+- **v0.4**: hotspot mode, multiple receivers, native (Rust) crypto core
 
 Made by **SUDOSOC**.

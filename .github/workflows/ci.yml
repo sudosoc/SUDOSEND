@@ -14,12 +14,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  CREATE_ARGS: --org com.sudosoc --project-name sudosend --platforms android,windows,linux .
-
 jobs:
   check:
-    name: Analyze & test
+    name: Analyze, test & CLI end-to-end
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,15 +25,31 @@ jobs:
           channel: stable
           cache: true
       - run: flutter --version
-      - name: Generate platform folders
-        run: flutter create $CREATE_ARGS
-      - name: Custom Android files survived
-        run: |
-          grep -q CHANGE_WIFI_MULTICAST_STATE android/app/src/main/AndroidManifest.xml
-          grep -q acquireMulticastLock android/app/src/main/kotlin/com/sudosoc/sudosend/MainActivity.kt
-      - run: flutter pub get
+      - run: ./tool/bootstrap.sh
       - run: flutter analyze --no-fatal-infos
       - run: flutter test
+      - name: Build CLI
+        run: dart compile exe bin/sudosend.dart -o sudosend-cli
+      - name: CLI end-to-end over loopback (folder + file + resume-safe naming)
+        run: |
+          set -euo pipefail
+          T=$RUNNER_TEMP
+          XDG_CONFIG_HOME=$T/bob ./sudosend-cli id --name ci-bob
+          XDG_CONFIG_HOME=$T/bob ./sudosend-cli receive --dir $T/inbox --yes --once > $T/receive.log 2>&1 &
+          RX=$!
+          sleep 3
+          XDG_CONFIG_HOME=$T/alice ./sudosend-cli send README.md lib --to 127.0.0.1
+          wait $RX
+          cat $T/receive.log
+          cmp README.md $T/inbox/README.md
+          diff -r lib $T/inbox/lib
+          XDG_CONFIG_HOME=$T/bob ./sudosend-cli receive --dir $T/inbox --yes --once > $T/receive2.log 2>&1 &
+          RX=$!
+          sleep 3
+          XDG_CONFIG_HOME=$T/alice ./sudosend-cli send --text "hello from CI 🔐" --to 127.0.0.1
+          wait $RX
+          grep -q "hello from CI" $T/receive2.log
+          echo "CLI E2E passed"
 
   android:
     name: Android APK
@@ -52,7 +65,7 @@ jobs:
         with:
           channel: stable
           cache: true
-      - run: flutter create $CREATE_ARGS
+      - run: ./tool/bootstrap.sh
       - run: flutter build apk --release
       - run: cp build/app/outputs/flutter-apk/app-release.apk sudosend-android.apk
       - uses: actions/upload-artifact@v4
@@ -61,7 +74,7 @@ jobs:
           path: sudosend-android.apk
 
   linux:
-    name: Linux bundle
+    name: Linux app + CLI
     needs: check
     runs-on: ubuntu-latest
     steps:
@@ -74,32 +87,43 @@ jobs:
         with:
           channel: stable
           cache: true
-      - run: flutter create $CREATE_ARGS
+      - run: ./tool/bootstrap.sh
       - run: flutter build linux --release
-      - run: tar -czf sudosend-linux-x64.tar.gz -C build/linux/x64/release bundle
+      - run: |
+          mv build/linux/x64/release/bundle build/linux/x64/release/sudosend
+          tar -czf sudosend-linux-x64.tar.gz -C build/linux/x64/release sudosend
+          dart compile exe bin/sudosend.dart -o sudosend-cli-linux-x64
       - uses: actions/upload-artifact@v4
         with:
           name: sudosend-linux
-          path: sudosend-linux-x64.tar.gz
+          path: |
+            sudosend-linux-x64.tar.gz
+            sudosend-cli-linux-x64
 
   windows:
-    name: Windows build
+    name: Windows app + CLI
     needs: check
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-      - run: flutter create --org com.sudosoc --project-name sudosend --platforms android,windows,linux .
+      - run: ./tool/bootstrap.sh
       - run: flutter build windows --release
+      - run: dart compile exe bin/sudosend.dart -o sudosend-cli-windows-x64.exe
       - shell: pwsh
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath sudosend-windows-x64.zip
       - uses: actions/upload-artifact@v4
         with:
           name: sudosend-windows
-          path: sudosend-windows-x64.zip
+          path: |
+            sudosend-windows-x64.zip
+            sudosend-cli-windows-x64.exe
 
   release:
     name: GitHub Release

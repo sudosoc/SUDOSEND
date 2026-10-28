@@ -43,6 +43,19 @@ String sanitizeFileName(String input) {
   return name;
 }
 
+/// Splits an untrusted relative path ("Album/2026/a.jpg") into safe segments.
+/// Every segment goes through [sanitizeFileName], so "..", absolute paths and
+/// drive letters can never escape the receive folder. Depth is capped at 16.
+List<String> sanitizeRelativePath(String input) {
+  final raw = input.replaceAll('\\', '/').split('/').where((s) => s.isNotEmpty && s != '.' && s != '..');
+  final segments = [for (final s in raw) sanitizeFileName(s)];
+  if (segments.isEmpty) return const ['file'];
+  if (segments.length > 16) {
+    return [...segments.take(15), segments.last];
+  }
+  return segments;
+}
+
 /// Returns a file in [dir] named [name] that does not exist yet:
 /// photo.jpg → photo (1).jpg → photo (2).jpg …
 Future<File> uniqueFile(Directory dir, String name) async {

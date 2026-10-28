@@ -29,11 +29,16 @@ class AppController extends ChangeNotifier {
 
   final List<TransferJob> jobs = [];
   final List<FileEntry> selected = [];
+
+  /// A text/clipboard message queued for sending (instead of files).
+  String? selectedText;
+  final Map<String, StreamSubscription<void>> _jobSubs = {};
   final StreamController<IncomingRequest> _incoming = StreamController<IncomingRequest>.broadcast();
 
   Stream<IncomingRequest> get incoming => _incoming.stream;
   List<Peer> get peers => ready ? _discovery.peers : const [];
   int get port => ready ? _engine.port : kTransferPort;
+  bool get hasSelection => selected.isNotEmpty || selectedText != null;
   int get selectedBytes => selected.fold<int>(0, (a, f) => a + f.size);
   int get activeJobs => jobs.where((j) => j.isActive).length;
 
@@ -80,7 +85,7 @@ class AppController extends ChangeNotifier {
 
   void _addJob(TransferJob job) {
     jobs.insert(0, job);
-    job.addListener(_onJobChanged);
+    _jobSubs[job.id] = job.changes.listen((_) => _onJobChanged());
     notifyListeners();
   }
 
@@ -103,6 +108,40 @@ class AppController extends ChangeNotifier {
       if (path == null || selected.any((s) => s.path == path)) continue;
       selected.add(FileEntry(name: f.name, size: await File(path).length(), path: path));
     }
+    selectedText = null;
+    notifyListeners();
+  }
+
+  /// Adds every file inside a folder, keeping the folder structure.
+  /// Returns an error message, or null on success.
+  Future<String?> pickFolder() async {
+    final path = await FilePicker.platform.getDirectoryPath();
+    if (path == null) return null;
+    final root = Directory(path);
+    final rootName = p.basename(root.path);
+    var added = 0;
+    try {
+      await for (final entity in root.list(recursive: true, followLinks: false)) {
+        if (entity is! File) continue;
+        if (selected.any((s) => s.path == entity.path)) continue;
+        final rel = p.relative(entity.path, from: root.path).split(p.separator).join('/');
+        selected.add(FileEntry(name: '$rootName/$rel', size: await entity.length(), path: entity.path));
+        added++;
+      }
+    } on FileSystemException catch (e) {
+      notifyListeners();
+      return 'Cannot read that folder (${e.osError?.message ?? e.message}). '
+          'On Android, pick the files instead.';
+    }
+    selectedText = null;
+    notifyListeners();
+    return added == 0 ? 'That folder has no files' : null;
+  }
+
+  void setText(String? text) {
+    final t = text?.trim();
+    selectedText = (t == null || t.isEmpty) ? null : text;
+    if (selectedText != null) selected.clear();
     notifyListeners();
   }
 
@@ -113,16 +152,19 @@ class AppController extends ChangeNotifier {
 
   void clearSelected() {
     selected.clear();
+    selectedText = null;
     notifyListeners();
   }
 
   Future<void> sendTo(Peer peer) async {
-    if (selected.isEmpty) return;
+    if (!hasSelection) return;
     final files = List<FileEntry>.of(selected);
+    final text = selectedText;
     selected.clear();
+    selectedText = null;
     tab = 2;
     notifyListeners();
-    await _engine.send(peer, files);
+    await _engine.send(peer, files, text: text);
   }
 
   /// Accepts "192.168.1.20" or "192.168.1.20:47824".
@@ -134,7 +176,7 @@ class AppController extends ChangeNotifier {
     final address = InternetAddress.tryParse(host);
     if (address == null || address.type != InternetAddressType.IPv4) return 'Enter a valid IPv4 address';
     if (port == null || port < 1 || port > 65535) return 'Invalid port';
-    if (selected.isEmpty) return 'Pick files first';
+    if (!hasSelection) return 'Pick files or text first';
     unawaited(sendTo(Peer.manual(address, port)));
     return null;
   }
@@ -172,7 +214,10 @@ class AppController extends ChangeNotifier {
   void clearFinished() {
     jobs.removeWhere((j) {
       final finished = !j.isActive;
-      if (finished) j.removeListener(_onJobChanged);
+      if (finished) {
+        _jobSubs.remove(j.id)?.cancel();
+        j.dispose();
+      }
       return finished;
     });
     notifyListeners();

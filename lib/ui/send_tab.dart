@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/models.dart';
 import '../core/util.dart';
@@ -78,7 +79,63 @@ class _FilesCard extends StatelessWidget {
               style: TextStyle(color: AppColors.muted, fontSize: 13),
             ),
             const SizedBox(height: 20),
-            GlowButton(label: 'Pick files', icon: Icons.add_rounded, onPressed: controller.pickFiles),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              alignment: WrapAlignment.center,
+              children: [
+                GlowButton(label: 'Files', icon: Icons.add_rounded, onPressed: controller.pickFiles),
+                GhostButton(label: 'Folder', icon: Icons.folder_rounded, onPressed: () => _pickFolder(context)),
+                GhostButton(label: 'Text', icon: Icons.notes_rounded, onPressed: () => _editText(context)),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    final text = controller.selectedText;
+    if (text != null) {
+      return Glass(
+        glow: AppColors.violet,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const IconBadge(icon: Icons.notes_rounded, color: AppColors.violet, size: 42),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('Text ready · ${text.length} chars',
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                ),
+                TextButton(
+                  onPressed: controller.clearSelected,
+                  child: const Text('Clear', style: TextStyle(color: AppColors.muted)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              text.length > 300 ? '${text.substring(0, 300)}…' : text,
+              maxLines: 6,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(height: 1.4),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                GhostButton(label: 'Edit', icon: Icons.edit_rounded, onPressed: () => _editText(context)),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Tap a device below to send',
+                    textAlign: TextAlign.end,
+                    style: TextStyle(color: AppColors.cyan, fontSize: 12.5, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       );
@@ -123,7 +180,9 @@ class _FilesCard extends StatelessWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              GhostButton(label: 'Add more', icon: Icons.add_rounded, onPressed: controller.pickFiles),
+              GhostButton(label: 'Add', icon: Icons.add_rounded, onPressed: controller.pickFiles),
+              const SizedBox(width: 8),
+              GhostButton(label: 'Folder', icon: Icons.folder_rounded, onPressed: () => _pickFolder(context)),
               const SizedBox(width: 12),
               const Expanded(
                 child: Text(
@@ -137,6 +196,60 @@ class _FilesCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _pickFolder(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final error = await controller.pickFolder();
+    if (error != null) messenger.showSnackBar(SnackBar(content: Text(error)));
+  }
+
+  Future<void> _editText(BuildContext context) async {
+    var initial = controller.selectedText ?? '';
+    if (initial.isEmpty) {
+      try {
+        initial = (await Clipboard.getData(Clipboard.kTextPlain))?.text ?? '';
+      } catch (_) {}
+    }
+    if (!context.mounted) return;
+    final field = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (ctx) => GlassDialog(
+        maxWidth: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Send text', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            const Text('Links, notes, passwords, code — encrypted end to end. Prefilled from your clipboard.',
+                style: TextStyle(color: AppColors.muted, fontSize: 13)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: field,
+              autofocus: true,
+              minLines: 4,
+              maxLines: 10,
+              maxLength: 65536,
+              decoration: const InputDecoration(hintText: 'Type or paste…', counterText: ''),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(child: GhostButton(label: 'Cancel', onPressed: () => Navigator.pop(ctx), expand: true)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GlowButton(label: 'Done', expand: true, onPressed: () => Navigator.pop(ctx, field.text)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result != null) controller.setText(result);
   }
 }
 
@@ -220,9 +333,9 @@ class _DevicesSection extends StatelessWidget {
   }
 
   void _send(BuildContext context, Peer peer) {
-    if (controller.selected.isEmpty) {
+    if (!controller.hasSelection) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pick some files first, then tap a device.')),
+        const SnackBar(content: Text('Pick files, a folder or some text first, then tap a device.')),
       );
       return;
     }

@@ -1,7 +1,7 @@
 name: sudosend
 description: "SUDOSEND — secure, local, instant file sharing over the Wraith Protocol."
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: ^3.5.0
@@ -19,6 +19,19 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.1
 
 flutter:
   uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/icon.png
+  adaptive_icon_background: "#060816"
+  adaptive_icon_foreground: assets/icon_foreground.png
+  min_sdk_android: 21
+  windows:
+    generate: true
+    image_path: assets/icon.png
+    icon_size: 256

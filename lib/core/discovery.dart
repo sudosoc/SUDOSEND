@@ -14,11 +14,22 @@ import 'wraith.dart';
 /// The real identity is proven during the handshake, and a fingerprint
 /// mismatch aborts the transfer.
 class Discovery {
-  Discovery({required this.identity, required this.transferPort, required this.onChanged});
+  Discovery({
+    required this.identity,
+    required this.transferPort,
+    required this.onChanged,
+    this.passive = false,
+  });
 
   final DeviceIdentity identity;
   final int transferPort;
   final void Function() onChanged;
+
+  /// Passive mode (CLI `send` / `devices`): find others without advertising
+  /// ourselves as a receiver. Sends `probe` instead of `announce`.
+  final bool passive;
+
+  String get _beacon => passive ? 'probe' : 'announce';
 
   static final InternetAddress group = InternetAddress('239.255.77.23');
   static final RegExp _fpPattern = RegExp(r'^[0-9A-F]{32}$');
@@ -52,10 +63,10 @@ class Discovery {
     socket.listen(_onEvent);
     _socket = socket;
     await _refreshTargets();
-    _announce('announce');
+    _announce(_beacon);
     _announceTimer = Timer.periodic(_interval, (_) async {
       if (++_ticks % 5 == 0) await _refreshTargets();
-      _announce('announce');
+      _announce(_beacon);
     });
     _pruneTimer = Timer.periodic(const Duration(seconds: 2), (_) => _prune());
   }
@@ -63,11 +74,11 @@ class Discovery {
   /// Ask everyone to answer right now (pull-to-refresh).
   Future<void> rescan() async {
     await _refreshTargets();
-    _announce('announce');
+    _announce(_beacon);
   }
 
   Future<void> stop() async {
-    _announce('bye');
+    if (!passive) _announce('bye');
     _announceTimer?.cancel();
     _pruneTimer?.cancel();
     _socket?.close();
@@ -136,6 +147,15 @@ class Discovery {
     final type = m['t'];
     if (id is! String || !_fpPattern.hasMatch(id) || id == identity.fingerprint) return;
 
+    if (type == 'probe') {
+      // Someone is looking for receivers; answer unless we are passive too.
+      if (!passive) {
+        try {
+          _socket?.send(_payload('reply'), dg.address, kDiscoveryPort);
+        } catch (_) {}
+      }
+      return;
+    }
     if (type == 'bye') {
       if (_peers.remove(id) != null) onChanged();
       return;
@@ -161,7 +181,7 @@ class Discovery {
     if (changed) onChanged();
 
     // Answer newcomers directly so they see us immediately.
-    if (type == 'announce' && previous == null) {
+    if (type == 'announce' && previous == null && !passive) {
       try {
         _socket?.send(_payload('reply'), dg.address, kDiscoveryPort);
       } catch (_) {}

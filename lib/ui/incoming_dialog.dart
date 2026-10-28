@@ -64,7 +64,7 @@ class _IncomingDialogState extends State<_IncomingDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('INCOMING TRANSFER',
+                    Text(r.text != null ? 'INCOMING TEXT' : 'INCOMING TRANSFER',
                         style: TextStyle(color: AppColors.muted, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 1.4)),
                     const SizedBox(height: 2),
                     Text(r.peerName,
@@ -112,6 +112,23 @@ class _IncomingDialogState extends State<_IncomingDialog> {
               ),
             ),
           const SizedBox(height: 16),
+          if (r.text != null)
+            Container(
+              width: double.infinity,
+              constraints: const BoxConstraints(maxHeight: 160),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: Colors.black.withValues(alpha: 0.2),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: SingleChildScrollView(
+                child: Text(
+                  r.text!.length > 1000 ? '${r.text!.substring(0, 1000)}…' : r.text!,
+                  style: const TextStyle(fontSize: 13.5, height: 1.4),
+                ),
+              ),
+            ),
           for (final f in shown)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
@@ -129,9 +146,11 @@ class _IncomingDialogState extends State<_IncomingDialog> {
               padding: const EdgeInsets.only(top: 4),
               child: Text('+ $more more', style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
             ),
-          const SizedBox(height: 6),
-          Text('Total ${formatBytes(r.totalBytes)}',
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+          if (r.files.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text('Total ${formatBytes(r.totalBytes)}',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+          ],
           if (!r.trusted) ...[
             const SizedBox(height: 10),
             InkWell(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/models.dart';
 import '../core/util.dart';
@@ -54,7 +55,7 @@ class TransfersTab extends StatelessWidget {
         final job = jobs[i - 1];
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: ListenableBuilder(listenable: job, builder: (context, _) => _JobCard(job: job)),
+          child: StreamBuilder<void>(stream: job.changes, builder: (context, _) => _JobCard(job: job)),
         );
       },
     );
@@ -70,9 +71,10 @@ class _JobCard extends StatelessWidget {
     final outgoing = job.direction == TransferDirection.outgoing;
     final accent = outgoing ? AppColors.cyan : AppColors.mint;
     final showSas = outgoing && job.status == TransferStatus.awaitingApproval && job.sas != null;
-    final showProgress = job.status == TransferStatus.transferring ||
-        job.status == TransferStatus.verifying ||
-        job.status == TransferStatus.done;
+    final showProgress = !job.isText &&
+        (job.status == TransferStatus.transferring ||
+            job.status == TransferStatus.verifying ||
+            job.status == TransferStatus.done);
 
     return Glass(
       glow: job.isActive ? accent : null,
@@ -82,7 +84,9 @@ class _JobCard extends StatelessWidget {
           Row(
             children: [
               IconBadge(
-                icon: outgoing ? Icons.north_east_rounded : Icons.south_west_rounded,
+                icon: job.isText
+                    ? Icons.notes_rounded
+                    : (outgoing ? Icons.north_east_rounded : Icons.south_west_rounded),
                 color: accent,
                 size: 42,
               ),
@@ -97,7 +101,10 @@ class _JobCard extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                     ),
                     Text(
-                      '${job.files.length} ${job.files.length == 1 ? 'file' : 'files'} · ${formatBytes(job.totalBytes)}',
+                      job.isText
+                          ? 'Text message · ${job.text!.length} chars'
+                          : '${job.files.length} ${job.files.length == 1 ? 'file' : 'files'} · ${formatBytes(job.totalBytes)}'
+                              '${job.resumedBytes > 0 ? ' · resumed' : ''}',
                       style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
                     ),
                   ],
@@ -127,7 +134,11 @@ class _JobCard extends StatelessWidget {
               ],
             ),
           ],
-          if (job.status == TransferStatus.done) ...[
+          if (job.isText && (job.status == TransferStatus.done || outgoing)) ...[
+            const SizedBox(height: 14),
+            _TextPanel(text: job.text!, showCopy: !outgoing && job.status == TransferStatus.done),
+          ],
+          if (job.status == TransferStatus.done && !job.isText) ...[
             const SizedBox(height: 10),
             Row(
               children: [
@@ -299,6 +310,49 @@ class _StatusChip extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(label, style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w800)),
+    );
+  }
+}
+
+class _TextPanel extends StatelessWidget {
+  const _TextPanel({required this.text, required this.showCopy});
+  final String text;
+  final bool showCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.black.withValues(alpha: 0.18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SelectableText(
+            text.length > 600 ? '${text.substring(0, 600)}…' : text,
+            style: const TextStyle(fontSize: 13.5, height: 1.4),
+          ),
+          if (showCopy) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: GhostButton(
+                label: 'Copy',
+                icon: Icons.copy_rounded,
+                color: AppColors.cyan,
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: text));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
+                },
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

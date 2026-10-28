@@ -30,7 +30,9 @@ and each interface's `/24` broadcast address:
 {"wraith":1,"t":"announce","id":"<fingerprint>","name":"Seif-Laptop","platform":"linux","port":47824}
 ```
 
-`t` ∈ `announce | reply | bye`. A newcomer gets a unicast `reply`. Peers unseen for
+`t` ∈ `announce | reply | probe | bye`. A newcomer gets a unicast `reply`. `probe` is sent by
+passive clients (CLI `send` / `devices`) that want to find receivers without advertising
+themselves; receivers answer it with `reply` and do not list the prober. Peers unseen for
 10 s are dropped. Announcements are **hints only** — unauthenticated by design. If the
 fingerprint proven in the handshake differs from the advertised `id`, the sender aborts.
 
@@ -73,10 +75,10 @@ payload = ChaCha20-Poly1305(key_dir, nonce = 0x00000000 ‖ u64 counter_dir, typ
 | Type | Name | Body |
 |---|---|---|
 | 1 | AUTH | 64-byte signature |
-| 2 | OFFER | `{"files":[{"name":…,"size":…}]}` |
-| 3 | ACCEPT | — |
+| 2 | OFFER | `{"files":[{"name":"dir/sub/file","size":…}], "text"?: "…"}` |
+| 3 | ACCEPT | `{"resume":{"<index>": bytes_already_held}}` |
 | 4 | DECLINE | — |
-| 5 | FILE_START | `{"i":0,"name":…,"size":…}` |
+| 5 | FILE_START | `{"i":0,"name":…,"size":…,"offset":…}` |
 | 6 | DATA | raw bytes (≤ 256 KiB) |
 | 7 | FILE_END | `{"i":0,"sha256":b64}` |
 | 8 | DONE | — |
@@ -84,7 +86,21 @@ payload = ChaCha20-Poly1305(key_dir, nonce = 0x00000000 ‖ u64 counter_dir, typ
 | 10 | CANCEL | — |
 | 11 | ERROR | UTF-8 reason |
 
-## 5. Session flow
+## 5. Folders, text and resume
+
+- **Folders**: `name` is a relative path with `/` separators. The receiver sanitises every
+  segment independently and re-checks that the final path is inside its receive folder.
+- **Text**: an OFFER with an empty `files` list and a `text` (≤ 64 KiB) carries a message.
+  After ACCEPT the sender sends DONE directly.
+- **Resume**: partial data lives in `.<name>.<fp8>-<size>.sudosend-part`, keyed by the
+  sender's fingerprint and the file size, so only the same device sending the same-sized
+  file can resume it. The receiver lists the bytes it already holds in ACCEPT; the sender
+  skips them (but still hashes them) and echoes the offset in FILE_START. The final
+  SHA-256 always covers the **whole** file, so a corrupted or forged partial is detected
+  and deleted. Partials survive dropped connections and are deleted on cancel, integrity
+  or protocol failures.
+
+## 6. Session flow
 
 ```
 C: OFFER                    S: shows SAS + files → user accepts → ACCEPT
@@ -100,5 +116,4 @@ protocol violation closes the connection and deletes the partial file.
 ## Known limitations (v1)
 
 - Discovery metadata (device name, fingerprint) is visible on the LAN.
-- No resume yet — planned for v2 via per-chunk offsets.
 - File sizes and names are visible to the receiver before acceptance (by design).

@@ -1,7 +1,6 @@
+// Pure Dart (no Flutter imports) so the same core powers the app and the CLI.
 import 'dart:async';
 import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 
 class WraithException implements Exception {
   const WraithException(this.message);
@@ -42,6 +41,8 @@ class Peer {
   final bool manual;
 }
 
+/// A file to send or being received. [name] is a relative path using '/'
+/// separators ("photo.jpg" or "Project/src/main.c" for folder transfers).
 class FileEntry {
   const FileEntry({required this.name, required this.size, this.path});
   final String name;
@@ -62,22 +63,28 @@ enum TransferStatus {
   cancelled,
 }
 
-class TransferJob extends ChangeNotifier {
+class TransferJob {
   TransferJob({
     required this.direction,
     required this.peerName,
     required this.files,
     required this.status,
     this.peerPlatform = 'unknown',
-  })  : id = DateTime.now().microsecondsSinceEpoch.toString(),
+    this.text,
+  })  : id = '${DateTime.now().microsecondsSinceEpoch}-${_seq++}',
         totalBytes = files.fold<int>(0, (a, f) => a + f.size),
         startedAt = DateTime.now();
+
+  static int _seq = 0;
 
   final String id;
   final TransferDirection direction;
   final List<FileEntry> files;
   final int totalBytes;
   final DateTime startedAt;
+
+  /// Set for text/clipboard transfers (then [files] is empty).
+  final String? text;
 
   String peerName;
   String peerPlatform;
@@ -86,6 +93,9 @@ class TransferJob extends ChangeNotifier {
   String? sas;
   TransferStatus status;
   int doneBytes = 0;
+
+  /// Bytes skipped because they were already on the receiver (resume).
+  int resumedBytes = 0;
   double speed = 0;
   String? error;
   int verifiedFiles = 0;
@@ -93,6 +103,13 @@ class TransferJob extends ChangeNotifier {
   bool cancelRequested = false;
   DateTime? finishedAt;
   int _lastNotifyMs = -1000;
+
+  final StreamController<void> _changes = StreamController<void>.broadcast();
+
+  /// Emits whenever the job's state changes (progress is throttled to ~10 Hz).
+  Stream<void> get changes => _changes.stream;
+
+  bool get isText => text != null;
 
   double get progress => totalBytes == 0
       ? (status == TransferStatus.done ? 1 : 0)
@@ -104,31 +121,36 @@ class TransferJob extends ChangeNotifier {
       status == TransferStatus.transferring ||
       status == TransferStatus.verifying;
 
+  void notify() {
+    if (!_changes.isClosed) _changes.add(null);
+  }
+
   void update(void Function() fn) {
     fn();
-    notifyListeners();
+    notify();
   }
 
   void addProgress(int bytes, Stopwatch clock) {
     doneBytes += bytes;
     final now = clock.elapsedMilliseconds;
     if (now - _lastNotifyMs >= 100 || doneBytes >= totalBytes) {
-      speed = now > 0 ? doneBytes / (now / 1000) : 0;
+      final fresh = doneBytes - resumedBytes;
+      speed = now > 0 ? fresh / (now / 1000) : 0;
       _lastNotifyMs = now;
-      notifyListeners();
+      notify();
     }
   }
 
   void cancel() {
     if (!isActive) return;
     cancelRequested = true;
-    notifyListeners();
+    notify();
   }
 
   void finish(TransferStatus s) {
     status = s;
     finishedAt = DateTime.now();
-    notifyListeners();
+    notify();
   }
 
   void fail(Object e) {
@@ -139,8 +161,10 @@ class TransferJob extends ChangeNotifier {
       error = describeError(e);
     }
     finishedAt = DateTime.now();
-    notifyListeners();
+    notify();
   }
+
+  void dispose() => _changes.close();
 }
 
 String describeError(Object e) {

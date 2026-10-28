@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
-# Generates the native platform folders around the SUDOSEND sources.
-# Existing files (lib/, test/, AndroidManifest.xml, MainActivity.kt) are kept.
+# One-time setup: native folders, packages, icons, tests.
 set -euo pipefail
 cd "$(dirname "$0")"
-
-flutter create --org com.sudosoc --project-name sudosend --platforms android,windows,linux .
-flutter pub get
+./tool/bootstrap.sh
 flutter test
 
 echo
 echo "✔ SUDOSEND is ready."
-echo "  Linux:   flutter run -d linux"
-echo "  Android: flutter run -d <device-id>   (flutter devices)"
+echo "  App:  flutter run -d linux        (or: flutter devices)"
+echo "  CLI:  dart run bin/sudosend.dart --help"
