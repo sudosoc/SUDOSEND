@@ -7,12 +7,12 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:sudosend/core/discovery.dart';
-import 'package:sudosend/core/identity.dart';
-import 'package:sudosend/core/models.dart';
-import 'package:sudosend/core/transfer.dart';
-import 'package:sudosend/core/util.dart';
-import 'package:sudosend/core/wraith.dart';
+import 'package:wraith_core/discovery.dart';
+import 'package:wraith_core/identity.dart';
+import 'package:wraith_core/models.dart';
+import 'package:wraith_core/transfer.dart';
+import 'package:wraith_core/util.dart';
+import 'package:wraith_core/wraith.dart';
 
 const _version = '0.2.0';
 

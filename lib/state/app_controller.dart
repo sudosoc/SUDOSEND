@@ -7,11 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import '../core/discovery.dart';
-import '../core/identity.dart';
-import '../core/models.dart';
-import '../core/transfer.dart';
-import '../core/wraith.dart';
+import 'package:wraith_core/discovery.dart';
+import 'package:wraith_core/identity.dart';
+import 'package:wraith_core/models.dart';
+import 'package:wraith_core/transfer.dart';
+import 'package:wraith_core/wraith.dart';
 
 class AppController extends ChangeNotifier {
   static const MethodChannel _net = MethodChannel('sudosend/net');

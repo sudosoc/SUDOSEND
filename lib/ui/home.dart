@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../core/transfer.dart';
-import '../core/util.dart';
+import 'package:wraith_core/transfer.dart';
+import 'package:wraith_core/util.dart';
 import '../state/app_controller.dart';
 import 'background.dart';
 import 'glass.dart';

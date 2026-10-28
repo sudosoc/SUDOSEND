@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../core/transfer.dart';
-import '../core/util.dart';
+import 'package:wraith_core/transfer.dart';
+import 'package:wraith_core/util.dart';
 import 'glass.dart';
 import 'theme.dart';
 

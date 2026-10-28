@@ -29,7 +29,7 @@ jobs:
       - run: ./tool/ci_run.sh flutter analyze --no-fatal-infos
       - run: ./tool/ci_run.sh flutter test
       - name: Build CLI
-        run: ./tool/ci_run.sh dart compile exe bin/sudosend.dart -o sudosend-cli
+        run: ./tool/ci_run.sh ./tool/build_cli.sh sudosend-cli
       - name: CLI end-to-end over loopback (folder + file + resume-safe naming)
         run: |
           set -euo pipefail
@@ -92,7 +92,7 @@ jobs:
       - run: |
           mv build/linux/x64/release/bundle build/linux/x64/release/sudosend
           tar -czf sudosend-linux-x64.tar.gz -C build/linux/x64/release sudosend
-          dart compile exe bin/sudosend.dart -o sudosend-cli-linux-x64
+          ./tool/build_cli.sh sudosend-cli-linux-x64
       - uses: actions/upload-artifact@v4
         with:
           name: sudosend-linux
@@ -115,7 +115,7 @@ jobs:
           cache: true
       - run: ./tool/ci_run.sh ./tool/bootstrap.sh
       - run: ./tool/ci_run.sh flutter build windows --release
-      - run: ./tool/ci_run.sh dart compile exe bin/sudosend.dart -o sudosend-cli-windows-x64.exe
+      - run: ./tool/ci_run.sh ./tool/build_cli.sh sudosend-cli-windows-x64.exe
       - shell: pwsh
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath sudosend-windows-x64.zip
       - uses: actions/upload-artifact@v4

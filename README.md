@@ -37,8 +37,8 @@ sudosend devices
 sudosend id --name Seif-Arch
 ```
 
-Run from source with `dart run bin/sudosend.dart …`, or build a native binary with
-`dart compile exe bin/sudosend.dart -o sudosend`.
+Run from source with `(cd packages/wraith_core && dart run bin/sudosend.dart) …`, or build a native binary with
+`./tool/build_cli.sh sudosend`.
 
 ## Setup
 
@@ -75,14 +75,14 @@ flutter build windows --release
 
 ```
 lib/
-  core/          protocol, crypto, discovery, transfer engine (no UI)
-    wraith.dart       framing, handshake, secure channel
-    discovery.dart    UDP announce/listen
-    transfer.dart     sender + receiver state machines
-    identity.dart     Ed25519 identity + trust store
   state/         AppController (ChangeNotifier)
   ui/            glass widgets, radar, tabs, dialogs
-bin/sudosend.dart  command-line client
+packages/wraith_core/   pure-Dart protocol core, shared by app and CLI
+  lib/wraith.dart       framing, handshake, secure channel
+  lib/discovery.dart    UDP announce/probe/listen
+  lib/transfer.dart     sender + receiver state machines (resume, folders, text)
+  lib/identity.dart     Ed25519 identity + trust store
+  bin/sudosend.dart     command-line client
 tool/            bootstrap + icon generator
 test/            loopback E2E: transfer, resume, tamper, folders, text, spoofing
 ```

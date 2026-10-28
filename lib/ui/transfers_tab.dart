@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../core/models.dart';
-import '../core/util.dart';
+import 'package:wraith_core/models.dart';
+import 'package:wraith_core/util.dart';
 import '../state/app_controller.dart';
 import 'glass.dart';
 import 'theme.dart';

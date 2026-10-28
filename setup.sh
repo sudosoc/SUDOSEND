@@ -8,4 +8,4 @@ flutter test
 echo
 echo "✔ SUDOSEND is ready."
 echo "  App:  flutter run -d linux        (or: flutter devices)"
-echo "  CLI:  dart run bin/sudosend.dart --help"
+echo "  CLI:  (cd packages/wraith_core && dart run bin/sudosend.dart) --help"

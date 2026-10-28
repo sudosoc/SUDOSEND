@@ -16,4 +16,4 @@ flutter test
 Write-Host ""
 Write-Host "SUDOSEND is ready."
 Write-Host "  App:  flutter run -d windows"
-Write-Host "  CLI:  dart run bin/sudosend.dart --help"
+Write-Host "  CLI:  (cd packages/wraith_core && dart run bin/sudosend.dart) --help"

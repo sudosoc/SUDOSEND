@@ -2,10 +2,10 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:sudosend/core/identity.dart';
-import 'package:sudosend/core/models.dart';
-import 'package:sudosend/core/transfer.dart';
-import 'package:sudosend/core/util.dart';
+import 'package:wraith_core/identity.dart';
+import 'package:wraith_core/models.dart';
+import 'package:wraith_core/transfer.dart';
+import 'package:wraith_core/util.dart';
 
 void main() {
   test('sanitizeRelativePath', () {

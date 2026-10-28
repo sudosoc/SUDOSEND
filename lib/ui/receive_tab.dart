@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../core/util.dart';
+import 'package:wraith_core/util.dart';
 import '../state/app_controller.dart';
 import 'glass.dart';
 import 'radar.dart';
