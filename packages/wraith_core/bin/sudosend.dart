@@ -20,7 +20,7 @@ import 'package:wraith_core/vault_windows.dart';
 import 'package:wraith_core/web_share.dart';
 import 'package:wraith_core/wraith.dart';
 
-const _version = '0.7.0';
+const _version = '0.8.0';
 
 const _usage = '''
 SUDOSEND $_version — secure local file sharing (Wraith Protocol)
@@ -38,6 +38,7 @@ Usage:
                --upload also lets visitors send files to you; --pin protects
                the link; --max stops after N downloads; --minutes sets expiry
   sudosend ring --to <device>      make a trusted device ring (find my phone)
+  sudosend update                  check for a newer version
   sudosend speedtest --to <device> [--seconds 6]
                measure real encrypted throughput to a trusted device
 
@@ -172,6 +173,8 @@ Future<int> _run(_Args args) async {
       return _ring(identity, trust, args);
     case 'speedtest':
       return _speedtest(identity, trust, args);
+    case 'update':
+      return _update();
     case 'receive':
       return _receive(identity, trust, args);
     default:
@@ -465,6 +468,41 @@ Future<int> _speedtest(DeviceIdentity identity, TrustStore trust, _Args args) as
   } on WraithException catch (e) {
     stderr.writeln(_red('✖ ${e.message}'));
     return 1;
+  }
+}
+
+Future<int> _update() async {
+  const repo = 'sudosoc/SUDOSEND-APP';
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+  try {
+    final req = await client.getUrl(Uri.parse('https://api.github.com/repos/$repo/releases/latest'));
+    req.headers.set(HttpHeaders.userAgentHeader, 'sudosend-cli/$_version');
+    final res = await req.close();
+    final body = await res.transform(utf8.decoder).join();
+    if (res.statusCode != 200) throw HttpException('GitHub answered ${res.statusCode}');
+    final latest = ((jsonDecode(body) as Map<String, dynamic>)['tag_name'] as String).replaceFirst('v', '');
+    List<int> v(String s) => s.split('.').map((x) => int.tryParse(x) ?? 0).toList();
+    final a = v(latest), b = v(_version);
+    var newer = false;
+    for (var i = 0; i < 3 && i < a.length && i < b.length; i++) {
+      if (a[i] != b[i]) {
+        newer = a[i] > b[i];
+        break;
+      }
+    }
+    if (!newer) {
+      stdout.writeln(_green('✔ sudosend $_version is the latest version'));
+      return 0;
+    }
+    stdout.writeln(_cyan('⬆ sudosend $latest is available (you have $_version)'));
+    stdout.writeln('  Linux:   curl -fsSL https://raw.githubusercontent.com/$repo/main/get.sh | bash');
+    stdout.writeln('  Others:  https://github.com/$repo/releases/latest');
+    return 0;
+  } catch (e) {
+    stderr.writeln(_red('✖ could not check for updates: $e'));
+    return 1;
+  } finally {
+    client.close(force: true);
   }
 }
 

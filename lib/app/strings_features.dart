@@ -136,6 +136,34 @@ const Map<String, Map<String, String>> featureStrings = {
 
     // Compression
     'compressed_saved': 'Compression saved {size}',
+
+    // Updates
+    'fg_app': 'App',
+    'f_update': 'Check for updates',
+    'f_update_sub': 'Look for a new version once when the app starts.',
+    'i_update':
+        'When on, SUDOSEND asks GitHub once at startup whether a newer release exists in github.com/sudosoc/SUDOSEND-APP, and shows a green dot on the settings button if there is one. Nothing is downloaded until you press Install.\n\nThis is the only time the app talks to the internet; your files never leave your network. Updates are checked against the SHA-256 GitHub publishes, and Android refuses an APK that is not signed with the same key as the installed app.\n\nYou can always check by hand in Settings → About.',
+    'update_check': 'Check for updates',
+    'update_title': 'App update',
+    'update_current': 'You have version {v}',
+    'update_latest': 'You are on the latest version.',
+    'update_new': 'Version {v} is available',
+    'update_available': 'SUDOSEND {v} is available — Settings → About',
+    'update_install': 'Download & install',
+    'update_open_page': 'Open download page',
+    'update_page': 'Release page',
+    'update_linux': 'On Linux, update with the same one-line installer (it picks .deb or portable for your CPU):',
+    'update_copy_cmd': 'Copy command',
+    'update_allow_install': 'Allow "Install unknown apps" for SUDOSEND in the screen that just opened, then press Install again.',
+    'update_failed': 'The installer could not be opened.',
+    'update_downloaded': 'Downloaded to {path}',
+    's_downloads': 'Downloads',
+
+    // Developer
+    'dev_title': 'Developer',
+    'dev_email': 'Email',
+    'dev_portfolio': 'Portfolio',
+    'dev_note': 'Tap to open · long-press to copy',
   },
   'ar': {
     'tab_messages': 'الرسايل',
@@ -256,5 +284,31 @@ const Map<String, Map<String, String>> featureStrings = {
     'incoming_sync': 'مزامنة فولدر',
 
     'compressed_saved': 'الضغط وفّر {size}',
+
+    'fg_app': 'التطبيق',
+    'f_update': 'دوّر على تحديثات',
+    'f_update_sub': 'بيشوف في نسخة جديدة مرة واحدة لما التطبيق يفتح.',
+    'i_update':
+        'لو شغالة، SUDOSEND بيسأل GitHub مرة واحدة أول ما يفتح هل في إصدار أحدث على github.com/sudosoc/SUDOSEND-APP، ولو في بيظهر نقطة خضرا على زرار الإعدادات. مفيش أي حاجة بتتحمّل غير لما تدوس تثبيت.\n\nدي المرة الوحيدة اللي التطبيق بيكلم فيها النت؛ ملفاتك عمرها ما بتخرج من شبكتك. التحديث بيتراجع بالـ SHA-256 اللي GitHub بينشره، وأندرويد بيرفض أي APK مش متوقّع بنفس مفتاح التطبيق المتثبّت.\n\nتقدر تدوّر بإيدك في أي وقت من الإعدادات ← عن التطبيق.',
+    'update_check': 'دوّر على تحديث',
+    'update_title': 'تحديث التطبيق',
+    'update_current': 'معاك الإصدار {v}',
+    'update_latest': 'إنت على آخر إصدار.',
+    'update_new': 'الإصدار {v} نزل',
+    'update_available': 'SUDOSEND {v} نزل — الإعدادات ← عن التطبيق',
+    'update_install': 'نزّل وثبّت',
+    'update_open_page': 'افتح صفحة التحميل',
+    'update_page': 'صفحة الإصدار',
+    'update_linux': 'على لينكس حدّث بنفس أمر التثبيت (بيختار .deb أو النسخة المحمولة حسب المعالج):',
+    'update_copy_cmd': 'انسخ الأمر',
+    'update_allow_install': 'اسمح بـ "تثبيت التطبيقات غير المعروفة" لـ SUDOSEND في الشاشة اللي فتحت، وبعدين دوس تثبيت تاني.',
+    'update_failed': 'معرفناش نفتح المثبّت.',
+    'update_downloaded': 'اتحمّل في {path}',
+    's_downloads': 'التحميلات',
+
+    'dev_title': 'المطوّر',
+    'dev_email': 'الإيميل',
+    'dev_portfolio': 'البورتفوليو',
+    'dev_note': 'دوس تفتح · دوس مطوّل تنسخ',
   },
 };

@@ -10,6 +10,8 @@ import 'package:wraith_core/wraith.dart' show kProtocol;
 import '../app/scope.dart';
 import '../platform/desktop.dart';
 import '../state/app_controller.dart';
+import '../state/updater.dart' show kReleaseRepo;
+import 'about_pages.dart';
 import 'background.dart';
 import 'glass.dart';
 import 'home.dart' show showRenameDialog;
@@ -371,6 +373,19 @@ class SettingsPage extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 22),
+      SectionTitle(context.tr('fg_app')),
+      Glass(
+        child: _Switch(
+          icon: Icons.system_update_rounded,
+          color: AppColors.mint,
+          title: context.tr('f_update'),
+          subtitle: context.tr('f_update_sub'),
+          info: 'i_update',
+          value: s.autoUpdateCheck,
+          onChanged: (v) => s.update((x) => x.autoUpdateCheck = v),
+        ),
+      ),
+      const SizedBox(height: 22),
       SectionTitle(context.tr('fg_noapp')),
       Glass(
         child: Column(
@@ -524,6 +539,57 @@ class SettingsPage extends StatelessWidget {
 
   List<Widget> _about(BuildContext context) => [
         Glass(
+          padding: const EdgeInsets.all(14),
+          onTap: () => showUpdateDialog(context, controller),
+          borderColor: controller.updateAvailable != null ? AppColors.mint.withValues(alpha: 0.6) : null,
+          child: Row(
+            children: [
+              const IconBadge(icon: Icons.system_update_rounded, color: AppColors.mint, size: 42),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(context.tr('update_check'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                    Text(
+                      controller.updateAvailable != null
+                          ? context.tr('update_new', {'v': controller.updateAvailable!.version})
+                          : context.tr('update_current', {'v': kAppVersion}),
+                      style: TextStyle(
+                          color: controller.updateAvailable != null ? AppColors.mint : AppColors.muted, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Glass(
+          padding: const EdgeInsets.all(14),
+          onTap: () => Navigator.of(context)
+              .push(MaterialPageRoute<void>(builder: (_) => DeveloperPage(controller: controller))),
+          child: Row(
+            children: [
+              const DeveloperAvatar(size: 42),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(context.tr('dev_title'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                    const Text('${Developer.name} · ${Developer.alias}',
+                        style: TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Glass(
           child: Column(
             children: [
               InfoRow(icon: Icons.bolt_rounded, color: AppColors.cyan, label: context.tr('s_version'), value: 'SUDOSEND $kAppVersion', ltr: true),
@@ -536,21 +602,12 @@ class SettingsPage extends StatelessWidget {
                   ltr: true),
               _divider,
               InfoRow(
-                icon: Icons.code_rounded,
+                icon: Icons.download_rounded,
                 color: AppColors.mint,
-                label: context.tr('s_source'),
-                value: 'github.com/sudosoc/SUDOSEND',
+                label: context.tr('s_downloads'),
+                value: 'github.com/$kReleaseRepo',
                 ltr: true,
-                copyValue: 'https://github.com/sudosoc/SUDOSEND',
-              ),
-              _divider,
-              InfoRow(
-                icon: Icons.person_rounded,
-                color: AppColors.pink,
-                label: context.tr('s_developer'),
-                value: 'SUDOSOC · ceo@sudosoc.com',
-                ltr: true,
-                copyValue: 'ceo@sudosoc.com',
+                copyValue: 'https://github.com/$kReleaseRepo',
               ),
               _divider,
               InfoRow(icon: Icons.gavel_rounded, color: AppColors.amber, label: context.tr('s_license'), value: 'MIT', ltr: true),

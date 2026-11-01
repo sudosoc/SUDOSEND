@@ -2,7 +2,7 @@
 # ──────────────────────────────────────────────────────────────────────────
 #  SUDOSEND one-line installer for Linux.
 #
-#    curl -fsSL https://raw.githubusercontent.com/sudosoc/SUDOSEND/main/get.sh | bash
+#    curl -fsSL https://raw.githubusercontent.com/sudosoc/SUDOSEND-APP/main/get.sh | bash
 #
 #  Detects your CPU (x86_64 / ARM64 e.g. Raspberry Pi) and distro, downloads the
 #  latest release and installs it: the .deb on Debian/Ubuntu/Kali/Raspberry Pi OS,
@@ -10,7 +10,7 @@
 #  the GitHub CLI (`gh`) is installed and logged in.
 # ──────────────────────────────────────────────────────────────────────────
 set -euo pipefail
-REPO="sudosoc/SUDOSEND"
+REPO="sudosoc/SUDOSEND-APP"
 
 if [ -t 1 ]; then G=$'\033[32m'; C=$'\033[36m'; R=$'\033[31m'; N=$'\033[0m'; else G= C= R= N=; fi
 step() { printf '%s▸%s %s\n' "$C" "$N" "$*"; }

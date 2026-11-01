@@ -3,7 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../state/settings.dart';
 import 'strings.dart';
 
-const String kAppVersion = '0.7.0';
+const String kAppVersion = '0.8.0';
 
 /// Makes settings (language, effects) available to every widget and rebuilds
 /// dependents when they change.

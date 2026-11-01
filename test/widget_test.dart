@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sudosend/app/strings.dart';
 import 'package:sudosend/state/chat.dart';
 import 'package:sudosend/state/settings.dart';
+import 'package:sudosend/state/updater.dart';
 import 'package:wraith_core/util.dart';
 
 void main() {
@@ -51,5 +52,13 @@ void main() {
     expect(t.unread, 1);
     // A message still "sending" when the app closed is shown as failed (retryable).
     expect(t.messages.last.state, ChatState.failed);
+  });
+
+  test('update version comparison', () {
+    expect(Updater.isNewer('0.8.0', '0.7.0'), isTrue);
+    expect(Updater.isNewer('0.10.0', '0.9.3'), isTrue);
+    expect(Updater.isNewer('1.0.0', '0.99.99'), isTrue);
+    expect(Updater.isNewer('0.8.0', '0.8.0'), isFalse);
+    expect(Updater.isNewer('0.7.9', '0.8.0'), isFalse);
   });
 }

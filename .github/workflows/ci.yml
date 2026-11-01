@@ -10,6 +10,10 @@ on:
 permissions:
   contents: write
 
+env:
+  # Builds are published here; the source repository can stay private.
+  RELEASE_REPO: sudosoc/SUDOSEND-APP
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -18,8 +22,30 @@ jobs:
   check:
     name: Analyze, test & CLI end-to-end
     runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      tag: ${{ steps.plan.outputs.tag }}
     steps:
       - uses: actions/checkout@v5
+      # Windows/macOS/iOS runners cost 2-10x on private repos, so they only
+      # run when there is a new version to publish (or on a manual run).
+      - name: Is there a new version to release?
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF#refs/tags/}"
+          else
+            tag="v$(grep -E '^version:' pubspec.yaml | sed -E 's/version: *([0-9.]+).*/\1/')"
+          fi
+          release=false
+          if [ "$GITHUB_EVENT_NAME" = push ] && ! gh api "repos/$RELEASE_REPO/releases/tags/$tag" >/dev/null 2>&1; then
+            release=true
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "tag $tag -> release=$release"
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -177,6 +203,7 @@ jobs:
   windows:
     name: Windows app + CLI
     needs: check
+    if: needs.check.outputs.release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     defaults:
       run:
@@ -221,6 +248,7 @@ jobs:
   macos:
     name: macOS app + CLI
     needs: check
+    if: needs.check.outputs.release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
@@ -247,6 +275,7 @@ jobs:
   ios:
     name: iOS (unsigned IPA)
     needs: check
+    if: needs.check.outputs.release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
@@ -270,36 +299,31 @@ jobs:
 
   release:
     name: GitHub Release
-    # Tag pushes, or any push to main whose pubspec version has no release yet.
-    if: github.event_name == 'push'
-    needs: [android, linux, linux-arm64, windows, macos, ios]
+    if: needs.check.outputs.release == 'true'
+    needs: [check, android, linux, linux-arm64, windows, macos, ios]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Decide release tag
-        id: tag
+      - name: Required secrets present?
         env:
-          GH_TOKEN: ${{ github.token }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            tag="${GITHUB_REF#refs/tags/}"
-          else
-            tag="v$(grep -E '^version:' pubspec.yaml | sed -E 's/version: *([0-9.]+).*/\1/')"
+          ok=1
+          if [ -z "$RELEASE_TOKEN" ]; then
+            echo "::error title=RELEASE_TOKEN missing::Add a fine-grained token with Contents read and write on $RELEASE_REPO as the RELEASE_TOKEN secret."
+            ok=0
           fi
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "release $tag already exists — skipping"
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "publish=true" >> "$GITHUB_OUTPUT"
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error title=Android signing missing::Refusing to publish debug-signed APKs because in-app updates would fail. Add the ANDROID_* secrets."
+            ok=0
           fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          [ "$ok" = 1 ]
       - uses: actions/download-artifact@v4
-        if: steps.tag.outputs.publish == 'true'
         with:
           path: dist
           merge-multiple: true
       - name: Publish release with labelled downloads
-        if: steps.tag.outputs.publish == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: ./tool/publish_release.sh "${{ steps.tag.outputs.tag }}" dist
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: ./tool/publish_release.sh "${{ needs.check.outputs.tag }}" dist

@@ -6,7 +6,8 @@
 set -euo pipefail
 tag="$1"
 dist="$2"
-repo="${GITHUB_REPOSITORY:-sudosoc/SUDOSEND}"
+# Public downloads repo (the source repo can be private).
+repo="${RELEASE_REPO:-sudosoc/SUDOSEND-APP}"
 ver="${tag#v}"
 
 label() {
@@ -32,7 +33,12 @@ label() {
 }
 
 notes="$(mktemp)"
-cat > "$notes" <<NOTES
+# "What's new" comes from release_notes/<version>.md (shown in the app's update dialog too).
+if [ -f "release_notes/$ver.md" ]; then
+  cat "release_notes/$ver.md" > "$notes"
+  printf '\n\n' >> "$notes"
+fi
+cat >> "$notes" <<NOTES
 ## Downloads
 
 | | System | File |
@@ -53,11 +59,11 @@ cat > "$notes" <<NOTES
 
 One-line Linux install: \`curl -fsSL https://raw.githubusercontent.com/${repo}/main/get.sh | bash\`
 
-Full guide: [README](https://github.com/${repo}#install)
+Install guide: [README](https://github.com/${repo}#install)
 NOTES
 
-gh release create "$tag" --repo "$repo" --title "SUDOSEND $tag" --notes-file "$notes" \
-  --target "${GITHUB_SHA:-main}" --generate-notes
+# --target is the downloads repo's own branch: source commits never become public.
+gh release create "$tag" --repo "$repo" --title "SUDOSEND $tag" --notes-file "$notes" --target main
 for f in "$dist"/*; do
   name="$(basename "$f")"
   gh release upload "$tag" --repo "$repo" "$f#$(label "$name")"

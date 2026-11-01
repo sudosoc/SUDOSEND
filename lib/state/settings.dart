@@ -106,6 +106,8 @@ class SettingsController extends ChangeNotifier {
   bool webShare = true;
   /// Queue sends for trusted devices that are offline.
   bool offlineQueue = true;
+  /// Look for a new version on GitHub once at startup.
+  bool autoUpdateCheck = true;
   /// Sync folders.
   List<SyncPair> syncPairs = [];
 
@@ -150,6 +152,7 @@ class SettingsController extends ChangeNotifier {
         allowSpeedTest = (m['allowSpeedTest'] as bool?) ?? allowSpeedTest;
         webShare = (m['webShare'] as bool?) ?? webShare;
         offlineQueue = (m['offlineQueue'] as bool?) ?? offlineQueue;
+        autoUpdateCheck = (m['autoUpdateCheck'] as bool?) ?? autoUpdateCheck;
         final pairs = m['syncPairs'];
         if (pairs is List) syncPairs = pairs.map(SyncPair.fromJson).whereType<SyncPair>().toList();
       }
@@ -190,6 +193,7 @@ class SettingsController extends ChangeNotifier {
         'allowSpeedTest': allowSpeedTest,
         'webShare': webShare,
         'offlineQueue': offlineQueue,
+        'autoUpdateCheck': autoUpdateCheck,
         'syncPairs': [for (final s in syncPairs) s.toJson()],
       }));
     } catch (_) {}

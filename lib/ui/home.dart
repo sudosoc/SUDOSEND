@@ -319,7 +319,12 @@ class _Header extends StatelessWidget {
             ),
             child: Tooltip(
               message: context.tr('settings'),
-              child: const Icon(Icons.tune_rounded, size: 20, color: AppColors.text),
+              child: Badge(
+                isLabelVisible: controller.updateAvailable != null,
+                backgroundColor: AppColors.mint,
+                smallSize: 9,
+                child: const Icon(Icons.tune_rounded, size: 20, color: AppColors.text),
+              ),
             ),
           ),
         ],

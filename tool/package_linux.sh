@@ -85,7 +85,7 @@ Installed-Size: $size_kb
 Depends: libgtk-3-0t64 | libgtk-3-0
 Recommends: zenity
 Maintainer: SUDOSOC <https://github.com/sudosoc>
-Homepage: https://github.com/sudosoc/SUDOSEND
+Homepage: https://github.com/sudosoc/SUDOSEND-APP
 Description: Secure, local, instant file sharing (Wraith Protocol)
  Send files, whole folders and text between Android, Windows and Linux on
  the same network. End-to-end encrypted (X25519 + ChaCha20-Poly1305),

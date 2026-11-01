@@ -21,6 +21,7 @@ import 'package:wraith_core/vault_windows.dart';
 import 'package:wraith_core/web_share.dart';
 import 'package:wraith_core/wraith.dart';
 
+import '../app/scope.dart' show kAppVersion;
 import '../app/strings.dart';
 import '../platform/desktop.dart';
 import '../platform/native_bridge.dart';
@@ -29,6 +30,7 @@ import 'history.dart';
 import 'outbox.dart';
 import 'previews.dart';
 import 'settings.dart';
+import 'updater.dart';
 
 class AppController extends ChangeNotifier {
   AppController({this.initialArgs = const []});
@@ -176,6 +178,9 @@ class AppController extends ChangeNotifier {
         _updateService();
       }
       if (initialArgs.isNotEmpty) await addPaths(initialArgs);
+      if (settings.autoUpdateCheck && !Platform.isIOS) {
+        unawaited(Future<void>.delayed(const Duration(seconds: 8), () => checkForUpdates(silent: true)));
+      }
     } catch (e) {
       startupError = describeError(e);
       notifyListeners();
@@ -1211,6 +1216,66 @@ class AppController extends ChangeNotifier {
   }
 
   bool isSyncing(String id) => _syncBusy.contains(id);
+
+  // ─────────────────────────── Updates ───────────────────────────
+
+  /// Set when a newer release exists (shown as a badge on the settings button).
+  UpdateInfo? updateAvailable;
+
+  /// Returns (newer release or null, error or null).
+  Future<(UpdateInfo?, String?)> checkForUpdates({bool silent = false}) async {
+    try {
+      final info = await Updater(kAppVersion).latest();
+      final newer = Updater.isNewer(info.version, kAppVersion) ? info : null;
+      updateAvailable = newer;
+      notifyListeners();
+      if (newer != null && silent) _messages.add(t('update_available', {'v': newer.version}));
+      return (newer, null);
+    } catch (e) {
+      return (null, e is HttpException ? e.message : describeError(e));
+    }
+  }
+
+  /// Downloads and starts installing [info]. Returns a user message for the
+  /// result, or null when an installer took over.
+  Future<String?> installUpdate(UpdateInfo info, {void Function(double)? onProgress}) async {
+    final method = Updater.method;
+    if (method == UpdateMethod.openPage || method == UpdateMethod.linuxCommand) {
+      await openUrl(info.page);
+      return null;
+    }
+    final asset = Updater.pick(info, androidAbi: Platform.isAndroid ? await _native.abi() : '');
+    if (asset == null) {
+      await openUrl(info.page);
+      return null;
+    }
+    try {
+      final Directory dir;
+      if (method == UpdateMethod.downloadAndReveal) {
+        dir = Directory(p.join((await getDownloadsDirectory())?.path ?? homeDir(), 'SUDOSEND'));
+      } else {
+        dir = Directory(p.join((await getTemporaryDirectory()).path, 'sudosend-update'));
+      }
+      final file = await Updater.download(asset, dir, onProgress: onProgress);
+      switch (method) {
+        case UpdateMethod.androidApk:
+          final r = await _native.installApk(file.path);
+          if (r == 'permission') return t('update_allow_install');
+          if (r != 'ok') return t('update_failed');
+          return null;
+        case UpdateMethod.windowsInstaller:
+          await Process.start(file.path, const [], mode: ProcessStartMode.detached);
+          // The installer replaces the running exe, so step aside.
+          Future<void>.delayed(const Duration(seconds: 1), () => exit(0));
+          return null;
+        default:
+          await reveal(file.path);
+          return t('update_downloaded', {'path': file.path});
+      }
+    } catch (e) {
+      return e is HttpException ? e.message : describeError(e);
+    }
+  }
 
   // ─────────────────────────── Find my device ───────────────────────────
 

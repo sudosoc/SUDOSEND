@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/sudosoc/SUDOSEND/actions/workflows/ci.yml"><img src="https://github.com/sudosoc/SUDOSEND/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/sudosoc/SUDOSEND/releases/latest"><img src="https://img.shields.io/github/v/release/sudosoc/SUDOSEND?label=release" alt="release"></a>
+  <a href="https://github.com/sudosoc/SUDOSEND-APP/releases/latest"><img src="https://img.shields.io/github/v/release/sudosoc/SUDOSEND-APP?label=release" alt="release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"></a>
 </p>
 
@@ -100,7 +100,7 @@ explains what it does, in English and Arabic.
 
 ## Install
 
-All files are on the **[Releases page](https://github.com/sudosoc/SUDOSEND/releases/latest)** —
+All files are on the **[Releases page](https://github.com/sudosoc/SUDOSEND-APP/releases/latest)** —
 each one is labelled with its system in parentheses, e.g. **SUDOSEND (Android) — arm64-v8a**.
 
 ### Which file do I download?
@@ -206,7 +206,7 @@ scan the QR on the other device's Receive tab. Received files are in the **Files
 Detects your CPU and distro, downloads the right file and installs it:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sudosoc/SUDOSEND/main/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/sudosoc/SUDOSEND-APP/main/get.sh | bash
 ```
 
 > While the repository is **private**, this needs the GitHub CLI logged in (`sudo apt install gh && gh auth login`). Without it, download the file from the Releases page manually.
@@ -321,12 +321,23 @@ CI (`.github/workflows/ci.yml`) runs analysis, tests and a CLI-to-CLI end-to-end
 Android, Windows (installer + portable), Linux x64 and Linux ARM64 (tarball + .deb), and smoke-tests every
 Linux installer. Bumping `version:` in `pubspec.yaml` publishes a new release automatically.
 
-### Release signing (Android)
+### Releases and signing
 
-CI re-signs the APK with a permanent key when these repository secrets exist:
-`ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS`
-(*Settings → Secrets and variables → Actions*). Without them the APK is debug-signed and a
-warning is shown in the run.
+Builds are published to the public **sudosoc/SUDOSEND-APP** repository (this source repo can be
+private). A release is made automatically when `version:` in `pubspec.yaml` has no release there yet;
+release notes come from `release_notes/<version>.md`. Windows/macOS/iOS builds only run for a new
+version or a manual *Run workflow* (they cost 2–10× minutes on private repos).
+
+Repository secrets (*Settings → Secrets and variables → Actions*), all required to publish:
+
+| Secret | What |
+|---|---|
+| `RELEASE_TOKEN` | Fine-grained token, repository **SUDOSEND-APP** only, *Contents: Read and write* |
+| `ANDROID_KEYSTORE_BASE64` | base64 of the release `.jks` |
+| `ANDROID_STORE_PASSWORD` / `ANDROID_KEY_PASSWORD` / `ANDROID_KEY_ALIAS` | keystore details |
+
+The release job refuses to publish debug-signed APKs, because in-app updates only install over an
+APK signed with the same key.
 
 ### Performance
 

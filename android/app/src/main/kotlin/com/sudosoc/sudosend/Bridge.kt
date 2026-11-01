@@ -117,6 +117,8 @@ object Bridge {
                         }
                     }
                     "sdkInt" -> result.success(Build.VERSION.SDK_INT)
+                    "abi" -> result.success(Build.SUPPORTED_ABIS.firstOrNull() ?: "")
+                    "installApk" -> result.success(installApk(call.argument<String>("path") ?: ""))
                     "isLowRam" -> {
                         val am = app.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
                         result.success(am.isLowRamDevice || Runtime.getRuntime().availableProcessors() <= 4)
@@ -190,6 +192,39 @@ object Bridge {
             true
         } catch (e: ActivityNotFoundException) {
             false
+        }
+    }
+
+    /**
+     * Hands a downloaded update to the system installer. Returns "ok",
+     * "permission" (the user must allow installs from SUDOSEND first — the
+     * settings screen is opened) or "error". Android itself refuses an APK
+     * that is not signed with the same key as the installed app.
+     */
+    private fun installApk(path: String): String {
+        val file = File(path)
+        if (!file.exists()) return "error"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !app.packageManager.canRequestPackageInstalls()) {
+            return try {
+                app.startActivity(
+                    Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        android.net.Uri.parse("package:${app.packageName}"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+                "permission"
+            } catch (e: ActivityNotFoundException) {
+                "error"
+            }
+        }
+        val uri = FileProvider.getUriForFile(app, "${app.packageName}.files", file)
+        val intent = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try {
+            app.startActivity(intent)
+            "ok"
+        } catch (e: ActivityNotFoundException) {
+            "error"
         }
     }
 

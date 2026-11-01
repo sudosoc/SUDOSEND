@@ -93,6 +93,12 @@ class NativeBridge {
 
   Future<bool> isLowRam() async => (await _invoke<bool>('isLowRam')) ?? false;
 
+  /// Primary CPU ABI, e.g. "arm64-v8a".
+  Future<String> abi() async => (await _invoke<String>('abi')) ?? '';
+
+  /// "ok" | "permission" | "error" — see Bridge.installApk.
+  Future<String> installApk(String path) async => (await _invoke<String>('installApk', {'path': path})) ?? 'error';
+
   /// Starts a local-only hotspot. Returns (ssid, password); throws a
   /// user-readable message on failure.
   Future<({String ssid, String password})> startHotspot() async {

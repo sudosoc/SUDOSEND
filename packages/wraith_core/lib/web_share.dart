@@ -344,7 +344,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.25);border
 </style></head><body><main>
 <header><div class="logo">⚡</div><div><h1>SUDOSEND</h1><small>${esc.convert(deviceName)}</small></div></header>
 $filesBlock$textBlock$uploadBlock
-<p class="note">${t('Shared over your local network. Get the app for end-to-end encrypted transfers: github.com/sudosoc/SUDOSEND', 'مشارَك على شبكتك المحلية. حمّل التطبيق لتحويلات مشفّرة من الطرف للطرف: github.com/sudosoc/SUDOSEND')}</p>
+<p class="note">${t('Shared over your local network. Get the app for end-to-end encrypted transfers: github.com/sudosoc/SUDOSEND-APP', 'مشارَك على شبكتك المحلية. حمّل التطبيق لتحويلات مشفّرة من الطرف للطرف: github.com/sudosoc/SUDOSEND-APP')}</p>
 </main>
 <script>
 function copyTx(b){const t=document.getElementById('tx');const r=document.createRange();r.selectNodeContents(t);const s=getSelection();s.removeAllRanges();s.addRange(r);
