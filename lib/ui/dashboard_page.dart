@@ -251,7 +251,7 @@ class _DashboardPageState extends State<DashboardPage> {
           padding: const pw.EdgeInsets.symmetric(vertical: 2),
           child: pw.Row(children: [
             pw.SizedBox(width: 170, child: pw.Text(k, style: const pw.TextStyle(color: PdfColors.grey700))),
-            pw.Expanded(child: pw.Text(v, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+            pw.Expanded(child: pw.Text(v, style: const pw.TextStyle(fontWeight: pw.FontWeight.bold))),
           ]),
         );
     final rows = c.history.entries.take(500).toList();
@@ -263,7 +263,7 @@ class _DashboardPageState extends State<DashboardPage> {
         padding: const pw.EdgeInsets.only(bottom: 8),
         decoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: PdfColors.cyan, width: 2))),
         child: pw.Row(children: [
-          pw.Text('SUDOSEND', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.cyan800)),
+          pw.Text('SUDOSEND', style: const pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.cyan800)),
           pw.Spacer(),
           pw.Text('${c.identity.name} · ${DateTime.now().toIso8601String().substring(0, 16).replaceAll('T', ' ')}'),
         ]),
@@ -274,7 +274,7 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
       build: (_) => [
         pw.SizedBox(height: 10),
-        pw.Text('Summary', style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+        pw.Text('Summary', style: const pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 6),
         kv('Files received', '${st.filesReceived} (${formatBytes(st.bytesReceived)})'),
         kv('Files sent', '${st.filesSent} (${formatBytes(st.bytesSent)})'),
@@ -284,16 +284,16 @@ class _DashboardPageState extends State<DashboardPage> {
         kv('Duplicate groups', '${c.library.duplicateGroups().length}'),
         if (c.disk != null) kv('Free space', '${formatBytes(c.disk!.$1)} of ${formatBytes(c.disk!.$2)}'),
         pw.SizedBox(height: 14),
-        pw.Text('Top senders', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+        pw.Text('Top senders', style: const pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
         for (final s in st.topSenders(10)) kv(s.$1, '${s.$2} files · ${formatBytes(s.$3)}'),
         pw.SizedBox(height: 14),
-        pw.Text('Received by type', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+        pw.Text('Received by type', style: const pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
         for (final s in st.topCategories()) kv(s.$1.folder, '${s.$2} files · ${formatBytes(s.$3)}'),
         pw.SizedBox(height: 14),
-        pw.Text('Transfers (latest ${rows.length})', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+        pw.Text('Transfers (latest ${rows.length})', style: const pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 6),
         pw.TableHelper.fromTextArray(
-          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
+          headerStyle: const pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
           cellStyle: const pw.TextStyle(fontSize: 8.5),
           headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
           headers: ['Time', 'Dir', 'Device', 'Status', 'Files', 'Size', 'Speed'],

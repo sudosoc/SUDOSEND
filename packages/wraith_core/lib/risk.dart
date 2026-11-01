@@ -46,7 +46,7 @@ FileRisk assessRisk(String name, [List<int>? head]) {
     return const FileRisk(RiskLevel.danger, 'double-extension');
   }
   // Right-to-left override characters used to flip the visible extension.
-  if (name.contains('‮') || name.contains('‭')) return const FileRisk(RiskLevel.danger, 'double-extension');
+  if (name.contains('\u202E') || name.contains('\u202D')) return const FileRisk(RiskLevel.danger, 'double-extension');
   if (_executables.contains(ext)) return const FileRisk(RiskLevel.caution, 'executable');
   if (_scripts.contains(ext)) return const FileRisk(RiskLevel.caution, 'script');
   if (_macros.contains(ext)) return const FileRisk(RiskLevel.caution, 'macro');

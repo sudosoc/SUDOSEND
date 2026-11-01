@@ -417,10 +417,9 @@ class _DevicesSectionState extends State<_DevicesSection> {
                   onPressed: () async {
                     final messenger = ScaffoldMessenger.of(context);
                     final none = context.tr('clip_none');
+                    final sentMsg = context.tr('clip_sent', {'n': '#'});
                     final sent = await controller.pollClipboard(force: true);
-                    if (!mounted) return;
-                    messenger.showSnackBar(SnackBar(
-                        content: Text(sent == 0 ? none : context.tr('clip_sent', {'n': sent}))));
+                    messenger.showSnackBar(SnackBar(content: Text(sent == 0 ? none : sentMsg.replaceAll('#', '$sent'))));
                   },
                   icon: const Icon(Icons.content_paste_go_rounded, size: 17, color: AppColors.cyan),
                   label: Text(context.tr('clipboard'), style: const TextStyle(color: AppColors.cyan)),

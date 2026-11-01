@@ -725,7 +725,7 @@ void main() {
     expect(assessRisk('setup.exe').level, RiskLevel.caution);
     expect(assessRisk('run.ps1').reason, 'script');
     expect(assessRisk('budget.xlsm').reason, 'macro');
-    expect(assessRisk('photo‮gpj.exe').level, RiskLevel.danger);
+    expect(assessRisk('photo\u202Egpj.exe').level, RiskLevel.danger);
     expect(assessRisk('cv.pdf', [0x4D, 0x5A, 0x90, 0x00]).reason, 'disguised');
     expect(assessRisk('notes.txt', '#!/bin/sh'.codeUnits).reason, 'disguised-script');
     expect(assessRisk('cv.pdf', '%PDF-1.7'.codeUnits).level, RiskLevel.none);
