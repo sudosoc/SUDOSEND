@@ -19,6 +19,9 @@ if [ ! -f "$platform/Podfile" ]; then
 fi
 if [ "$platform" = ios ]; then
   sed -i '' "s/^#* *platform :ios, '[0-9.]*'/platform :ios, '15.5'/" ios/Podfile
+else
+  # pdfrx (PDF previews) needs macOS 12+.
+  sed -i '' "s/^#* *platform :osx, '[0-9.]*'/platform :osx, '12.0'/" macos/Podfile
 fi
 echo "== Podfile platform:"; grep -n "platform :" "$platform/Podfile"
 cd "$platform" && pod install --repo-update 2>&1 | tail -n 40

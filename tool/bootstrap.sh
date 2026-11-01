@@ -48,7 +48,7 @@ if has macos; then
   plist_set macos/Runner/Info.plist NSCameraUsageDescription string "Scan a SUDOSEND pairing QR code."
   # Flutter generates and integrates the Podfile itself on the first build;
   # CocoaPods then follows the deployment target set here.
-  sedi 's/MACOSX_DEPLOYMENT_TARGET = 10\.[0-9]*;/MACOSX_DEPLOYMENT_TARGET = 10.15;/g' macos/Runner.xcodeproj/project.pbxproj
+  sedi 's/MACOSX_DEPLOYMENT_TARGET = [0-9.]*;/MACOSX_DEPLOYMENT_TARGET = 12.0;/g' macos/Runner.xcodeproj/project.pbxproj
   sedi 's/^PRODUCT_NAME = .*/PRODUCT_NAME = SUDOSEND/' macos/Runner/Configs/AppInfo.xcconfig
 fi
 if has ios; then
