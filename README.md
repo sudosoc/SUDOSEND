@@ -256,7 +256,7 @@ Standalone binaries (`sudosend-cli-*`) are on the Releases page for servers with
 | `exec format error` on Linux | Wrong CPU build. `uname -m` says `aarch64` → use the **arm64** file. `x86_64` → **x64/amd64**. |
 | `sudosend: command not found` after `./install.sh` | Open a new terminal, or run `export PATH="$HOME/.local/bin:$PATH"`. |
 | Devices don't see each other | Same Wi-Fi? Guest, campus and café Wi-Fi often block device-to-device traffic (*client isolation*), so use a phone hotspot instead. Or use **By IP**. |
-| Linux: other devices can't find mine | Firewall. `sudo ufw allow 47823/udp && sudo ufw allow 47824:47833/tcp` |
+| Linux: other devices can't find mine | Firewall. `sudo ufw allow 47823/udp && sudo ufw allow 47824:47833/tcp && sudo ufw allow 47840:47849/tcp` (the last range is browser share) |
 | Windows: other devices can't find the PC | Re-run the installer with the firewall option, or allow SUDOSEND on **Private** networks. Make sure the Wi-Fi network is set to *Private*, not *Public*. |
 | *Pick files* does nothing on Linux | Install zenity: `sudo apt install zenity` |
 | Window is blank or very slow on a Raspberry Pi | Use a 64-bit OS with the desktop (X11/Wayland) running. On very old boards, the CLI is lighter: `sudosend receive`. |

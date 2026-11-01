@@ -7,6 +7,7 @@ import 'package:wraith_core/util.dart';
 import '../app/scope.dart';
 import '../state/app_controller.dart';
 import 'background.dart';
+import 'chat_page.dart';
 import 'glass.dart';
 import 'incoming_dialog.dart';
 import 'radar.dart';
@@ -35,7 +36,20 @@ const _navItems = [
   _NavItem(Icons.send_rounded, 'tab_send'),
   _NavItem(Icons.wifi_tethering_rounded, 'tab_receive'),
   _NavItem(Icons.swap_vert_rounded, 'tab_transfers'),
+  _NavItem(Icons.forum_rounded, 'tab_messages'),
 ];
+
+/// Tabs on screen: Messages only while that feature is on.
+List<_NavItem> _visibleNav(AppController c) => c.settings.chat ? _navItems : _navItems.sublist(0, 3);
+
+int _badgeFor(AppController c, int i) => switch (i) {
+      2 => c.activeJobs,
+      3 => c.chat.unread,
+      _ => 0,
+    };
+
+/// Watches and other tiny screens.
+bool _tiny(BoxConstraints c) => c.maxWidth < 300 || c.maxHeight < 300;
 
 class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<IncomingRequest>? _incomingSub;
@@ -110,7 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final request = _queue.removeAt(0);
       if (!request.isPending) continue;
       _dialogOpen = true;
-      await showIncomingDialog(context, request);
+      await showIncomingDialog(context, request, onAcceptSync: c.acceptSyncInvite);
       _dialogOpen = false;
     }
   }
@@ -124,15 +138,16 @@ class _HomeScreenState extends State<HomeScreen> {
           const Positioned.fill(child: AnimatedBackground()),
           SafeArea(
             child: ListenableBuilder(
-              listenable: c,
+              listenable: Listenable.merge([c, c.settings]),
               builder: (context, _) {
                 if (!c.ready) return _Boot(error: c.startupError);
                 return LayoutBuilder(
                   builder: (context, constraints) {
                     final wide = constraints.maxWidth >= 900;
+                    final tiny = _tiny(constraints);
                     final content = Column(
                       children: [
-                        _Header(controller: c, compact: constraints.maxWidth < 420),
+                        if (!tiny) _Header(controller: c, compact: constraints.maxWidth < 420),
                         Expanded(
                           child: AnimatedSwitcher(
                             duration: context.reducedEffects ? Duration.zero : const Duration(milliseconds: 220),
@@ -148,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: KeyedSubtree(key: ValueKey(c.tab), child: _tabBody()),
                           ),
                         ),
-                        if (!wide) _BottomNav(controller: c),
+                        if (!wide) _BottomNav(controller: c, iconsOnly: constraints.maxWidth < 420),
                       ],
                     );
                     if (!wide) return content;
@@ -171,6 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _tabBody() => switch (c.tab) {
         0 => SendTab(controller: c),
         1 => ReceiveTab(controller: c),
+        3 when c.settings.chat => MessagesTab(controller: c),
         _ => TransfersTab(controller: c),
       };
 }
@@ -353,13 +369,17 @@ Future<void> showRenameDialog(BuildContext context, AppController controller) as
 }
 
 class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.controller});
+  const _BottomNav({required this.controller, this.iconsOnly = false});
   final AppController controller;
+  final bool iconsOnly;
 
   @override
   Widget build(BuildContext context) {
+    final items = _visibleNav(controller);
+    // Labels only fit when there are few tabs or the screen is roomy.
+    final labels = !iconsOnly || items.length <= 3;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      padding: EdgeInsets.fromLTRB(iconsOnly ? 8 : 16, 4, iconsOnly ? 8 : 16, iconsOnly ? 6 : 12),
       child: Glass(
         radius: 26,
         blur: 26,
@@ -367,12 +387,13 @@ class _BottomNav extends StatelessWidget {
         padding: const EdgeInsets.all(6),
         child: Row(
           children: [
-            for (var i = 0; i < _navItems.length; i++)
+            for (var i = 0; i < items.length; i++)
               Expanded(
                 child: _NavButton(
-                  item: _navItems[i],
+                  item: items[i],
                   selected: controller.tab == i,
-                  badge: i == 2 ? controller.activeJobs : 0,
+                  badge: _badgeFor(controller, i),
+                  showLabel: labels,
                   onTap: () => controller.setTab(i),
                 ),
               ),
@@ -399,13 +420,13 @@ class _SideNav extends StatelessWidget {
           width: 84,
           child: Column(
             children: [
-              for (var i = 0; i < _navItems.length; i++)
+              for (var i = 0; i < _visibleNav(controller).length; i++)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _NavButton(
                     item: _navItems[i],
                     selected: controller.tab == i,
-                    badge: i == 2 ? controller.activeJobs : 0,
+                    badge: _badgeFor(controller, i),
                     vertical: true,
                     onTap: () => controller.setTab(i),
                   ),
@@ -425,6 +446,7 @@ class _NavButton extends StatelessWidget {
     required this.onTap,
     this.badge = 0,
     this.vertical = false,
+    this.showLabel = true,
   });
 
   final _NavItem item;
@@ -432,6 +454,7 @@ class _NavButton extends StatelessWidget {
   final VoidCallback onTap;
   final int badge;
   final bool vertical;
+  final bool showLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -457,10 +480,8 @@ class _NavButton extends StatelessWidget {
       context.tr(item.labelKey),
       style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: vertical ? 11.5 : 13),
     );
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
+    // InkWell (not GestureDetector) so TV remotes and keyboards can focus it.
+    final body = AnimatedContainer(
         duration: const Duration(milliseconds: 240),
         curve: Curves.easeOutCubic,
         padding: EdgeInsets.symmetric(vertical: vertical ? 12 : 11),
@@ -475,9 +496,18 @@ class _NavButton extends StatelessWidget {
             ? Column(children: [icon, const SizedBox(height: 6), label])
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: [icon, const SizedBox(width: 8), Flexible(child: label)],
+                children: [icon, if (showLabel) ...[const SizedBox(width: 8), Flexible(child: label)]],
               ),
+      );
+    final button = Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        focusColor: AppColors.cyan.withValues(alpha: 0.25),
+        child: body,
       ),
     );
+    return showLabel ? button : Tooltip(message: context.tr(item.labelKey), child: button);
   }
 }

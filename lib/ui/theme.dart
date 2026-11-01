@@ -42,6 +42,7 @@ ThemeData buildTheme({bool arabic = false}) {
   );
   return base.copyWith(
     scaffoldBackgroundColor: AppColors.bgTop,
+    focusColor: AppColors.cyan.withValues(alpha: 0.22),
     textTheme: base.textTheme.apply(bodyColor: AppColors.text, displayColor: AppColors.text),
     iconTheme: const IconThemeData(color: AppColors.text),
     snackBarTheme: SnackBarThemeData(

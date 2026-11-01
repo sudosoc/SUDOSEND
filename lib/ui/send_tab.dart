@@ -9,6 +9,7 @@ import 'package:wraith_core/util.dart';
 import '../app/scope.dart';
 import '../platform/desktop.dart';
 import '../state/app_controller.dart';
+import 'device_actions.dart';
 import 'glass.dart';
 import 'radar.dart';
 import 'scan_page.dart';
@@ -168,13 +169,15 @@ class _FilesCard extends StatelessWidget {
               children: [
                 GhostButton(label: context.tr('edit'), icon: Icons.edit_rounded, onPressed: () => _editText(context)),
                 const SizedBox(width: 8),
-                GhostButton(
-                  label: context.tr('web_link'),
-                  icon: Icons.public_rounded,
-                  color: AppColors.violet,
-                  onPressed: () => openWebShare(context, controller, upload: false, withSelection: true),
-                ),
-                const SizedBox(width: 12),
+                if (controller.settings.webShare) ...[
+                  GhostButton(
+                    label: context.tr('web_link'),
+                    icon: Icons.public_rounded,
+                    color: AppColors.violet,
+                    onPressed: () => openWebShare(context, controller, upload: false, withSelection: true),
+                  ),
+                  const SizedBox(width: 12),
+                ],
                 Expanded(
                   child: Text(
                     context.tr('tap_device'),
@@ -238,12 +241,13 @@ class _FilesCard extends StatelessWidget {
             children: [
               GhostButton(label: context.tr('add'), icon: Icons.add_rounded, onPressed: controller.pickFiles),
               GhostButton(label: context.tr('folder'), icon: Icons.folder_rounded, onPressed: () => _pickFolder(context)),
-              GhostButton(
-                label: context.tr('web_link'),
-                icon: Icons.public_rounded,
-                color: AppColors.violet,
-                onPressed: () => openWebShare(context, controller, upload: false, withSelection: true),
-              ),
+              if (controller.settings.webShare)
+                GhostButton(
+                  label: context.tr('web_link'),
+                  icon: Icons.public_rounded,
+                  color: AppColors.violet,
+                  onPressed: () => openWebShare(context, controller, upload: false, withSelection: true),
+                ),
               Padding(
                 padding: const EdgeInsetsDirectional.only(start: 4),
                 child: Text(
@@ -430,7 +434,7 @@ class _DevicesSectionState extends State<_DevicesSection> {
               child: _PeerTile(
                 peer: peer,
                 trusted: controller.trust.isTrusted(peer.id),
-                onRing: controller.trust.isTrusted(peer.id) ? () => _ring(context, peer) : null,
+                onMore: controller.trust.isTrusted(peer.id) ? () => showDeviceActions(context, controller, peer) : null,
                 selected: _selecting ? _chosen.contains(peer.id) : null,
                 onTap: _selecting
                     ? () => setState(() => _chosen.contains(peer.id) ? _chosen.remove(peer.id) : _chosen.add(peer.id))
@@ -458,7 +462,7 @@ class _DevicesSectionState extends State<_DevicesSection> {
                     },
             ),
         ],
-        if (controller.trustedOffline.isNotEmpty && !_selecting) ...[
+        if (controller.settings.offlineQueue && controller.trustedOffline.isNotEmpty && !_selecting) ...[
           const SizedBox(height: 14),
           SectionTitle(context.tr('offline_trusted')),
           for (final d in controller.trustedOffline.take(6))
@@ -495,13 +499,6 @@ class _DevicesSectionState extends State<_DevicesSection> {
         ],
       ],
     );
-  }
-
-  Future<void> _ring(BuildContext context, Peer peer) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final ok = context.tr('ring_sent', {'name': peer.name});
-    final error = await controller.ringDevice(peer);
-    messenger.showSnackBar(SnackBar(content: Text(error ?? ok)));
   }
 
   void _send(BuildContext context, Peer peer) {
@@ -591,9 +588,10 @@ class _DevicesSectionState extends State<_DevicesSection> {
 }
 
 class _PeerTile extends StatelessWidget {
-  const _PeerTile({required this.peer, required this.trusted, required this.onTap, this.selected, this.onRing});
+  const _PeerTile({required this.peer, required this.trusted, required this.onTap, this.selected, this.onMore});
 
-  final VoidCallback? onRing;
+  /// Trusted devices: ring, speed test, message, folder sync.
+  final VoidCallback? onMore;
 
   final Peer peer;
   final bool trusted;
@@ -643,11 +641,11 @@ class _PeerTile extends StatelessWidget {
               ],
             ),
           ),
-          if (onRing != null && selected == null)
+          if (onMore != null && selected == null)
             IconButton(
-              tooltip: context.tr('ring'),
-              onPressed: onRing,
-              icon: const Icon(Icons.notifications_active_outlined, size: 20, color: AppColors.amber),
+              tooltip: context.tr('device_actions'),
+              onPressed: onMore,
+              icon: const Icon(Icons.more_horiz_rounded, size: 22, color: AppColors.amber),
             ),
           if (selected != null)
             Checkbox(value: selected, onChanged: (_) => onTap())

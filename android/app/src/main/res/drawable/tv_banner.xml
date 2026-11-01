@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android TV home-screen banner (320x180 dp): bolt badge on deep navy. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path android:fillColor="#0A0F24" android:pathData="M0,0h320v180h-320z" />
+    <path android:fillColor="#1B2350" android:pathData="M0,180 L320,60 L320,180 Z" />
+    <path android:fillColor="#22D3EE"
+        android:pathData="M120,50h80a20,20 0 0 1 20,20v40a20,20 0 0 1 -20,20h-80a20,20 0 0 1 -20,-20v-40a20,20 0 0 1 20,-20z" />
+    <path android:fillColor="#0A0F24"
+        android:pathData="M166,58 L138,96 L156,96 L150,122 L182,82 L163,82 Z" />
+</vector>

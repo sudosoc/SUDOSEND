@@ -14,6 +14,7 @@ import 'background.dart';
 import 'glass.dart';
 import 'home.dart' show showRenameDialog;
 import 'receive_tab.dart' show InfoRow;
+import 'sync_page.dart';
 import 'theme.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -23,63 +24,60 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.bgTop,
-      body: Stack(
-        children: [
-          const Positioned.fill(child: AnimatedBackground()),
-          SafeArea(
-            child: ListenableBuilder(
-              listenable: Listenable.merge([controller, controller.settings]),
-              builder: (context, _) => Column(
+    final cats = <(IconData, Color, String, String, List<Widget> Function(BuildContext))>[
+      (Icons.devices_rounded, AppColors.cyan, 's_device', 'cat_device_sub', _device),
+      (Icons.download_rounded, AppColors.amber, 's_receiving', 'cat_receiving_sub', _receiving),
+      (Icons.extension_rounded, AppColors.violet, 's_features', 's_features_sub', _features),
+      (Icons.shield_rounded, AppColors.mint, 's_privacy', 'cat_privacy_sub', _privacy),
+      (Icons.data_usage_rounded, AppColors.pink, 's_usage', 'cat_usage_sub', _usage),
+      (Icons.palette_rounded, AppColors.amber, 's_appearance', 'cat_appearance_sub', _appearance),
+      (Icons.info_rounded, AppColors.cyan, 's_about', 'cat_about_sub', _about),
+    ];
+    return _SettingsScaffold(
+      controller: controller,
+      title: context.tr('settings'),
+      children: (context) => [
+        for (final c in cats)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Glass(
+              padding: const EdgeInsets.all(14),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => _SettingsScaffold(controller: controller, title: context.tr(c.$3), children: c.$5),
+              )),
+              child: Row(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 16, 6),
-                    child: Row(
+                  IconBadge(icon: c.$1, color: c.$2, size: 42),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const BackButtonIcon(),
-                          color: AppColors.text,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(context.tr('settings'),
-                            style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                        Text(context.tr(c.$3), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                        const SizedBox(height: 2),
+                        Text(context.tr(c.$4), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
                       ],
                     ),
                   ),
-                  Expanded(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 720),
-                        child: ListView(
-                          padding: const EdgeInsets.fromLTRB(16, 6, 16, 32),
-                          children: _sections(context),
-                        ),
-                      ),
-                    ),
-                  ),
+                  const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
                 ],
               ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 
-  List<Widget> _sections(BuildContext context) {
-    final s = controller.settings;
+  Widget get _divider => Divider(height: 18, color: Colors.white.withValues(alpha: 0.07));
+
+  List<Widget> _device(BuildContext context) {
     final id = controller.identity;
     final keyStorage = switch (id.protection) {
       'dpapi' => context.tr('ks_dpapi'),
       'android-keystore' => context.tr('ks_android'),
       _ => context.tr('ks_file'),
     };
-    final divider = Divider(height: 18, color: Colors.white.withValues(alpha: 0.07));
     return [
-      // ── This device ──
-      SectionTitle(context.tr('s_device')),
       Glass(
         child: Column(
           children: [
@@ -93,7 +91,7 @@ class SettingsPage extends StatelessWidget {
                 onPressed: () => showRenameDialog(context, controller),
               ),
             ),
-            divider,
+            _divider,
             InfoRow(
               icon: Icons.fingerprint_rounded,
               color: AppColors.cyan,
@@ -103,15 +101,23 @@ class SettingsPage extends StatelessWidget {
               copyValue: id.fingerprint,
               copiedMessage: context.tr('fingerprint_copied'),
             ),
-            divider,
-            InfoRow(icon: Icons.key_rounded, color: AppColors.amber, label: context.tr('s_key_storage'), value: keyStorage),
+            _divider,
+            InfoRow(
+              icon: Icons.key_rounded,
+              color: AppColors.amber,
+              label: context.tr('s_key_storage'),
+              value: keyStorage,
+              trailing: InfoButton(title: context.tr('s_key_storage'), body: context.tr('i_key_storage')),
+            ),
           ],
         ),
       ),
-      const SizedBox(height: 22),
+    ];
+  }
 
-      // ── Receiving ──
-      SectionTitle(context.tr('s_receiving')),
+  List<Widget> _receiving(BuildContext context) {
+    final s = controller.settings;
+    return [
       Glass(
         child: Column(
           children: [
@@ -143,68 +149,65 @@ class SettingsPage extends StatelessWidget {
                 ],
               ),
             ],
-            divider,
+            _divider,
             _Switch(
               icon: Icons.create_new_folder_rounded,
               color: AppColors.amber,
               title: context.tr('s_sender_folders'),
               subtitle: context.tr('s_sender_folders_sub'),
+              info: 'i_sender_folders',
               value: s.senderFolders,
               onChanged: (v) => s.update((x) => x.senderFolders = v),
             ),
-            divider,
-            _Switch(
-              icon: Icons.sync_rounded,
-              color: AppColors.violet,
-              title: context.tr('s_clip_sync'),
-              subtitle: context.tr(isDesktop ? 's_clip_sync_sub' : 's_clip_sync_sub_mobile'),
-              value: s.clipboardSync,
-              onChanged: (v) => s.update((x) => x.clipboardSync = v),
-            ),
-            divider,
-            _Switch(
-              icon: Icons.content_paste_go_rounded,
-              color: AppColors.cyan,
-              title: context.tr('s_auto_copy'),
-              subtitle: context.tr('s_auto_copy_sub'),
-              value: s.autoCopyText,
-              onChanged: (v) => s.update((x) => x.autoCopyText = v),
-            ),
-            divider,
+            _divider,
             _Switch(
               icon: Icons.verified_user_rounded,
               color: AppColors.mint,
               title: context.tr('s_auto_accept'),
               subtitle: context.tr('s_auto_accept_sub'),
+              info: 'i_auto_accept',
               value: s.autoAcceptTrusted,
               onChanged: (v) => s.update((x) => x.autoAcceptTrusted = v),
             ),
+            _divider,
+            _Switch(
+              icon: Icons.content_paste_go_rounded,
+              color: AppColors.cyan,
+              title: context.tr('s_auto_copy'),
+              subtitle: context.tr('s_auto_copy_sub'),
+              info: 'i_auto_copy',
+              value: s.autoCopyText,
+              onChanged: (v) => s.update((x) => x.autoCopyText = v),
+            ),
             if (Platform.isAndroid) ...[
-              divider,
+              _divider,
               _Switch(
                 icon: Icons.nights_stay_rounded,
                 color: AppColors.violet,
                 title: context.tr('s_background'),
                 subtitle: context.tr('s_background_sub'),
+                info: 'i_background',
                 value: s.backgroundReceive,
                 onChanged: controller.setBackgroundReceive,
               ),
             ],
-            divider,
-            Row(
-              children: [
-                const IconBadge(icon: Icons.speed_rounded, color: AppColors.cyan, size: 38),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(context.tr('s_speed'), style: const TextStyle(fontWeight: FontWeight.w700)),
-                      Text(context.tr('s_speed_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
-                    ],
-                  ),
-                ),
-              ],
+            _divider,
+            _Switch(
+              icon: Icons.notifications_rounded,
+              color: AppColors.pink,
+              title: context.tr('s_notifications'),
+              subtitle: context.tr('s_notifications_sub'),
+              info: 'i_notifications',
+              value: s.notifications,
+              onChanged: controller.setNotifications,
+            ),
+            _divider,
+            _Header(
+              icon: Icons.speed_rounded,
+              color: AppColors.cyan,
+              title: context.tr('s_speed'),
+              subtitle: context.tr('s_speed_sub'),
+              info: 'i_speed_limit',
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -219,13 +222,70 @@ class SettingsPage extends StatelessWidget {
                   ),
               ],
             ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _features(BuildContext context) {
+    final s = controller.settings;
+    return [
+      Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Text(context.tr('s_features_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+      ),
+      SectionTitle(context.tr('fg_transfer')),
+      Glass(
+        child: Column(
+          children: [
+            _Switch(
+              icon: Icons.compress_rounded,
+              color: AppColors.cyan,
+              title: context.tr('f_compression'),
+              subtitle: context.tr('f_compression_sub'),
+              info: 'i_compression',
+              value: s.compression,
+              onChanged: (v) => s.update((x) => x.compression = v),
+            ),
+            _divider,
+            _Switch(
+              icon: Icons.image_rounded,
+              color: AppColors.pink,
+              title: context.tr('f_previews_send'),
+              subtitle: context.tr('f_previews_send_sub'),
+              info: 'i_previews_send',
+              value: s.previewsSend,
+              onChanged: (v) => s.update((x) => x.previewsSend = v),
+            ),
+            _divider,
+            _Switch(
+              icon: Icons.photo_library_rounded,
+              color: AppColors.pink,
+              title: context.tr('f_previews_show'),
+              subtitle: context.tr('f_previews_show_sub'),
+              info: 'i_previews_show',
+              value: s.previewsShow,
+              onChanged: (v) => s.update((x) => x.previewsShow = v),
+            ),
+            _divider,
+            _Switch(
+              icon: Icons.schedule_send_rounded,
+              color: AppColors.violet,
+              title: context.tr('f_queue'),
+              subtitle: context.tr('f_queue_sub'),
+              info: 'i_queue',
+              value: s.offlineQueue,
+              onChanged: (v) => s.update((x) => x.offlineQueue = v),
+            ),
             if (isDesktop) ...[
-              divider,
+              _divider,
               _Switch(
                 icon: Icons.drive_folder_upload_rounded,
                 color: AppColors.amber,
                 title: context.tr('s_hot'),
                 subtitle: context.tr('s_hot_sub'),
+                info: 'i_hot',
                 value: s.hotFolders,
                 onChanged: (v) => s.update((x) => x.hotFolders = v),
               ),
@@ -239,31 +299,100 @@ class SettingsPage extends StatelessWidget {
                   ),
                 ),
             ],
-            divider,
+          ],
+        ),
+      ),
+      const SizedBox(height: 22),
+      SectionTitle(context.tr('fg_devices')),
+      Glass(
+        child: Column(
+          children: [
+            _Switch(
+              icon: Icons.forum_rounded,
+              color: AppColors.cyan,
+              title: context.tr('f_chat'),
+              subtitle: context.tr('f_chat_sub'),
+              info: 'i_chat',
+              value: s.chat,
+              onChanged: (v) => s.update((x) => x.chat = v),
+            ),
+            _divider,
+            _Switch(
+              icon: Icons.sync_alt_rounded,
+              color: AppColors.violet,
+              title: context.tr('f_sync'),
+              subtitle: context.tr(Platform.isIOS ? 'sync_unsupported' : 'f_sync_sub'),
+              info: 'i_sync',
+              value: s.folderSync,
+              onChanged: Platform.isIOS ? null : (v) => s.update((x) => x.folderSync = v),
+            ),
+            if (controller.syncSupported)
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: TextButton.icon(
+                  onPressed: () => Navigator.of(context)
+                      .push(MaterialPageRoute<void>(builder: (_) => SyncPage(controller: controller))),
+                  icon: const Icon(Icons.folder_copy_rounded, size: 18, color: AppColors.violet),
+                  label: Text(context.tr('sync_manage', {'n': s.syncPairs.length}),
+                      style: const TextStyle(color: AppColors.violet)),
+                ),
+              ),
+            _divider,
+            _Switch(
+              icon: Icons.speed_rounded,
+              color: AppColors.mint,
+              title: context.tr('f_speed'),
+              subtitle: context.tr('f_speed_sub'),
+              info: 'i_speed',
+              value: s.allowSpeedTest,
+              onChanged: (v) => s.update((x) => x.allowSpeedTest = v),
+            ),
+            _divider,
+            _Switch(
+              icon: Icons.sync_rounded,
+              color: AppColors.violet,
+              title: context.tr('s_clip_sync'),
+              subtitle: context.tr(isDesktop ? 's_clip_sync_sub' : 's_clip_sync_sub_mobile'),
+              info: 'i_clip_sync',
+              value: s.clipboardSync,
+              onChanged: (v) => s.update((x) => x.clipboardSync = v),
+            ),
+            _divider,
             _Switch(
               icon: Icons.notifications_active_rounded,
               color: AppColors.amber,
               title: context.tr('s_ring'),
               subtitle: context.tr('s_ring_sub'),
+              info: 'i_ring',
               value: s.allowRing,
               onChanged: (v) => s.update((x) => x.allowRing = v),
-            ),
-            divider,
-            _Switch(
-              icon: Icons.notifications_rounded,
-              color: AppColors.pink,
-              title: context.tr('s_notifications'),
-              subtitle: context.tr('s_notifications_sub'),
-              value: s.notifications,
-              onChanged: controller.setNotifications,
             ),
           ],
         ),
       ),
       const SizedBox(height: 22),
+      SectionTitle(context.tr('fg_noapp')),
+      Glass(
+        child: Column(
+          children: [
+            _Switch(
+              icon: Icons.public_rounded,
+              color: AppColors.violet,
+              title: context.tr('f_web'),
+              subtitle: context.tr('f_web_sub'),
+              info: 'i_web',
+              value: s.webShare,
+              onChanged: (v) => s.update((x) => x.webShare = v),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
 
-      // ── Privacy & security ──
-      SectionTitle(context.tr('s_privacy')),
+  List<Widget> _privacy(BuildContext context) {
+    final s = controller.settings;
+    return [
       Glass(
         child: Column(
           children: [
@@ -272,108 +401,91 @@ class SettingsPage extends StatelessWidget {
               color: AppColors.violet,
               title: context.tr('s_stealth'),
               subtitle: context.tr('s_stealth_sub'),
+              info: 'i_stealth',
               value: s.stealth,
               onChanged: controller.setStealth,
             ),
-            divider,
+            _divider,
             _DeviceList(
               title: context.tr('s_trusted'),
               empty: context.tr('s_trusted_none'),
               icon: Icons.verified_user_rounded,
               color: AppColors.mint,
+              info: 'i_trusted',
               devices: controller.trust.all,
               actionLabel: context.tr('s_revoke'),
               actionIcon: Icons.remove_moderator_outlined,
               onAction: controller.untrust,
             ),
-            divider,
+            _divider,
             _DeviceList(
               title: context.tr('s_blocked'),
               empty: context.tr('s_blocked_none'),
               icon: Icons.block_rounded,
               color: AppColors.danger,
+              info: 'i_blocked',
               devices: controller.trust.blocked,
               actionLabel: context.tr('s_unblock'),
               actionIcon: Icons.lock_open_rounded,
               onAction: controller.unblock,
             ),
-            divider,
-            Row(
-              children: [
-                const IconBadge(icon: Icons.receipt_long_rounded, color: AppColors.mint, size: 38),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(context.tr('s_audit'), style: const TextStyle(fontWeight: FontWeight.w700)),
-                      Text(context.tr('s_audit_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                GhostButton(
-                  label: context.tr('s_export'),
-                  icon: Icons.download_rounded,
-                  color: AppColors.mint,
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    final saved = context.tr('history_exported');
-                    final path = await controller.exportHistory();
-                    if (path != null) messenger.showSnackBar(SnackBar(content: Text('$saved · $path')));
-                  },
-                ),
-              ],
+            _divider,
+            _Header(
+              icon: Icons.receipt_long_rounded,
+              color: AppColors.mint,
+              title: context.tr('s_audit'),
+              subtitle: context.tr('s_audit_sub'),
+              info: 'i_audit',
             ),
-            divider,
-            Row(
-              children: [
-                const IconBadge(icon: Icons.shield_rounded, color: AppColors.cyan, size: 38),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(context.tr('s_rejected', {'n': controller.rejectedConnections}),
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
-                      Text(context.tr('s_rejected_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
-                    ],
-                  ),
-                ),
-              ],
+            const SizedBox(height: 8),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: GhostButton(
+                label: context.tr('s_export'),
+                icon: Icons.download_rounded,
+                color: AppColors.mint,
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final saved = context.tr('history_exported');
+                  final path = await controller.exportHistory();
+                  if (path != null) messenger.showSnackBar(SnackBar(content: Text('$saved · $path')));
+                },
+              ),
+            ),
+            _divider,
+            _Header(
+              icon: Icons.shield_rounded,
+              color: AppColors.cyan,
+              title: context.tr('s_rejected', {'n': controller.rejectedConnections}),
+              subtitle: context.tr('s_rejected_sub'),
+              info: 'i_rejected',
             ),
           ],
         ),
       ),
-      const SizedBox(height: 22),
+    ];
+  }
 
-      // ── Data usage ──
-      SectionTitle(context.tr('s_usage')),
-      Glass(child: _UsageCard(controller: controller)),
-      const SizedBox(height: 22),
+  List<Widget> _usage(BuildContext context) => [Glass(child: _UsageCard(controller: controller))];
 
-      // ── Appearance ──
-      SectionTitle(context.tr('s_appearance')),
+  List<Widget> _appearance(BuildContext context) {
+    final s = controller.settings;
+    ButtonStyle segStyle(Color accent) => ButtonStyle(
+          foregroundColor:
+              WidgetStateProperty.resolveWith((st) => st.contains(WidgetState.selected) ? AppColors.ink : AppColors.text),
+          backgroundColor: WidgetStateProperty.resolveWith(
+              (st) => st.contains(WidgetState.selected) ? accent : Colors.white.withValues(alpha: 0.04)),
+          side: WidgetStatePropertyAll(BorderSide(color: Colors.white.withValues(alpha: 0.14))),
+        );
+    return [
       Glass(
         child: Column(
           children: [
-            Row(
-              children: [
-                const IconBadge(icon: Icons.translate_rounded, color: AppColors.cyan, size: 38),
-                const SizedBox(width: 12),
-                Expanded(child: Text(context.tr('s_language'), style: const TextStyle(fontWeight: FontWeight.w700))),
-              ],
-            ),
+            _Header(icon: Icons.translate_rounded, color: AppColors.cyan, title: context.tr('s_language')),
             const SizedBox(height: 12),
             SegmentedButton<String>(
               showSelectedIcon: false,
-              style: ButtonStyle(
-                foregroundColor: WidgetStateProperty.resolveWith(
-                    (st) => st.contains(WidgetState.selected) ? AppColors.ink : AppColors.text),
-                backgroundColor: WidgetStateProperty.resolveWith(
-                    (st) => st.contains(WidgetState.selected) ? AppColors.cyan : Colors.white.withValues(alpha: 0.04)),
-                side: WidgetStatePropertyAll(BorderSide(color: Colors.white.withValues(alpha: 0.14))),
-              ),
+              style: segStyle(AppColors.cyan),
               segments: [
                 ButtonSegment(value: 'system', label: Text(context.tr('lang_system'))),
                 const ButtonSegment(value: 'en', label: Text('English')),
@@ -382,32 +494,18 @@ class SettingsPage extends StatelessWidget {
               selected: {s.language},
               onSelectionChanged: (v) => s.update((x) => x.language = v.first),
             ),
-            divider,
-            Row(
-              children: [
-                const IconBadge(icon: Icons.auto_awesome_rounded, color: AppColors.amber, size: 38),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(context.tr('s_effects'), style: const TextStyle(fontWeight: FontWeight.w700)),
-                      Text(context.tr('s_effects_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
-                    ],
-                  ),
-                ),
-              ],
+            _divider,
+            _Header(
+              icon: Icons.auto_awesome_rounded,
+              color: AppColors.amber,
+              title: context.tr('s_effects'),
+              subtitle: context.tr('s_effects_sub'),
+              info: 'i_effects',
             ),
             const SizedBox(height: 12),
             SegmentedButton<String>(
               showSelectedIcon: false,
-              style: ButtonStyle(
-                foregroundColor: WidgetStateProperty.resolveWith(
-                    (st) => st.contains(WidgetState.selected) ? AppColors.ink : AppColors.text),
-                backgroundColor: WidgetStateProperty.resolveWith(
-                    (st) => st.contains(WidgetState.selected) ? AppColors.amber : Colors.white.withValues(alpha: 0.04)),
-                side: WidgetStatePropertyAll(BorderSide(color: Colors.white.withValues(alpha: 0.14))),
-              ),
+              style: segStyle(AppColors.amber),
               segments: [
                 ButtonSegment(value: 'lite', label: Text(context.tr('fx_lite'))),
                 ButtonSegment(value: 'balanced', label: Text(context.tr('fx_balanced'))),
@@ -421,45 +519,156 @@ class SettingsPage extends StatelessWidget {
           ],
         ),
       ),
-      const SizedBox(height: 22),
+    ];
+  }
 
-      // ── About ──
-      SectionTitle(context.tr('s_about')),
-      Glass(
+  List<Widget> _about(BuildContext context) => [
+        Glass(
+          child: Column(
+            children: [
+              InfoRow(icon: Icons.bolt_rounded, color: AppColors.cyan, label: context.tr('s_version'), value: 'SUDOSEND $kAppVersion', ltr: true),
+              _divider,
+              InfoRow(
+                  icon: Icons.hub_rounded,
+                  color: AppColors.violet,
+                  label: context.tr('s_protocol'),
+                  value: '$kProtocol · X25519 · Ed25519 · ChaCha20-Poly1305',
+                  ltr: true),
+              _divider,
+              InfoRow(
+                icon: Icons.code_rounded,
+                color: AppColors.mint,
+                label: context.tr('s_source'),
+                value: 'github.com/sudosoc/SUDOSEND',
+                ltr: true,
+                copyValue: 'https://github.com/sudosoc/SUDOSEND',
+              ),
+              _divider,
+              InfoRow(
+                icon: Icons.person_rounded,
+                color: AppColors.pink,
+                label: context.tr('s_developer'),
+                value: 'SUDOSOC · ceo@sudosoc.com',
+                ltr: true,
+                copyValue: 'ceo@sudosoc.com',
+              ),
+              _divider,
+              InfoRow(icon: Icons.gavel_rounded, color: AppColors.amber, label: context.tr('s_license'), value: 'MIT', ltr: true),
+            ],
+          ),
+        ),
+      ];
+}
+
+/// Background + header + centred list; rebuilds when settings change.
+class _SettingsScaffold extends StatelessWidget {
+  const _SettingsScaffold({required this.controller, required this.title, required this.children});
+  final AppController controller;
+  final String title;
+  final List<Widget> Function(BuildContext context) children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bgTop,
+      body: Stack(
+        children: [
+          const Positioned.fill(child: AnimatedBackground()),
+          SafeArea(
+            child: ListenableBuilder(
+              listenable: Listenable.merge([controller, controller.settings]),
+              builder: (context, _) => Column(
+                children: [
+                  SubPageHeader(title: title),
+                  Expanded(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 720),
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 6, 16, 32),
+                          children: children(context),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The (i) button: opens a short explanation of a feature.
+class InfoButton extends StatelessWidget {
+  const InfoButton({super.key, required this.title, required this.body});
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: context.tr('more_info'),
+      visualDensity: VisualDensity.compact,
+      icon: const Icon(Icons.info_outline_rounded, size: 20, color: AppColors.muted),
+      onPressed: () => showInfo(context, title, body),
+    );
+  }
+}
+
+Future<void> showInfo(BuildContext context, String title, String body) => showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (ctx) => GlassDialog(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            InfoRow(icon: Icons.bolt_rounded, color: AppColors.cyan, label: context.tr('s_version'), value: 'SUDOSEND $kAppVersion', ltr: true),
-            divider,
-            InfoRow(
-                icon: Icons.hub_rounded,
-                color: AppColors.violet,
-                label: context.tr('s_protocol'),
-                value: '$kProtocol · X25519 · Ed25519 · ChaCha20-Poly1305',
-                ltr: true),
-            divider,
-            InfoRow(
-              icon: Icons.code_rounded,
-              color: AppColors.mint,
-              label: context.tr('s_source'),
-              value: 'github.com/sudosoc/SUDOSEND',
-              ltr: true,
-              copyValue: 'https://github.com/sudosoc/SUDOSEND',
+            Row(
+              children: [
+                const Icon(Icons.info_rounded, color: AppColors.cyan),
+                const SizedBox(width: 10),
+                Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+              ],
             ),
-            divider,
-            InfoRow(
-              icon: Icons.person_rounded,
-              color: AppColors.pink,
-              label: context.tr('s_developer'),
-              value: 'SUDOSOC · ceo@sudosoc.com',
-              ltr: true,
-              copyValue: 'ceo@sudosoc.com',
-            ),
-            divider,
-            InfoRow(icon: Icons.gavel_rounded, color: AppColors.amber, label: context.tr('s_license'), value: 'MIT', ltr: true),
+            const SizedBox(height: 14),
+            Text(body, style: const TextStyle(height: 1.5, fontSize: 14)),
+            const SizedBox(height: 18),
+            GlowButton(label: ctx.tr('got_it'), expand: true, onPressed: () => Navigator.pop(ctx)),
           ],
         ),
       ),
-    ];
+    );
+
+/// Icon + title (+ subtitle) row with an optional (i) button.
+class _Header extends StatelessWidget {
+  const _Header({required this.icon, required this.color, required this.title, this.subtitle, this.info});
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String? subtitle;
+  final String? info;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        IconBadge(icon: icon, color: color, size: 38),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+              if (subtitle != null) Text(subtitle!, style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+            ],
+          ),
+        ),
+        if (info != null) InfoButton(title: title, body: context.tr(info!)),
+      ],
+    );
   }
 }
 
@@ -471,6 +680,7 @@ class _Switch extends StatelessWidget {
     required this.subtitle,
     required this.value,
     required this.onChanged,
+    this.info,
   });
 
   final IconData icon;
@@ -478,13 +688,17 @@ class _Switch extends StatelessWidget {
   final String title;
   final String subtitle;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
+
+  /// String key of the (i) explanation.
+  final String? info;
 
   @override
   Widget build(BuildContext context) {
+    final change = onChanged;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: () => onChanged(!value),
+      onTap: change == null ? null : () => change(!value),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
@@ -501,10 +715,10 @@ class _Switch extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            if (info != null) InfoButton(title: title, body: context.tr(info!)),
             Switch(
               value: value,
-              onChanged: onChanged,
+              onChanged: change,
               thumbColor: WidgetStateProperty.resolveWith(
                   (st) => st.contains(WidgetState.selected) ? AppColors.ink : AppColors.muted),
               trackColor: WidgetStateProperty.resolveWith(
@@ -523,6 +737,7 @@ class _DeviceList extends StatelessWidget {
     required this.empty,
     required this.icon,
     required this.color,
+    this.info,
     required this.devices,
     required this.actionLabel,
     required this.actionIcon,
@@ -533,6 +748,7 @@ class _DeviceList extends StatelessWidget {
   final String empty;
   final IconData icon;
   final Color color;
+  final String? info;
   final List<KnownDevice> devices;
   final String actionLabel;
   final IconData actionIcon;
@@ -548,6 +764,7 @@ class _DeviceList extends StatelessWidget {
             IconBadge(icon: icon, color: color, size: 38),
             const SizedBox(width: 12),
             Expanded(child: Text('$title (${devices.length})', style: const TextStyle(fontWeight: FontWeight.w700))),
+            if (info != null) InfoButton(title: title, body: context.tr(info!)),
           ],
         ),
         const SizedBox(height: 6),

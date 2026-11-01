@@ -191,14 +191,15 @@ fi
 
 # ── 7. Firewall ──────────────────────────────────────────────────────────
 if command -v ufw >/dev/null 2>&1 && $SUDO ufw status 2>/dev/null | grep -q "Status: active"; then
-  if ask "ufw is active. Open SUDOSEND ports (47823/udp, 47824-47833/tcp)?"; then
+  if ask "ufw is active. Open SUDOSEND ports (47823/udp, 47824-47833/tcp, 47840-47849/tcp for browser share)?"; then
     $SUDO ufw allow 47823/udp comment SUDOSEND >/dev/null
     $SUDO ufw allow 47824:47833/tcp comment SUDOSEND >/dev/null
+    $SUDO ufw allow 47840:47849/tcp comment "SUDOSEND browser share" >/dev/null
     ok "Firewall ports opened (ufw)"
   fi
 elif command -v firewall-cmd >/dev/null 2>&1 && $SUDO firewall-cmd --state >/dev/null 2>&1; then
-  if ask "firewalld is active. Open SUDOSEND ports (47823/udp, 47824-47833/tcp)?"; then
-    $SUDO firewall-cmd -q --permanent --add-port=47823/udp --add-port=47824-47833/tcp
+  if ask "firewalld is active. Open SUDOSEND ports (47823/udp, 47824-47833/tcp, 47840-47849/tcp for browser share)?"; then
+    $SUDO firewall-cmd -q --permanent --add-port=47823/udp --add-port=47824-47833/tcp --add-port=47840-47849/tcp
     $SUDO firewall-cmd -q --reload
     ok "Firewall ports opened (firewalld)"
   fi

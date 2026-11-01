@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import 'package:wraith_core/transfer.dart';
@@ -8,7 +10,8 @@ import 'glass.dart';
 import 'theme.dart';
 
 /// Shows the accept/decline dialog. Closes by itself if the request times out.
-Future<void> showIncomingDialog(BuildContext context, IncomingRequest request) async {
+Future<void> showIncomingDialog(BuildContext context, IncomingRequest request,
+    {Future<bool> Function(IncomingRequest r)? onAcceptSync}) async {
   final navigator = Navigator.of(context);
   var open = true;
   request.decision.then((_) {
@@ -23,6 +26,7 @@ Future<void> showIncomingDialog(BuildContext context, IncomingRequest request) a
     barrierColor: Colors.black.withValues(alpha: 0.6),
     builder: (_) => _IncomingDialog(
       request: request,
+      onAcceptSync: onAcceptSync,
       onDecide: (accept, trust, block) {
         if (!open) return;
         open = false;
@@ -36,9 +40,10 @@ Future<void> showIncomingDialog(BuildContext context, IncomingRequest request) a
 }
 
 class _IncomingDialog extends StatefulWidget {
-  const _IncomingDialog({required this.request, required this.onDecide});
+  const _IncomingDialog({required this.request, required this.onDecide, this.onAcceptSync});
 
   final IncomingRequest request;
+  final Future<bool> Function(IncomingRequest r)? onAcceptSync;
   final void Function(bool accept, bool trust, bool block) onDecide;
 
   @override
@@ -53,6 +58,15 @@ class _IncomingDialogState extends State<_IncomingDialog> {
     final r = widget.request;
     final shown = r.files.take(4).toList();
     final more = r.files.length - shown.length;
+    final invite = r.syncInvite;
+    final previews = AppScope.of(context).previewsShow ? r.previews : const <int, Uint8List>{};
+    final label = invite != null
+        ? 'incoming_sync'
+        : r.chat
+            ? 'incoming_chat'
+            : r.text != null
+                ? 'incoming_text'
+                : 'incoming_transfer';
     return GlassDialog(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -66,7 +80,7 @@ class _IncomingDialogState extends State<_IncomingDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(context.tr(r.text != null ? 'incoming_text' : 'incoming_transfer'),
+                    Text(context.tr(label),
                         style: const TextStyle(color: AppColors.muted, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 1.4)),
                     const SizedBox(height: 2),
                     Text(r.peerName,
@@ -116,6 +130,54 @@ class _IncomingDialogState extends State<_IncomingDialog> {
               ),
             ),
           const SizedBox(height: 16),
+          if (invite != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: AppColors.violet.withValues(alpha: 0.08),
+                border: Border.all(color: AppColors.violet.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.folder_copy_rounded, color: AppColors.violet),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(context.tr('sync_invite_body', {'name': invite.name}),
+                        style: const TextStyle(fontSize: 13.5, height: 1.4)),
+                  ),
+                ],
+              ),
+            ),
+          if (previews.isNotEmpty) ...[
+            SizedBox(
+              height: 84,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final e in previews.entries)
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(end: 8),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.memory(
+                          e.value,
+                          height: 84,
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                          errorBuilder: (_, __, ___) => const SizedBox(
+                            width: 84,
+                            child: Icon(Icons.broken_image_rounded, color: AppColors.muted),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           if (r.text != null)
             Container(
               width: double.infinity,
@@ -155,7 +217,7 @@ class _IncomingDialogState extends State<_IncomingDialog> {
             Text(context.tr('total', {'size': formatBytes(r.totalBytes)}),
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
           ],
-          if (!r.trusted) ...[
+          if (!r.trusted && invite == null) ...[
             const SizedBox(height: 10),
             InkWell(
               borderRadius: BorderRadius.circular(10),
@@ -183,12 +245,21 @@ class _IncomingDialogState extends State<_IncomingDialog> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: GlowButton(
-                  label: context.tr('accept'),
-                  icon: Icons.download_rounded,
-                  expand: true,
-                  onPressed: () => widget.onDecide(true, _trust, false),
-                ),
+                child: invite != null
+                    ? GlowButton(
+                        label: context.tr('sync_choose_folder'),
+                        icon: Icons.folder_open_rounded,
+                        expand: true,
+                        // The picker opens over this dialog; accepting answers
+                        // the request, which closes the dialog by itself.
+                        onPressed: widget.onAcceptSync == null ? null : () => widget.onAcceptSync!(r),
+                      )
+                    : GlowButton(
+                        label: context.tr('accept'),
+                        icon: Icons.download_rounded,
+                        expand: true,
+                        onPressed: () => widget.onDecide(true, _trust, false),
+                      ),
               ),
             ],
           ),

@@ -755,6 +755,7 @@ class TransferEngine {
           final body = msg.type == Frame.dataZ
               ? inflateBounded(msg.body, min(kChunkSize, files[index].size - written))
               : msg.body;
+          if (msg.type == Frame.dataZ) activeJob.compressedSaved += body.length - msg.body.length;
           written += body.length;
           if (written > files[index].size) {
             throw const WraithException('Sender exceeded the announced file size');

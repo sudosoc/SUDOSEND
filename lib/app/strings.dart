@@ -1,6 +1,8 @@
 // UI strings (English + Egyptian-friendly Modern Standard Arabic).
 // Usage: tr(lang, 'key', {'n': 3}) — placeholders are written {n}.
 
+import 'strings_features.dart';
+
 const Map<String, Map<String, String>> _strings = {
   'en': {
     // Navigation
@@ -528,10 +530,17 @@ const Map<String, Map<String, String>> _strings = {
 };
 
 String tr(String lang, String key, [Map<String, Object?> args = const {}]) {
-  var s = _strings[lang]?[key] ?? _strings['en']![key] ?? key;
+  var s = _strings[lang]?[key] ??
+      featureStrings[lang]?[key] ??
+      _strings['en']![key] ??
+      featureStrings['en']![key] ??
+      key;
   args.forEach((k, v) => s = s.replaceAll('{$k}', '$v'));
   return s;
 }
 
 /// Keys present in English but missing in Arabic (used by tests).
-Iterable<String> missingArabicKeys() => _strings['en']!.keys.where((k) => !_strings['ar']!.containsKey(k));
+Iterable<String> missingArabicKeys() => [
+      ..._strings['en']!.keys.where((k) => !_strings['ar']!.containsKey(k)),
+      ...featureStrings['en']!.keys.where((k) => !featureStrings['ar']!.containsKey(k)),
+    ];

@@ -100,6 +100,7 @@ class _ReceiveTabState extends State<ReceiveTab> {
       final qr = _PairingCard(controller: controller);
       final info = _InfoCard(controller: controller);
       final noApp = _NoAppCard(controller: controller);
+      final showNoApp = controller.settings.webShare || controller.webShare != null || Platform.isAndroid;
       if (wide) {
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -108,7 +109,7 @@ class _ReceiveTabState extends State<ReceiveTab> {
             children: [
               Expanded(child: Column(children: [header, const SizedBox(height: 22), info])),
               const SizedBox(width: 18),
-              SizedBox(width: 340, child: Column(children: [qr, const SizedBox(height: 16), noApp])),
+              SizedBox(width: 340, child: Column(children: [qr, if (showNoApp) ...[const SizedBox(height: 16), noApp]])),
             ],
           ),
         );
@@ -119,8 +120,10 @@ class _ReceiveTabState extends State<ReceiveTab> {
           header,
           const SizedBox(height: 22),
           qr,
-          const SizedBox(height: 16),
-          noApp,
+          if (showNoApp) ...[
+            const SizedBox(height: 16),
+            noApp,
+          ],
           const SizedBox(height: 16),
           info,
         ],
@@ -232,6 +235,7 @@ class _NoAppCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
+          if (controller.settings.webShare || controller.webShare != null)
           GhostButton(
             label: context.tr(controller.webShare != null ? 'web_open' : 'web_receive'),
             icon: Icons.public_rounded,

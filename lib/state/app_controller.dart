@@ -14,6 +14,7 @@ import 'package:wraith_core/identity.dart';
 import 'package:wraith_core/models.dart';
 import 'package:wraith_core/pairing.dart';
 import 'package:wraith_core/receipt.dart';
+import 'package:wraith_core/sync.dart';
 import 'package:wraith_core/transfer.dart';
 import 'package:wraith_core/util.dart';
 import 'package:wraith_core/vault_windows.dart';
@@ -23,8 +24,10 @@ import 'package:wraith_core/wraith.dart';
 import '../app/strings.dart';
 import '../platform/desktop.dart';
 import '../platform/native_bridge.dart';
+import 'chat.dart';
 import 'history.dart';
 import 'outbox.dart';
+import 'previews.dart';
 import 'settings.dart';
 
 class AppController extends ChangeNotifier {
@@ -37,6 +40,7 @@ class AppController extends ChangeNotifier {
   late DeviceIdentity identity;
   late TrustStore trust;
   late HistoryStore history;
+  late ChatStore chat;
   late Discovery _discovery;
   late Directory _support;
   late TransferEngine _engine;
@@ -101,6 +105,7 @@ class AppController extends ChangeNotifier {
       identity = await DeviceIdentity.loadOrCreate(support, vault: vault);
       trust = await TrustStore.load(support);
       history = await HistoryStore.load(support);
+      chat = await ChatStore.load(support);
       outbox = await OutboxStore.load(support);
       saveDir = await _resolveSaveDir();
 
@@ -111,11 +116,15 @@ class AppController extends ChangeNotifier {
         saveDirFor: (name, fp) async => settings.senderFolders
             ? Directory(p.join(saveDir!.path, sanitizeFileName(name)))
             : saveDir!,
-        autoAccept: (r) => r.ring
-            ? (r.trusted && settings.allowRing)
-            : r.clipboard
-                ? (r.trusted && settings.clipboardSync)
-                : (settings.autoAcceptTrusted && r.trusted),
+        autoAccept: (r) {
+          if (!r.trusted) return false;
+          if (r.ring) return settings.allowRing;
+          if (r.clipboard) return settings.clipboardSync;
+          if (r.speedTest) return settings.allowSpeedTest;
+          if (r.chat && settings.chat) return true;
+          if (r.syncInvite != null) return false; // always asks: a folder must be chosen
+          return settings.autoAcceptTrusted;
+        },
         onIncoming: _onIncoming,
         onJob: _addJob,
         onRejected: (address, reason) {
@@ -123,6 +132,7 @@ class AppController extends ChangeNotifier {
           notifyListeners();
         },
       );
+      _engine.syncFolder = _syncFolderFor;
       await _engine.start();
 
       _discovery = Discovery(identity: identity, transferPort: _engine.port, onChanged: _onPeersChanged)
@@ -183,7 +193,11 @@ class AppController extends ChangeNotifier {
   void _onIncoming(IncomingRequest r) {
     // Clipboard pushes never prompt: accepted silently from trusted devices
     // when sync is on (see autoAccept), declined otherwise.
-    if (r.clipboard || r.ring) {
+    if (r.clipboard || r.ring || r.speedTest) {
+      r.respond(false);
+      return;
+    }
+    if (r.syncInvite != null && !syncSupported) {
       r.respond(false);
       return;
     }
@@ -191,7 +205,9 @@ class AppController extends ChangeNotifier {
     tab = 1;
     notifyListeners();
     _incoming.add(r);
-    final what = r.text != null
+    final what = r.syncInvite != null
+        ? t('sync_invite_notif', {'name': r.syncInvite!.name})
+        : r.text != null
         ? t('notif_incoming_text')
         : t('notif_incoming_files', {'n': r.files.length, 'size': formatBytes(r.totalBytes)});
     final title = t('notif_incoming_title', {'name': r.peerName});
@@ -225,6 +241,14 @@ class AppController extends ChangeNotifier {
   // ─────────────────────────── Jobs ───────────────────────────
 
   void _addJob(TransferJob job) {
+    if (job.syncId != null) {
+      _watchSyncJob(job);
+      return;
+    }
+    if (job.chat && settings.chat) {
+      _watchChatJob(job);
+      return;
+    }
     if (job.ring) {
       var finished = false;
       job.changes.listen((_) {
@@ -516,7 +540,8 @@ class AppController extends ChangeNotifier {
     selectedText = null;
     tab = 2;
     notifyListeners();
-    await _sendWithRetry(peer, files, text: text, pairToken: pairToken);
+    final previews = await _previewsFor(files);
+    await _sendWithRetry(peer, files, text: text, pairToken: pairToken, previews: previews);
     notifyListeners();
   }
 
@@ -529,7 +554,8 @@ class AppController extends ChangeNotifier {
     selectedText = null;
     tab = 2;
     notifyListeners();
-    await Future.wait([for (final peer in peers) _sendWithRetry(peer, files, text: text)]);
+    final previews = await _previewsFor(files);
+    await Future.wait([for (final peer in peers) _sendWithRetry(peer, files, text: text, previews: previews)]);
     notifyListeners();
   }
 
@@ -605,6 +631,20 @@ class AppController extends ChangeNotifier {
   void _applySettings() {
     TransferJob.progressIntervalMs = settings.reduceEffects ? 300 : 150;
     TransferEngine.maxBytesPerSecond = settings.uploadLimit * 1024 * 1024;
+    TransferEngine.compression = settings.compression;
+    if (!settings.chat && tab == 3) {
+      tab = 0;
+      notifyListeners();
+    }
+    final wantSync = settings.folderSync && settings.syncPairs.any((s) => s.enabled);
+    if (wantSync && _syncTimer == null) {
+      _syncTimer = Timer.periodic(const Duration(seconds: 60), (_) => unawaited(syncNow()));
+      unawaited(Future<void>.delayed(const Duration(seconds: 5), syncNow));
+    } else if (!wantSync && _syncTimer != null) {
+      _syncTimer!.cancel();
+      _syncTimer = null;
+    }
+    if (!settings.webShare && webShare != null) unawaited(stopWebShare());
     final wantHot = settings.hotFolders && isDesktop;
     if (wantHot && _hotTimer == null) {
       _hotTimer = Timer.periodic(const Duration(seconds: 4), (_) => unawaited(_scanHotFolders()));
@@ -784,9 +824,9 @@ class AppController extends ChangeNotifier {
   /// Sends with automatic retries (3 attempts) for dropped connections; each
   /// retry resumes where the last one stopped.
   Future<TransferJob> _sendWithRetry(Peer peer, List<FileEntry> files,
-      {String? text, String? pairToken}) async {
+      {String? text, String? pairToken, Map<int, Uint8List>? previews}) async {
     var target = peer;
-    var job = await _engine.send(target, files, text: text, pairToken: pairToken);
+    var job = await _engine.send(target, files, text: text, pairToken: pairToken, previews: previews);
     for (final wait in const [Duration(seconds: 3), Duration(seconds: 10)]) {
       if (!_retryable(job)) break;
       await Future<void>.delayed(wait);
@@ -794,7 +834,7 @@ class AppController extends ChangeNotifier {
         // The device may have changed address (e.g. Wi-Fi reconnect).
         target = peers.firstWhere((p) => p.id == peer.id, orElse: () => target);
       }
-      job = await _engine.send(target, files, text: text, pairToken: pairToken);
+      job = await _engine.send(target, files, text: text, pairToken: pairToken, previews: previews);
     }
     return job;
   }
@@ -802,7 +842,16 @@ class AppController extends ChangeNotifier {
   void _onPeersChanged() {
     notifyListeners();
     unawaited(_flushOutbox());
+    // A sync partner just showed up: sync right away instead of waiting.
+    final online = {for (final p in peers) p.id};
+    final fresh = online.difference(_seenPeers);
+    _seenPeers = online;
+    if (fresh.isNotEmpty && settings.folderSync && settings.syncPairs.any((s) => s.enabled && fresh.contains(s.fingerprint))) {
+      unawaited(syncNow());
+    }
   }
+
+  Set<String> _seenPeers = {};
 
   /// Trusted devices that are not currently visible (for "send when online").
   List<KnownDevice> get trustedOffline {
@@ -945,6 +994,224 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  // ─────────────────────────── Previews ───────────────────────────
+
+  Future<Map<int, Uint8List>?> _previewsFor(List<FileEntry> files) async {
+    if (!settings.previewsSend || !files.any((f) => isPreviewable(f.name))) return null;
+    try {
+      return await buildPreviews(files).timeout(const Duration(seconds: 4));
+    } catch (_) {
+      return null; // never delay a transfer for thumbnails
+    }
+  }
+
+  // ─────────────────────────── Messages ───────────────────────────
+
+  /// The thread currently on screen (its messages are not counted as unread).
+  String? openThread;
+
+  void _watchChatJob(TransferJob job) {
+    var finished = false;
+    job.changes.listen((_) {
+      if (finished || job.isActive) return;
+      finished = true;
+      if (job.direction == TransferDirection.incoming && job.status == TransferStatus.done) {
+        final fp = job.peerFingerprint ?? '';
+        final visible = foreground && tab == 3 && openThread == fp;
+        chat.add(fp, job.peerName, job.text ?? '', outgoing: false, unread: !visible);
+        if (!visible && settings.notifications) {
+          final title = t('chat_from', {'name': job.peerName});
+          final body = (job.text ?? '').length > 160 ? '${job.text!.substring(0, 160)}…' : (job.text ?? '');
+          if (Platform.isAndroid) {
+            unawaited(_native.notify(job.id, title, body));
+          } else if (!foreground) {
+            unawaited(desktopNotify(title, body));
+          } else {
+            _messages.add('$title: $body');
+          }
+        }
+        notifyListeners();
+      }
+      job.dispose();
+    });
+  }
+
+  /// Sends a chat message to a trusted device. Failures are kept and can be retried.
+  Future<void> sendChat(String fingerprint, String name, String text, {ChatMessage? retry}) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty || trimmed.length > kMaxTextLength) return;
+    final msg = retry ?? chat.add(fingerprint, name, trimmed, outgoing: true);
+    msg.state = ChatState.sending;
+    notifyListeners();
+    final peer = peers.where((p) => p.id == fingerprint).firstOrNull;
+    if (peer == null) {
+      msg.state = ChatState.failed;
+    } else {
+      final job = await _engine.send(peer, const [], text: msg.text, chat: true);
+      msg.state = job.status == TransferStatus.done ? ChatState.sent : ChatState.failed;
+    }
+    await chat.save();
+    notifyListeners();
+  }
+
+  void markThreadRead(String fingerprint) {
+    chat.markRead(fingerprint);
+    notifyListeners();
+  }
+
+  void clearThread(String fingerprint) {
+    chat.clear(fingerprint);
+    notifyListeners();
+  }
+
+  // ─────────────────────────── Speed test ───────────────────────────
+
+  /// Measures encrypted throughput to a trusted device. Returns (bytes/s, error).
+  Future<(double?, String?)> speedTest(Peer peer) async {
+    try {
+      return (await _engine.speedTest(peer), null);
+    } on WraithException catch (e) {
+      return (null, e.message.contains('declined') ? t('speed_declined') : e.message);
+    } catch (e) {
+      return (null, describeError(e));
+    }
+  }
+
+  // ─────────────────────────── Folder sync ───────────────────────────
+
+  Timer? _syncTimer;
+  final Set<String> _syncBusy = {};
+
+  /// iOS keeps apps inside their sandbox; picking an arbitrary folder to keep
+  /// in sync there is not reliable, so the feature is off on iOS for now.
+  bool get syncSupported => !Platform.isIOS && settings.folderSync;
+
+  Directory? _syncFolderFor(String id, String fingerprint) {
+    if (!settings.folderSync) return null;
+    for (final s in settings.syncPairs) {
+      if (s.id == id && s.fingerprint == fingerprint && s.enabled) return Directory(s.path);
+    }
+    return null;
+  }
+
+  SyncPair? _pairById(String id) => settings.syncPairs.where((s) => s.id == id).firstOrNull;
+
+  void _watchSyncJob(TransferJob job) {
+    var finished = false;
+    job.changes.listen((_) {
+      if (finished || job.isActive) return;
+      finished = true;
+      final pair = _pairById(job.syncId!);
+      if (pair != null) {
+        if (job.status == TransferStatus.done) {
+          pair.lastSync = DateTime.now();
+          pair.lastError = null;
+          if (job.direction == TransferDirection.outgoing) pair.pushed += job.files.length;
+        } else {
+          pair.lastError = job.error ?? job.status.name;
+        }
+        unawaited(settings.update((_) {}));
+      }
+      job.dispose();
+    });
+  }
+
+  /// Picks a folder and invites [peer] to keep it in sync. Returns an error or null.
+  Future<String?> createSync(Peer peer) async {
+    if (!trust.isTrusted(peer.id)) return t('sync_trusted_only');
+    final path = await FilePicker.platform.getDirectoryPath();
+    if (path == null) return null;
+    final dir = Directory(path);
+    if (!await _isWritable(dir)) return t('err_not_writable');
+    final id = newPairingToken().substring(0, 16);
+    final name = p.basename(p.normalize(path));
+    // Save first so the partner's first manifest request already finds it.
+    final pair = SyncPair(id: id, name: name, path: dir.path, fingerprint: peer.id, peerName: peer.name);
+    await settings.update((s) => s.syncPairs = [...s.syncPairs, pair]);
+    try {
+      final ok = await _engine.sendSyncInvite(peer, id, name);
+      if (!ok) {
+        await removeSync(id);
+        return t('sync_declined', {'name': peer.name});
+      }
+    } catch (e) {
+      await removeSync(id);
+      return describeError(e);
+    }
+    _applySettings();
+    unawaited(syncNow());
+    return null;
+  }
+
+  /// Answers a sync invitation: the user picks the local folder. Returns false if cancelled.
+  Future<bool> acceptSyncInvite(IncomingRequest r) async {
+    final invite = r.syncInvite!;
+    final path = await FilePicker.platform.getDirectoryPath();
+    if (path == null || !r.isPending) return false;
+    final dir = Directory(path);
+    if (!await _isWritable(dir)) {
+      _messages.add(t('err_not_writable'));
+      return false;
+    }
+    final pair = SyncPair(id: invite.id, name: invite.name, path: dir.path, fingerprint: r.fingerprint, peerName: r.peerName);
+    await settings.update((s) => s.syncPairs = [...s.syncPairs.where((x) => x.id != invite.id), pair]);
+    r.respond(true, trust: true); // syncing implies trusting this device
+    _applySettings();
+    return true;
+  }
+
+  Future<void> removeSync(String id) async {
+    await settings.update((s) => s.syncPairs = s.syncPairs.where((x) => x.id != id).toList());
+    _applySettings();
+    notifyListeners();
+  }
+
+  Future<void> setSyncEnabled(String id, bool enabled) async {
+    final pair = _pairById(id);
+    if (pair == null) return;
+    await settings.update((_) => pair.enabled = enabled);
+    _applySettings();
+    if (enabled) unawaited(syncNow());
+  }
+
+  /// One sync round for every enabled pair whose device is online: fetch
+  /// the partner's manifest and push what is new or newer here. The partner
+  /// does the same in the other direction.
+  Future<void> syncNow() async {
+    if (!ready || !settings.folderSync) return;
+    for (final pair in List.of(settings.syncPairs)) {
+      if (!pair.enabled || _syncBusy.contains(pair.id)) continue;
+      final peer = peers.where((x) => x.id == pair.fingerprint).firstOrNull;
+      if (peer == null || !trust.isTrusted(pair.fingerprint)) continue;
+      _syncBusy.add(pair.id);
+      try {
+        final root = Directory(pair.path);
+        final remote = await _engine.fetchManifest(peer, pair.id);
+        final local = await buildManifest(root);
+        final push = planPush(local, remote);
+        if (push.isEmpty) {
+          pair.lastSync = DateTime.now();
+          pair.lastError = null;
+        } else {
+          final files = [
+            for (final e in push.take(2000))
+              FileEntry(name: e.path, size: e.size, path: p.joinAll([root.path, ...e.path.split('/')]), mtime: e.mtime),
+          ];
+          final job = await _engine.send(peer, files, syncId: pair.id);
+          if (job.status != TransferStatus.done) pair.lastError = job.error ?? job.status.name;
+        }
+      } catch (e) {
+        pair.lastError = describeError(e);
+      } finally {
+        _syncBusy.remove(pair.id);
+      }
+      await settings.update((_) {});
+    }
+    notifyListeners();
+  }
+
+  bool isSyncing(String id) => _syncBusy.contains(id);
+
   // ─────────────────────────── Find my device ───────────────────────────
 
   final DesktopRinger _ringer = DesktopRinger();
@@ -1086,6 +1353,7 @@ class AppController extends ChangeNotifier {
   @override
   void dispose() {
     _outboxTimer?.cancel();
+    _syncTimer?.cancel();
     _hotTimer?.cancel();
     _ringer.stop();
     _clipTimer?.cancel();

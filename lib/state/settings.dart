@@ -6,6 +6,60 @@ import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+/// One folder kept in sync with one trusted device.
+class SyncPair {
+  SyncPair({
+    required this.id,
+    required this.name,
+    required this.path,
+    required this.fingerprint,
+    required this.peerName,
+    this.enabled = true,
+    this.lastSync,
+    this.lastError,
+    this.pushed = 0,
+  });
+
+  final String id;
+  final String name;
+  final String path;
+  final String fingerprint;
+  String peerName;
+  bool enabled;
+  DateTime? lastSync;
+  String? lastError;
+  int pushed; // files sent by this side, lifetime
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'name': name,
+        'path': path,
+        'fp': fingerprint,
+        'peer': peerName,
+        'enabled': enabled,
+        if (lastSync != null) 'last': lastSync!.millisecondsSinceEpoch,
+        'pushed': pushed,
+      };
+
+  static SyncPair? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    try {
+      return SyncPair(
+        id: raw['id'] as String,
+        name: raw['name'] as String,
+        path: raw['path'] as String,
+        fingerprint: raw['fp'] as String,
+        peerName: raw['peer'] as String? ?? '?',
+        enabled: raw['enabled'] as bool? ?? true,
+        lastSync: raw['last'] is int ? DateTime.fromMillisecondsSinceEpoch(raw['last'] as int) : null,
+        pushed: raw['pushed'] as int? ?? 0,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
 /// User preferences, stored as settings.json next to the identity.
 class SettingsController extends ChangeNotifier {
   File? _file;
@@ -34,6 +88,26 @@ class SettingsController extends ChangeNotifier {
   bool autoCopyText = false;
   bool senderFolders = false;
   String? saveDir;
+
+  // Optional features — every one can be switched off.
+  /// Deflate compressible files on the wire (text, logs, code, raw images).
+  bool compression = true;
+  /// Attach small image thumbnails to outgoing offers.
+  bool previewsSend = true;
+  /// Show thumbnails that other devices attach to their offers.
+  bool previewsShow = true;
+  /// Messages tab: short texts between trusted devices, kept as threads.
+  bool chat = true;
+  /// Two-way folder sync with trusted devices.
+  bool folderSync = true;
+  /// Let trusted devices run a speed test against this one.
+  bool allowSpeedTest = true;
+  /// Browser share (send to / receive from devices without the app).
+  bool webShare = true;
+  /// Queue sends for trusted devices that are offline.
+  bool offlineQueue = true;
+  /// Sync folders.
+  List<SyncPair> syncPairs = [];
 
   /// Effective UI language.
   String get lang {
@@ -68,6 +142,16 @@ class SettingsController extends ChangeNotifier {
         autoCopyText = (m['autoCopyText'] as bool?) ?? autoCopyText;
         senderFolders = (m['senderFolders'] as bool?) ?? senderFolders;
         saveDir = m['saveDir'] as String?;
+        compression = (m['compression'] as bool?) ?? compression;
+        previewsSend = (m['previewsSend'] as bool?) ?? previewsSend;
+        previewsShow = (m['previewsShow'] as bool?) ?? previewsShow;
+        chat = (m['chat'] as bool?) ?? chat;
+        folderSync = (m['folderSync'] as bool?) ?? folderSync;
+        allowSpeedTest = (m['allowSpeedTest'] as bool?) ?? allowSpeedTest;
+        webShare = (m['webShare'] as bool?) ?? webShare;
+        offlineQueue = (m['offlineQueue'] as bool?) ?? offlineQueue;
+        final pairs = m['syncPairs'];
+        if (pairs is List) syncPairs = pairs.map(SyncPair.fromJson).whereType<SyncPair>().toList();
       }
     } catch (_) {
       // Corrupt settings: keep defaults.
@@ -98,6 +182,15 @@ class SettingsController extends ChangeNotifier {
         'autoCopyText': autoCopyText,
         'senderFolders': senderFolders,
         'saveDir': saveDir,
+        'compression': compression,
+        'previewsSend': previewsSend,
+        'previewsShow': previewsShow,
+        'chat': chat,
+        'folderSync': folderSync,
+        'allowSpeedTest': allowSpeedTest,
+        'webShare': webShare,
+        'offlineQueue': offlineQueue,
+        'syncPairs': [for (final s in syncPairs) s.toJson()],
       }));
     } catch (_) {}
   }

@@ -227,6 +227,18 @@ class _JobCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (job.compressedSaved > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  children: [
+                    const Icon(Icons.compress_rounded, size: 16, color: AppColors.cyan),
+                    const SizedBox(width: 6),
+                    Text(context.tr('compressed_saved', {'size': formatBytes(job.compressedSaved)}),
+                        style: const TextStyle(color: AppColors.cyan, fontSize: 12.5)),
+                  ],
+                ),
+              ),
             if (!outgoing && job.savedPaths.isNotEmpty) ...[
               const SizedBox(height: 10),
               _SavedFiles(paths: job.savedPaths, controller: controller),

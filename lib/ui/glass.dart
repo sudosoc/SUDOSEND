@@ -55,6 +55,8 @@ class Glass extends StatelessWidget {
           borderRadius: r,
           splashColor: AppColors.cyan.withValues(alpha: 0.12),
           highlightColor: Colors.white.withValues(alpha: 0.04),
+          // Clearly visible focus for TV remotes (D-pad) and keyboards.
+          focusColor: AppColors.cyan.withValues(alpha: 0.22),
           child: surface,
         ),
       );
@@ -137,6 +139,7 @@ class GlowButton extends StatelessWidget {
           child: InkWell(
             onTap: onPressed,
             borderRadius: r,
+            focusColor: Colors.white.withValues(alpha: 0.35),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               child: content,
@@ -257,16 +260,19 @@ class GlassDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+      insetPadding: MediaQuery.sizeOf(context).width < 300
+          ? const EdgeInsets.all(6)
+          : const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: Glass(
           tint: 0.10,
           blur: 34,
           radius: 28,
-          padding: const EdgeInsets.all(22),
+          padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 300 ? 12 : 22),
           glow: AppColors.violet,
-          child: child,
+          // Scrolls on small screens (watches, landscape phones) instead of overflowing.
+          child: SingleChildScrollView(child: child),
         ),
       ),
     );
