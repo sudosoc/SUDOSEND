@@ -53,7 +53,13 @@
 - 🌐 **Share with any browser** — send to *and receive from* a device that doesn't have the app,
   even an iPhone: it scans a QR and gets a download/upload page (Send Anywhere / Feem-style)
 - 📶 **No Wi-Fi? Make one** — Android creates a private hotspot; the other phone joins by scanning a QR
-- 🧾 Signed delivery receipts, multi-device send, resume, no file-size limits, no ads, no account
+- 🔒 **Protected, self-destructing links** — PIN, expiry (10 min – 2 h), one-download links (WeTransfer Pro / Send Anywhere Plus)
+- 📬 **Outbox** — send to a trusted device that's switched off; it's delivered the moment it comes online,
+  and dropped connections **retry and resume automatically**
+- 📂 **Hot folders** (desktop) — drop anything into `SUDOSEND Outbox/<device>/` and it's sent by itself (Resilio-style)
+- 🔔 **Find my device** — make your phone ring at full volume, even on silent (AirDroid Premium)
+- 🚦 **Upload speed limit** and 📊 **per-device data usage**
+- 🧾 Signed delivery receipts, multi-device send, no file-size limits, no ads, no account
 
 **Only in SUDOSEND**
 - **Signed proof of delivery** — every transfer ends with a receipt the *receiver's device key* signs:
@@ -233,6 +239,9 @@ sudosend receive --receipts ~/receipts      # keep a signed receipt for every tr
 sudosend verify ~/receipts/receipt-*.json   # check receipts offline
 sudosend web report.pdf                     # QR + link: any browser can download it
 sudosend web --upload                       # let browsers send files to you
+sudosend web secret.pdf --pin 4821 --max 1  # PIN-protected, self-destructs after 1 download
+sudosend ring --to phone                    # find my phone (trusted devices)
+sudosend send big.iso --to nas --limit 5M   # cap upload speed
 sudosend --help
 ```
 
@@ -355,6 +364,10 @@ test/                   RFC 8439 vectors, loopback E2E: transfer, resume, tamper
 | Universal clipboard | ✅ free | — | ✅ | — |
 | Send to / receive from a plain browser | ✅ | ✅ send only | — | — |
 | Built-in hotspot when there is no Wi-Fi | ✅ Android | — | — | ✅ |
+| PIN-protected, self-destructing share links | ✅ free | — | — | — |
+| Deliver to an offline device later (outbox) | ✅ | — | — | — |
+| Find my device (ring) | ✅ free | — | ✅ | — |
+| Upload speed limit | ✅ | — | — | — |
 | Arabic UI with RTL | ✅ | ✅ | ✅ | ✅ |
 
 *✅ yes · ⚠️ partly · ❌ no · — not offered or not documented. Based on each project's public

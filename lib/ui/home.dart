@@ -40,6 +40,8 @@ const _navItems = [
 class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<IncomingRequest>? _incomingSub;
   StreamSubscription<String>? _messageSub;
+  StreamSubscription<String>? _ringSub;
+  bool _ringOpen = false;
   final List<IncomingRequest> _queue = [];
   bool _dialogOpen = false;
 
@@ -52,6 +54,41 @@ class _HomeScreenState extends State<HomeScreen> {
       _queue.add(r);
       _drainQueue();
     });
+    _ringSub = c.rings.listen((from) {
+      if (!mounted) return;
+      if (from.isEmpty) {
+        if (_ringOpen) Navigator.of(context).pop();
+        return;
+      }
+      if (_ringOpen) return;
+      _ringOpen = true;
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => GlassDialog(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const IconBadge(icon: Icons.notifications_active_rounded, color: AppColors.amber, size: 64),
+              const SizedBox(height: 14),
+              Text(context.tr('ring_title'), style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 6),
+              Text(context.tr('ring_from', {'name': from}), textAlign: TextAlign.center),
+              const SizedBox(height: 18),
+              GlowButton(
+                label: context.tr('ring_stop'),
+                icon: Icons.stop_rounded,
+                expand: true,
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+        ),
+      ).whenComplete(() {
+        _ringOpen = false;
+        c.stopRinging();
+      });
+    });
     _messageSub = c.messages.listen((m) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
@@ -62,6 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _incomingSub?.cancel();
     _messageSub?.cancel();
+    _ringSub?.cancel();
     super.dispose();
   }
 

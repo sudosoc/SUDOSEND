@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wraith_core/identity.dart';
+import 'package:wraith_core/models.dart';
 import 'package:wraith_core/util.dart';
 import 'package:wraith_core/wraith.dart' show kProtocol;
 
@@ -190,6 +191,64 @@ class SettingsPage extends StatelessWidget {
               ),
             ],
             divider,
+            Row(
+              children: [
+                const IconBadge(icon: Icons.speed_rounded, color: AppColors.cyan, size: 38),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(context.tr('s_speed'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                      Text(context.tr('s_speed_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                for (final v in const [0, 1, 5, 10, 50])
+                  ChoiceChip(
+                    label: Text(v == 0 ? context.tr('s_speed_unlimited') : '$v MB/s'),
+                    selected: s.uploadLimit == v,
+                    onSelected: (_) => s.update((x) => x.uploadLimit = v),
+                  ),
+              ],
+            ),
+            if (isDesktop) ...[
+              divider,
+              _Switch(
+                icon: Icons.drive_folder_upload_rounded,
+                color: AppColors.amber,
+                title: context.tr('s_hot'),
+                subtitle: context.tr('s_hot_sub'),
+                value: s.hotFolders,
+                onChanged: (v) => s.update((x) => x.hotFolders = v),
+              ),
+              if (s.hotFolders)
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: TextButton.icon(
+                    onPressed: () => controller.reveal(controller.hotRoot),
+                    icon: const Icon(Icons.folder_open_rounded, size: 18, color: AppColors.cyan),
+                    label: Text(context.tr('s_hot_open'), style: const TextStyle(color: AppColors.cyan)),
+                  ),
+                ),
+            ],
+            divider,
+            _Switch(
+              icon: Icons.notifications_active_rounded,
+              color: AppColors.amber,
+              title: context.tr('s_ring'),
+              subtitle: context.tr('s_ring_sub'),
+              value: s.allowRing,
+              onChanged: (v) => s.update((x) => x.allowRing = v),
+            ),
+            divider,
             _Switch(
               icon: Icons.notifications_rounded,
               color: AppColors.pink,
@@ -286,6 +345,11 @@ class SettingsPage extends StatelessWidget {
           ],
         ),
       ),
+      const SizedBox(height: 22),
+
+      // ── Data usage ──
+      SectionTitle(context.tr('s_usage')),
+      Glass(child: _UsageCard(controller: controller)),
       const SizedBox(height: 22),
 
       // ── Appearance ──
@@ -520,6 +584,88 @@ class _DeviceList extends StatelessWidget {
               ),
             ),
       ],
+    );
+  }
+}
+
+class _UsageCard extends StatelessWidget {
+  const _UsageCard({required this.controller});
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final perPeer = <String, (int sent, int received, int count)>{};
+    var sent = 0, received = 0;
+    for (final e in controller.history.entries) {
+      if (e.status != TransferStatus.done) continue;
+      final cur = perPeer[e.peerName] ?? (0, 0, 0);
+      if (e.direction == TransferDirection.outgoing) {
+        sent += e.totalBytes;
+        perPeer[e.peerName] = (cur.$1 + e.totalBytes, cur.$2, cur.$3 + 1);
+      } else {
+        received += e.totalBytes;
+        perPeer[e.peerName] = (cur.$1, cur.$2 + e.totalBytes, cur.$3 + 1);
+      }
+    }
+    final top = perPeer.entries.toList()..sort((a, b) => (b.value.$1 + b.value.$2).compareTo(a.value.$1 + a.value.$2));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: _Stat(icon: Icons.north_east_rounded, color: AppColors.cyan, label: context.tr('s_usage_sent'), value: formatBytes(sent))),
+            const SizedBox(width: 10),
+            Expanded(child: _Stat(icon: Icons.south_west_rounded, color: AppColors.mint, label: context.tr('s_usage_received'), value: formatBytes(received))),
+          ],
+        ),
+        if (top.isNotEmpty) const SizedBox(height: 12),
+        for (final e in top.take(6))
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Expanded(child: Text(e.key, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
+                Text('↑ ${formatBytes(e.value.$1)}  ↓ ${formatBytes(e.value.$2)}  · ${e.value.$3}',
+                    textDirection: TextDirection.ltr, style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  const _Stat({required this.icon, required this.color, required this.label, required this.value});
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: color.withValues(alpha: 0.08),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 11.5)),
+                Text(value, textDirection: TextDirection.ltr, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

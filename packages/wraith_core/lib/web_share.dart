@@ -12,6 +12,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:path/path.dart' as p;
 
 import 'models.dart';
@@ -41,7 +42,17 @@ class WebShare {
     this.onStopped,
     this.ttl = const Duration(minutes: 30),
     this.basePort = 47840,
+    this.pin,
+    this.maxDownloads,
   });
+
+  /// Optional PIN visitors must enter (WeTransfer-Pro-style protected link).
+  final String? pin;
+
+  /// Stop sharing after this many completed file downloads (self-destructing link).
+  final int? maxDownloads;
+
+  int downloads = 0;
 
   final List<FileEntry> files;
   final String? text;
@@ -140,6 +151,42 @@ class WebShare {
     }
     final rest = seg.sublist(2).where((s) => s.isNotEmpty).toList();
 
+    // PIN gate: everything except the PIN form needs the session cookie.
+    if (pin != null && !_hasSession(req)) {
+      if (rest.length == 1 && rest[0] == 'pin' && req.method == 'POST') {
+        final body = await utf8.decoder.bind(req).join();
+        final given = Uri.splitQueryString(body)['pin'] ?? '';
+        if (constantTimeEquals(utf8.encode(given), utf8.encode(pin!))) {
+          res.statusCode = HttpStatus.seeOther;
+          res.headers
+            ..set(HttpHeaders.locationHeader, './')
+            ..set(HttpHeaders.setCookieHeader,
+                'ss=${_sessionValue()}; Path=/s/$token/; HttpOnly; SameSite=Strict; Max-Age=${ttl.inSeconds}');
+          await res.close();
+        } else {
+          _failures[ip]!.add(DateTime.now().millisecondsSinceEpoch);
+          final arabic = (req.headers.value(HttpHeaders.acceptLanguageHeader) ?? '').toLowerCase().startsWith('ar');
+          _headers(res, 'text/html; charset=utf-8');
+          res.statusCode = HttpStatus.forbidden;
+          res.write(_pinPage(arabic, wrong: true));
+          await res.close();
+        }
+        return;
+      }
+      if (rest.isEmpty && req.method == 'GET' && req.uri.path.endsWith('/')) {
+        final arabic = (req.headers.value(HttpHeaders.acceptLanguageHeader) ?? '').toLowerCase().startsWith('ar');
+        _headers(res, 'text/html; charset=utf-8');
+        res.write(_pinPage(arabic));
+        await res.close();
+        return;
+      }
+      if (!(rest.isEmpty && req.method == 'GET')) {
+        res.statusCode = HttpStatus.forbidden;
+        await res.close();
+        return;
+      }
+    }
+
     if (rest.isEmpty && req.method == 'GET') {
       if (!req.uri.path.endsWith('/')) {
         res.statusCode = HttpStatus.movedPermanently;
@@ -173,6 +220,12 @@ class WebShare {
       await res.addStream(file.openRead());
       await res.close();
       onEvent?.call(WebShareEvent('download', ip, f.name, f.size));
+      downloads++;
+      final limit = maxDownloads;
+      if (limit != null && downloads >= limit) {
+        // Self-destruct: give the response a moment to flush, then stop.
+        unawaited(Future<void>.delayed(const Duration(seconds: 2), stop));
+      }
       return;
     }
 
@@ -213,6 +266,33 @@ class WebShare {
 
     res.statusCode = HttpStatus.notFound;
     await res.close();
+  }
+
+  late final List<int> _secret = utf8.encode(newPairingToken());
+
+  String _sessionValue() =>
+      crypto.Hmac(crypto.sha256, _secret).convert(utf8.encode('$token|$pin')).toString();
+
+  bool _hasSession(HttpRequest req) {
+    final expected = _sessionValue();
+    for (final c in req.cookies) {
+      if (c.name == 'ss' && constantTimeEquals(utf8.encode(c.value), utf8.encode(expected))) return true;
+    }
+    return false;
+  }
+
+  String _pinPage(bool ar, {bool wrong = false}) {
+    String t(String en, String arText) => ar ? arText : en;
+    return '''<!doctype html><html lang="${ar ? 'ar' : 'en'}" dir="${ar ? 'rtl' : 'ltr'}"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>SUDOSEND</title><style>
+body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px system-ui,sans-serif;color:#eaf0ff;background:#060816}
+form{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:22px;padding:26px;text-align:center;width:min(320px,90vw)}
+input{width:100%;box-sizing:border-box;font-size:28px;letter-spacing:8px;text-align:center;padding:12px;border-radius:14px;border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.3);color:#fff}
+button{margin-top:14px;width:100%;border:0;border-radius:14px;padding:12px;font-weight:800;background:linear-gradient(135deg,#38e1ff,#8b5cf6);color:#070a16}
+.e{color:#fb7185}</style></head><body><form method="post" action="pin">
+<h2>🔒 ${t('Enter PIN', 'اكتب الرقم السري')}</h2>${wrong ? '<p class="e">${t('Wrong PIN', 'الرقم غلط')}</p>' : ''}
+<input name="pin" inputmode="numeric" autocomplete="one-time-code" autofocus maxlength="12">
+<button>${t('Open', 'فتح')}</button></form></body></html>''';
   }
 
   // ─────────────────────────── Page ───────────────────────────

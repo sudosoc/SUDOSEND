@@ -24,6 +24,7 @@ import '../app/strings.dart';
 import '../platform/desktop.dart';
 import '../platform/native_bridge.dart';
 import 'history.dart';
+import 'outbox.dart';
 import 'settings.dart';
 
 class AppController extends ChangeNotifier {
@@ -100,6 +101,7 @@ class AppController extends ChangeNotifier {
       identity = await DeviceIdentity.loadOrCreate(support, vault: vault);
       trust = await TrustStore.load(support);
       history = await HistoryStore.load(support);
+      outbox = await OutboxStore.load(support);
       saveDir = await _resolveSaveDir();
 
       _engine = TransferEngine(
@@ -109,9 +111,11 @@ class AppController extends ChangeNotifier {
         saveDirFor: (name, fp) async => settings.senderFolders
             ? Directory(p.join(saveDir!.path, sanitizeFileName(name)))
             : saveDir!,
-        autoAccept: (r) => r.clipboard
-            ? (r.trusted && settings.clipboardSync)
-            : (settings.autoAcceptTrusted && r.trusted),
+        autoAccept: (r) => r.ring
+            ? (r.trusted && settings.allowRing)
+            : r.clipboard
+                ? (r.trusted && settings.clipboardSync)
+                : (settings.autoAcceptTrusted && r.trusted),
         onIncoming: _onIncoming,
         onJob: _addJob,
         onRejected: (address, reason) {
@@ -121,7 +125,7 @@ class AppController extends ChangeNotifier {
       );
       await _engine.start();
 
-      _discovery = Discovery(identity: identity, transferPort: _engine.port, onChanged: notifyListeners)
+      _discovery = Discovery(identity: identity, transferPort: _engine.port, onChanged: _onPeersChanged)
         ..stealth = settings.stealth;
       await _discovery.start();
       await _refreshAddresses();
@@ -144,6 +148,8 @@ class AppController extends ChangeNotifier {
         notifyListeners();
       }));
       settings.addListener(_applySettings);
+      _outboxTimer = Timer.periodic(const Duration(seconds: 30), (_) => unawaited(_flushOutbox()));
+      _subs.add(_native.ringStopped.listen((_) => _rings.add('')));
       if (isDesktop) unawaited(SingleInstance.listen((args) => addPaths(args)));
 
       if (Platform.isAndroid && !settings.effectsChosen && await _native.isLowRam()) {
@@ -177,7 +183,7 @@ class AppController extends ChangeNotifier {
   void _onIncoming(IncomingRequest r) {
     // Clipboard pushes never prompt: accepted silently from trusted devices
     // when sync is on (see autoAccept), declined otherwise.
-    if (r.clipboard) {
+    if (r.clipboard || r.ring) {
       r.respond(false);
       return;
     }
@@ -219,6 +225,18 @@ class AppController extends ChangeNotifier {
   // ─────────────────────────── Jobs ───────────────────────────
 
   void _addJob(TransferJob job) {
+    if (job.ring) {
+      var finished = false;
+      job.changes.listen((_) {
+        if (finished || job.isActive) return;
+        finished = true;
+        if (job.direction == TransferDirection.incoming && job.status == TransferStatus.done) {
+          _startRinging(job.peerName);
+        }
+        job.dispose();
+      });
+      return;
+    }
     if (job.clipboard) {
       // Silent: not shown in the list or kept in history.
       var finished = false;
@@ -498,7 +516,7 @@ class AppController extends ChangeNotifier {
     selectedText = null;
     tab = 2;
     notifyListeners();
-    await _engine.send(peer, files, text: text, pairToken: pairToken);
+    await _sendWithRetry(peer, files, text: text, pairToken: pairToken);
     notifyListeners();
   }
 
@@ -511,7 +529,7 @@ class AppController extends ChangeNotifier {
     selectedText = null;
     tab = 2;
     notifyListeners();
-    await Future.wait([for (final peer in peers) _engine.send(peer, files, text: text)]);
+    await Future.wait([for (final peer in peers) _sendWithRetry(peer, files, text: text)]);
     notifyListeners();
   }
 
@@ -586,6 +604,15 @@ class AppController extends ChangeNotifier {
 
   void _applySettings() {
     TransferJob.progressIntervalMs = settings.reduceEffects ? 300 : 150;
+    TransferEngine.maxBytesPerSecond = settings.uploadLimit * 1024 * 1024;
+    final wantHot = settings.hotFolders && isDesktop;
+    if (wantHot && _hotTimer == null) {
+      _hotTimer = Timer.periodic(const Duration(seconds: 4), (_) => unawaited(_scanHotFolders()));
+      unawaited(_scanHotFolders());
+    } else if (!wantHot && _hotTimer != null) {
+      _hotTimer!.cancel();
+      _hotTimer = null;
+    }
     final wantPolling = settings.clipboardSync && isDesktop;
     if (wantPolling && _clipTimer == null) {
       unawaited(Clipboard.getData(Clipboard.kTextPlain).then((d) => _lastClip = d?.text));
@@ -630,7 +657,13 @@ class AppController extends ChangeNotifier {
 
   /// Shares the current selection (if [withSelection]) with browsers, and
   /// optionally lets browsers upload files to this device.
-  Future<String?> startWebShare({required bool upload, required bool withSelection}) async {
+  Future<String?> startWebShare({
+    required bool upload,
+    required bool withSelection,
+    String? pin,
+    Duration ttl = const Duration(minutes: 30),
+    int? maxDownloads,
+  }) async {
     await stopWebShare();
     final files = withSelection ? List<FileEntry>.of(selected) : <FileEntry>[];
     final text = withSelection ? selectedText : null;
@@ -643,6 +676,9 @@ class AppController extends ChangeNotifier {
       deviceName: identity.name,
       saveDir: () async => settings.senderFolders ? Directory(p.join(saveDir!.path, 'Browser')) : saveDir!,
       onEvent: _onWebEvent,
+      pin: pin,
+      ttl: ttl,
+      maxDownloads: maxDownloads,
       onStopped: () {
         webShare = null;
         _lastService = '';
@@ -730,6 +766,214 @@ class AppController extends ChangeNotifier {
     _lastService = '';
     _updateService();
     notifyListeners();
+  }
+
+  // ─────────────────────────── Retry & outbox ───────────────────────────
+
+  late OutboxStore outbox;
+  final Set<String> _outboxInflight = {};
+  Timer? _outboxTimer;
+  Timer? _hotTimer;
+
+  static bool _retryable(TransferJob job) {
+    if (job.status != TransferStatus.failed) return false;
+    final e = job.error ?? '';
+    return e.startsWith('Connection') || e.startsWith('Timed out');
+  }
+
+  /// Sends with automatic retries (3 attempts) for dropped connections; each
+  /// retry resumes where the last one stopped.
+  Future<TransferJob> _sendWithRetry(Peer peer, List<FileEntry> files,
+      {String? text, String? pairToken}) async {
+    var target = peer;
+    var job = await _engine.send(target, files, text: text, pairToken: pairToken);
+    for (final wait in const [Duration(seconds: 3), Duration(seconds: 10)]) {
+      if (!_retryable(job)) break;
+      await Future<void>.delayed(wait);
+      if (!peer.manual) {
+        // The device may have changed address (e.g. Wi-Fi reconnect).
+        target = peers.firstWhere((p) => p.id == peer.id, orElse: () => target);
+      }
+      job = await _engine.send(target, files, text: text, pairToken: pairToken);
+    }
+    return job;
+  }
+
+  void _onPeersChanged() {
+    notifyListeners();
+    unawaited(_flushOutbox());
+  }
+
+  /// Trusted devices that are not currently visible (for "send when online").
+  List<KnownDevice> get trustedOffline {
+    final online = {for (final p in peers) p.id};
+    return trust.all.where((d) => !online.contains(d.fingerprint)).toList();
+  }
+
+  /// Queues the current selection for a trusted device that is offline.
+  Future<void> enqueueFor(KnownDevice device) async {
+    if (!hasSelection) return;
+    await outbox.add(OutboxItem(
+      id: '${DateTime.now().microsecondsSinceEpoch}',
+      fingerprint: device.fingerprint,
+      peerName: device.name,
+      files: List.of(selected),
+      text: selectedText,
+      created: DateTime.now(),
+    ));
+    selected.clear();
+    selectedText = null;
+    _messages.add(t('queued', {'name': device.name}));
+    notifyListeners();
+    unawaited(_flushOutbox());
+  }
+
+  Future<void> removeOutbox(String id) async {
+    await outbox.remove(id);
+    notifyListeners();
+  }
+
+  Future<void> _flushOutbox() async {
+    if (!ready) return;
+    for (final item in List.of(outbox.items)) {
+      if (_outboxInflight.contains(item.id)) continue;
+      final peer = peers.where((p) => p.id == item.fingerprint).firstOrNull;
+      if (peer == null) continue;
+      final files = item.files.where((f) => f.path != null && File(f.path!).existsSync()).toList();
+      if (files.isEmpty && item.text == null) {
+        await outbox.remove(item.id);
+        continue;
+      }
+      _outboxInflight.add(item.id);
+      unawaited(() async {
+        final job = await _sendWithRetry(peer, files, text: item.text);
+        _outboxInflight.remove(item.id);
+        if (job.status == TransferStatus.done) {
+          await outbox.remove(item.id);
+          await _archiveHot(item.hotPaths);
+        } else {
+          item
+            ..attempts += 1
+            ..lastError = job.error ?? job.status.name;
+          if (job.status == TransferStatus.declined || item.attempts >= 10) {
+            await outbox.remove(item.id);
+          } else {
+            await outbox.save();
+          }
+        }
+        notifyListeners();
+      }());
+    }
+  }
+
+  // ─────────────────────────── Hot folders (desktop) ───────────────────────────
+
+  String get hotRoot => p.join(homeDir(), 'SUDOSEND Outbox');
+  final Map<String, int> _hotSizes = {};
+  final Set<String> _hotQueued = {};
+
+  Future<void> _scanHotFolders() async {
+    if (!ready) return;
+    final root = Directory(hotRoot);
+    try {
+      await root.create(recursive: true);
+      final readme = File(p.join(root.path, 'README.txt'));
+      if (!await readme.exists()) {
+        await readme.writeAsString('Drop files or folders into a device's folder here and SUDOSEND sends them '
+            'automatically when that device is online. Delivered items move to its "Sent" folder.
+');
+      }
+      for (final device in trust.all) {
+        final dir = Directory(p.join(root.path, sanitizeFileName(device.name)));
+        await dir.create(recursive: true);
+        await for (final entity in dir.list(followLinks: false)) {
+          final name = p.basename(entity.path);
+          if (name == 'Sent' || name.startsWith('.') || _hotQueued.contains(entity.path)) continue;
+          final size = entity is File ? await entity.length() : await _dirSize(entity as Directory);
+          final prev = _hotSizes[entity.path];
+          _hotSizes[entity.path] = size;
+          if (prev == null || prev != size) continue; // wait until it stops changing
+          final files = <FileEntry>[];
+          if (entity is File) {
+            files.add(FileEntry(name: name, size: size, path: entity.path));
+          } else {
+            await for (final f in (entity as Directory).list(recursive: true, followLinks: false)) {
+              if (f is! File) continue;
+              final rel = p.relative(f.path, from: entity.path).split(p.separator).join('/');
+              files.add(FileEntry(name: '$name/$rel', size: await f.length(), path: f.path));
+            }
+          }
+          if (files.isEmpty) continue;
+          _hotQueued.add(entity.path);
+          _hotSizes.remove(entity.path);
+          await outbox.add(OutboxItem(
+            id: 'hot-${DateTime.now().microsecondsSinceEpoch}',
+            fingerprint: device.fingerprint,
+            peerName: device.name,
+            files: files,
+            created: DateTime.now(),
+            hotPaths: [entity.path],
+          ));
+          notifyListeners();
+        }
+      }
+      await _flushOutbox();
+    } catch (_) {}
+  }
+
+  static Future<int> _dirSize(Directory d) async {
+    var total = 0;
+    await for (final f in d.list(recursive: true, followLinks: false)) {
+      if (f is File) total += await f.length();
+    }
+    return total;
+  }
+
+  Future<void> _archiveHot(List<String> paths) async {
+    for (final path in paths) {
+      try {
+        final sent = Directory(p.join(p.dirname(path), 'Sent'));
+        await sent.create(recursive: true);
+        var dest = p.join(sent.path, p.basename(path));
+        var i = 1;
+        while (FileSystemEntity.typeSync(dest) != FileSystemEntityType.notFound) {
+          dest = p.join(sent.path, '${p.basenameWithoutExtension(path)} ($i)${p.extension(path)}');
+          i++;
+        }
+        await (FileSystemEntity.isDirectorySync(path) ? Directory(path).rename(dest) : File(path).rename(dest));
+      } catch (_) {}
+      _hotQueued.remove(path);
+    }
+  }
+
+  // ─────────────────────────── Find my device ───────────────────────────
+
+  final DesktopRinger _ringer = DesktopRinger();
+  final StreamController<String> _rings = StreamController<String>.broadcast();
+
+  /// Fires with the requesting device's name when this device starts ringing.
+  Stream<String> get rings => _rings.stream;
+
+  void _startRinging(String from) {
+    if (Platform.isAndroid) {
+      unawaited(_native.ring(from, title: t('ring_title'), stop: t('ring_stop')));
+    } else {
+      _ringer.start();
+      if (!foreground) unawaited(desktopNotify(t('ring_title'), from));
+    }
+    _rings.add(from);
+  }
+
+  void stopRinging() {
+    _ringer.stop();
+    unawaited(_native.stopRing());
+  }
+
+  /// Makes a trusted device ring. Returns an error message or null.
+  Future<String?> ringDevice(Peer peer) async {
+    final job = await _engine.send(peer, const [], ring: true);
+    if (job.status == TransferStatus.done) return null;
+    return job.status == TransferStatus.declined ? t('ring_declined') : (job.error ?? t('ring_declined'));
   }
 
   Future<void> setStealth(bool value) async {
@@ -842,6 +1086,9 @@ class AppController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _outboxTimer?.cancel();
+    _hotTimer?.cancel();
+    _ringer.stop();
     _clipTimer?.cancel();
     unawaited(webShare?.stop());
     if (hotspot != null) unawaited(_native.stopHotspot());

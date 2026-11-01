@@ -23,7 +23,8 @@ class TransfersTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final jobs = controller.jobs;
     final earlier = controller.earlierHistory;
-    if (jobs.isEmpty && earlier.isEmpty) {
+    final queued = controller.outbox.items;
+    if (jobs.isEmpty && earlier.isEmpty && queued.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -46,6 +47,45 @@ class TransfersTab extends StatelessWidget {
     }
     final hasFinished = jobs.any((j) => !j.isActive);
     final items = <Widget>[
+      if (queued.isNotEmpty) ...[
+        SectionTitle(context.tr('outbox')),
+        for (final q in queued)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Glass(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  const IconBadge(icon: Icons.schedule_send_rounded, color: AppColors.violet, size: 38),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(context.tr('to_name', {'name': q.peerName}),
+                            style: const TextStyle(fontWeight: FontWeight.w700)),
+                        Text(
+                          q.text != null
+                              ? context.tr('text_message_short')
+                              : _summary(context, q.files.length, q.totalBytes),
+                          style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                        ),
+                        Text(q.lastError ?? context.tr('waiting_online'),
+                            style: TextStyle(color: q.lastError != null ? AppColors.amber : AppColors.muted, fontSize: 11.5)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: context.tr('cancel'),
+                    onPressed: () => controller.removeOutbox(q.id),
+                    icon: const Icon(Icons.close_rounded, color: AppColors.muted),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        const SizedBox(height: 8),
+      ],
       if (jobs.isNotEmpty)
         SectionTitle(
           context.tr('activity'),

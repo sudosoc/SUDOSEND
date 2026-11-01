@@ -78,7 +78,7 @@ payload = ChaCha20-Poly1305(key_dir, nonce = 0x00000000 ‖ u64 counter_dir, typ
 | Type | Name | Body |
 |---|---|---|
 | 1 | AUTH | 64-byte signature |
-| 2 | OFFER | `{"files":[…], "text"?: "…", "pair"?: "<token>", "clip"?: true}` |
+| 2 | OFFER | `{"files":[…], "text"?: "…", "pair"?: "<token>", "clip"?: true, "ring"?: true}` |
 | 3 | ACCEPT | `{"resume":{"<index>": bytes_already_held}}` |
 | 4 | DECLINE | — |
 | 5 | FILE_START | `{"i":0,"name":…,"size":…,"offset":…}` |
@@ -165,6 +165,16 @@ protocol violation closes the connection and deletes the partial file.
   app, under `/s/<128-bit token>/`. It is **not** end-to-end encrypted (plain HTTP on the LAN);
   wrong-token probes are rate-limited, uploads are sanitised like normal transfers, and the share
   expires after 30 minutes or when stopped.
+
+## 12. Find my device, outbox, protected links
+
+- `"ring": true` with no files and no text asks the receiver to ring. Apps accept it only from
+  trusted devices (and only if the user allows it); anything else is declined without a prompt.
+- The outbox and automatic retries are app features: a failed transfer to the same fingerprint
+  is simply retried, and the resume mechanism (§5) skips what already arrived.
+- Browser links can require a PIN (checked in constant time, rate-limited like token probes; a
+  correct PIN sets an HMAC session cookie scoped to the share path) and can stop after a set
+  number of downloads.
 
 ## Known limitations
 

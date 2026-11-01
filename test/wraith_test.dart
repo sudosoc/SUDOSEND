@@ -316,6 +316,76 @@ void main() {
     expect(seen!.clipboard, isTrue);
   });
 
+  test('ring requests reach the receiver flagged, with no files', () async {
+    IncomingRequest? seen;
+    final t = await _pair(onIncoming: (r) {
+      seen = r;
+      r.respond(true);
+    });
+    final job = await t.sender.send(t.peer, const [], ring: true);
+    expect(job.status, TransferStatus.done, reason: job.error);
+    expect(seen!.ring, isTrue);
+  });
+
+  test('upload speed cap is respected', () async {
+    final t = await _pair();
+    final f = File(p.join(t.tmp.path, 'slow.bin'))..writeAsBytesSync(List<int>.filled(600 * 1024, 1));
+    TransferEngine.maxBytesPerSecond = 1024 * 1024; // 1 MiB/s → ≥ ~0.5 s
+    addTearDown(() => TransferEngine.maxBytesPerSecond = 0);
+    final sw = Stopwatch()..start();
+    final job = await t.sender.send(t.peer, [FileEntry(name: 'slow.bin', size: 600 * 1024, path: f.path)]);
+    expect(job.status, TransferStatus.done);
+    expect(sw.elapsedMilliseconds, greaterThan(400));
+  });
+
+  test('browser share: PIN gate and self-destruct after N downloads', () async {
+    final tmp = await Directory.systemTemp.createTemp('sudosend_web_pin_');
+    addTearDown(() => tmp.delete(recursive: true));
+    final src = File(p.join(tmp.path, 'a.txt'))..writeAsStringSync('secret');
+    var stopped = false;
+    final share = WebShare(
+      files: [FileEntry(name: 'a.txt', size: 6, path: src.path)],
+      saveDir: () async => tmp,
+      pin: '4821',
+      maxDownloads: 1,
+      onStopped: () => stopped = true,
+      basePort: 0,
+    );
+    await share.start();
+    addTearDown(share.stop);
+    final base = share.urls([InternetAddress.loopbackIPv4]).single;
+    final client = HttpClient();
+    addTearDown(client.close);
+
+    var res = await (await client.getUrl(Uri.parse('${base}f/0'))).close();
+    await res.drain<void>();
+    expect(res.statusCode, 403, reason: 'files need the PIN');
+
+    var req = await client.postUrl(Uri.parse('${base}pin'));
+    req.followRedirects = false;
+    req.headers.contentType = ContentType('application', 'x-www-form-urlencoded');
+    req.write('pin=0000');
+    res = await req.close();
+    await res.drain<void>();
+    expect(res.statusCode, 403, reason: 'wrong PIN');
+
+    req = await client.postUrl(Uri.parse('${base}pin'));
+    req.followRedirects = false;
+    req.headers.contentType = ContentType('application', 'x-www-form-urlencoded');
+    req.write('pin=4821');
+    res = await req.close();
+    await res.drain<void>();
+    expect(res.statusCode, 303);
+    final cookie = res.cookies.single;
+
+    final get = await client.getUrl(Uri.parse('${base}f/0'));
+    get.cookies.add(cookie);
+    res = await get.close();
+    expect(String.fromCharCodes(await res.fold<List<int>>(<int>[], (a, b) => a..addAll(b))), 'secret');
+    await Future<void>.delayed(const Duration(seconds: 3));
+    expect(stopped, isTrue, reason: 'one-download link must self-destruct');
+  });
+
   group('ChaCha20-Poly1305 (fast implementation)', () {
     Uint8List hex(String h) {
       final clean = h.replaceAll(RegExp(r'\s'), '');

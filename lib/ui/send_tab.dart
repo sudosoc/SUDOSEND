@@ -430,6 +430,7 @@ class _DevicesSectionState extends State<_DevicesSection> {
               child: _PeerTile(
                 peer: peer,
                 trusted: controller.trust.isTrusted(peer.id),
+                onRing: controller.trust.isTrusted(peer.id) ? () => _ring(context, peer) : null,
                 selected: _selecting ? _chosen.contains(peer.id) : null,
                 onTap: _selecting
                     ? () => setState(() => _chosen.contains(peer.id) ? _chosen.remove(peer.id) : _chosen.add(peer.id))
@@ -457,8 +458,50 @@ class _DevicesSectionState extends State<_DevicesSection> {
                     },
             ),
         ],
+        if (controller.trustedOffline.isNotEmpty && !_selecting) ...[
+          const SizedBox(height: 14),
+          SectionTitle(context.tr('offline_trusted')),
+          for (final d in controller.trustedOffline.take(6))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Glass(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                onTap: () {
+                  if (!controller.hasSelection) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('pick_first'))));
+                    return;
+                  }
+                  unawaited(controller.enqueueFor(d));
+                },
+                child: Row(
+                  children: [
+                    const Icon(Icons.cloud_off_rounded, size: 20, color: AppColors.muted),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(d.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                          Text(context.tr('send_when_online'),
+                              style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.schedule_send_rounded, color: AppColors.violet, size: 20),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ],
     );
+  }
+
+  Future<void> _ring(BuildContext context, Peer peer) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = context.tr('ring_sent', {'name': peer.name});
+    final error = await controller.ringDevice(peer);
+    messenger.showSnackBar(SnackBar(content: Text(error ?? ok)));
   }
 
   void _send(BuildContext context, Peer peer) {
@@ -548,7 +591,9 @@ class _DevicesSectionState extends State<_DevicesSection> {
 }
 
 class _PeerTile extends StatelessWidget {
-  const _PeerTile({required this.peer, required this.trusted, required this.onTap, this.selected});
+  const _PeerTile({required this.peer, required this.trusted, required this.onTap, this.selected, this.onRing});
+
+  final VoidCallback? onRing;
 
   final Peer peer;
   final bool trusted;
@@ -598,6 +643,12 @@ class _PeerTile extends StatelessWidget {
               ],
             ),
           ),
+          if (onRing != null && selected == null)
+            IconButton(
+              tooltip: context.tr('ring'),
+              onPressed: onRing,
+              icon: const Icon(Icons.notifications_active_outlined, size: 20, color: AppColors.amber),
+            ),
           if (selected != null)
             Checkbox(value: selected, onChanged: (_) => onTap())
           else

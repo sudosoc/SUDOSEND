@@ -18,6 +18,15 @@ class SettingsController extends ChangeNotifier {
   bool get effectsChosen => _effectsSaved;
   bool get reduceEffects => effects == 'lite';
   bool clipboardSync = false;
+
+  /// Upload cap in MB/s (0 = unlimited).
+  int uploadLimit = 0;
+
+  /// Desktop: send whatever is dropped into "SUDOSEND Outbox/<device>/".
+  bool hotFolders = false;
+
+  /// Let trusted devices make this one ring ("find my device").
+  bool allowRing = true;
   bool autoAcceptTrusted = false;
   bool stealth = false;
   bool backgroundReceive = false;
@@ -49,6 +58,9 @@ class SettingsController extends ChangeNotifier {
           _effectsSaved = true;
         }
         clipboardSync = (m['clipboardSync'] as bool?) ?? clipboardSync;
+        uploadLimit = (m['uploadLimit'] as int?) ?? uploadLimit;
+        hotFolders = (m['hotFolders'] as bool?) ?? hotFolders;
+        allowRing = (m['allowRing'] as bool?) ?? allowRing;
         autoAcceptTrusted = (m['autoAcceptTrusted'] as bool?) ?? autoAcceptTrusted;
         stealth = (m['stealth'] as bool?) ?? stealth;
         backgroundReceive = (m['backgroundReceive'] as bool?) ?? backgroundReceive;
@@ -76,6 +88,9 @@ class SettingsController extends ChangeNotifier {
         'language': language,
         'effects': effects,
         'clipboardSync': clipboardSync,
+        'uploadLimit': uploadLimit,
+        'hotFolders': hotFolders,
+        'allowRing': allowRing,
         'autoAcceptTrusted': autoAcceptTrusted,
         'stealth': stealth,
         'backgroundReceive': backgroundReceive,

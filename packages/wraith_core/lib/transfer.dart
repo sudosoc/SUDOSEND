@@ -38,6 +38,7 @@ class IncomingRequest {
     this.text,
     this.paired = false,
     this.clipboard = false,
+    this.ring = false,
   })  : id = '${DateTime.now().microsecondsSinceEpoch}-${_seq++}',
         totalBytes = files.fold<int>(0, (a, f) => a + f.size);
 
@@ -59,6 +60,9 @@ class IncomingRequest {
 
   /// A universal-clipboard push (text only).
   final bool clipboard;
+
+  /// "Find my device": make this device ring (no files, trusted senders only).
+  final bool ring;
 
   final Completer<IncomingDecision> _completer = Completer<IncomingDecision>();
   Future<IncomingDecision> get decision => _completer.future;
@@ -129,6 +133,9 @@ class TransferEngine {
 
   /// First port to try; 0 means "any free port" (used by tests).
   final int basePort;
+
+  /// Upload speed cap in bytes per second for outgoing files (0 = unlimited).
+  static int maxBytesPerSecond = 0;
 
   ServerSocket? _server;
   int port = kTransferPort;
@@ -260,7 +267,7 @@ class TransferEngine {
   /// [pairToken] comes from a scanned QR code / pairing link.
   /// Completes when the transfer has finished, successfully or not.
   Future<TransferJob> send(Peer peer, List<FileEntry> files,
-      {String? text, String? pairToken, bool clipboard = false}) async {
+      {String? text, String? pairToken, bool clipboard = false, bool ring = false}) async {
     if (text != null && text.length > kMaxTextLength) {
       throw const WraithException('Text is too long (64 KB max)');
     }
@@ -271,7 +278,9 @@ class TransferEngine {
       files: files,
       text: text,
       status: TransferStatus.connecting,
-    )..clipboard = clipboard && text != null;
+    )
+      ..clipboard = clipboard && text != null
+      ..ring = ring && files.isEmpty && text == null;
     onJob(job);
 
     Socket? socket;
@@ -310,6 +319,7 @@ class TransferEngine {
         if (text != null) 'text': text,
         if (pairToken != null) 'pair': pairToken,
         if (clipboard && text != null) 'clip': true,
+        if (job.ring) 'ring': true,
       });
 
       final reply = await channel.receive(timeout: _approvalTimeout + const Duration(seconds: 10));
@@ -326,6 +336,7 @@ class TransferEngine {
       job.update(() => job.status = TransferStatus.transferring);
       final clock = Stopwatch()..start();
       final sent = <ReceiptFile>[];
+      var paced = 0;
 
       for (var i = 0; i < files.length; i++) {
         final f = files[i];
@@ -365,6 +376,13 @@ class TransferEngine {
           await channel.send(Frame.data, chunk, false);
           remaining -= chunk.length;
           job.addProgress(chunk.length, clock);
+          final cap = maxBytesPerSecond;
+          if (cap > 0) {
+            // Token-bucket pacing: never run ahead of the configured rate.
+            paced += chunk.length;
+            final aheadMs = paced * 1000 ~/ cap - clock.elapsedMilliseconds;
+            if (aheadMs > 5) await Future<void>.delayed(Duration(milliseconds: aheadMs));
+          }
         }
         await raf.close();
         raf = null;
@@ -434,7 +452,8 @@ class TransferEngine {
         throw const WraithException('Invalid text offer');
       }
       final text = rawText as String?;
-      if (rawFiles.isEmpty && text == null) throw const WraithException('Empty offer');
+      final ring = offer['ring'] == true && rawFiles.isEmpty && text == null;
+      if (rawFiles.isEmpty && text == null && !ring) throw const WraithException('Empty offer');
 
       final files = <FileEntry>[];
       final segments = <List<String>>[];
@@ -472,6 +491,7 @@ class TransferEngine {
         text: text,
         paired: paired,
         clipboard: offer['clip'] == true && text != null && rawFiles.isEmpty,
+        ring: ring,
       );
 
       if (paired || (autoAccept?.call(request) ?? false)) {
@@ -546,7 +566,8 @@ class TransferEngine {
         ..peerFingerprint = hs.peerFingerprint
         ..peerTrusted = trusted || decision.trust || paired
         ..sas = hs.sas
-        ..clipboard = request.clipboard;
+        ..clipboard = request.clipboard
+        ..ring = request.ring;
       job = activeJob;
       onJob(activeJob);
       await channel.sendJson(Frame.accept, {'resume': resume});
@@ -627,6 +648,11 @@ class TransferEngine {
         } else if (msg.type == Frame.done) {
           if (index != files.length - 1 || raf != null) {
             throw const WraithException('Transfer ended early');
+          }
+          if (activeJob.ring) {
+            await channel.sendJson(Frame.result, {'ok': true, 'verified': 0});
+            activeJob.finish(TransferStatus.done);
+            return;
           }
           final receipt = await DeliveryReceipt.create(
             receiver: identity,

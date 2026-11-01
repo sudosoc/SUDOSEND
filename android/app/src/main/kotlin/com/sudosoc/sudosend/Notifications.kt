@@ -98,6 +98,11 @@ object Notifications {
 
 class NotificationActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == Ringer.ACTION_STOP) {
+            Ringer.stop(context)
+            Bridge.emit("onRingStopped", null)
+            return
+        }
         val id = intent.getStringExtra(Notifications.EXTRA_ID) ?: return
         Notifications.cancel(context, id)
         if (intent.action == Notifications.ACTION_DECLINE) {

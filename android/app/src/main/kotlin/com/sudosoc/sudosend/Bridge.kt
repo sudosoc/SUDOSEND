@@ -128,6 +128,19 @@ object Bridge {
                             result.error("unsupported", "Needs Android 8 or newer", null)
                         }
                     }
+                    "ring" -> {
+                        Ringer.start(
+                            app,
+                            call.argument<String>("name") ?: "",
+                            call.argument<String>("title") ?: "SUDOSEND",
+                            call.argument<String>("stop") ?: "Stop",
+                        )
+                        result.success(true)
+                    }
+                    "stopRing" -> {
+                        Ringer.stop(app)
+                        result.success(true)
+                    }
                     "stopHotspot" -> {
                         Hotspot.stop()
                         result.success(true)

@@ -33,6 +33,9 @@ class NativeBridge {
   final StreamController<void> _shares = StreamController<void>.broadcast();
   final StreamController<NotificationAction> _actions = StreamController<NotificationAction>.broadcast();
   final StreamController<void> _hotspotStopped = StreamController<void>.broadcast();
+  final StreamController<void> _ringStopped = StreamController<void>.broadcast();
+
+  Stream<void> get ringStopped => _ringStopped.stream;
 
   Stream<void> get hotspotStopped => _hotspotStopped.stream;
 
@@ -46,6 +49,8 @@ class NativeBridge {
     switch (call.method) {
       case 'onShare':
         _shares.add(null);
+      case 'onRingStopped':
+        _ringStopped.add(null);
       case 'onHotspotStopped':
         _hotspotStopped.add(null);
       case 'onNotificationAction':
@@ -103,6 +108,10 @@ class NativeBridge {
   }
 
   Future<void> stopHotspot() => _invoke<bool>('stopHotspot');
+
+  Future<void> ring(String name, {required String title, required String stop}) =>
+      _invoke<bool>('ring', {'name': name, 'title': title, 'stop': stop});
+  Future<void> stopRing() => _invoke<bool>('stopRing');
 
   Future<SharedPayload?> takeShare() async {
     final raw = await _invoke<Map<Object?, Object?>>('takeShare');

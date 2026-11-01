@@ -20,7 +20,7 @@ import 'package:wraith_core/vault_windows.dart';
 import 'package:wraith_core/web_share.dart';
 import 'package:wraith_core/wraith.dart';
 
-const _version = '0.5.0';
+const _version = '0.6.0';
 
 const _usage = '''
 SUDOSEND $_version — secure local file sharing (Wraith Protocol)
@@ -33,8 +33,14 @@ Usage:
   sudosend id [--name NEW_NAME]
   sudosend verify <receipt.json>
   sudosend web [file|folder]... [--text T] [--upload] [--dir PATH]
+               [--pin 1234] [--max N] [--minutes M]
                share with any device that has a browser (no app needed);
-               --upload also lets visitors send files to you
+               --upload also lets visitors send files to you; --pin protects
+               the link; --max stops after N downloads; --minutes sets expiry
+  sudosend ring --to <device>      make a trusted device ring (find my phone)
+
+Speed:
+  --limit 5M     cap upload speed (bytes/s, K/M suffix) for send
 
 Pipes:
   tar c dir | sudosend send - --name dir.tar --to laptop   (send stdin)
@@ -80,7 +86,7 @@ class _Args {
     }
   }
 
-  static const _valued = {'to', 'dir', 'text', 'wait', 'name', 'receipts'};
+  static const _valued = {'to', 'dir', 'text', 'wait', 'name', 'receipts', 'pin', 'max', 'minutes', 'limit'};
   final List<String> positional = [];
   final Map<String, String> options = {};
   final Set<String> flags = {};
@@ -160,6 +166,8 @@ Future<int> _run(_Args args) async {
       return _verify(rest);
     case 'web':
       return _web(identity, rest, args);
+    case 'ring':
+      return _ring(identity, trust, args);
     case 'receive':
       return _receive(identity, trust, args);
     default:
@@ -283,6 +291,7 @@ Future<int> _send(DeviceIdentity identity, TrustStore trust, List<String> paths,
     return 2;
   }
   final files = text == null ? await _collect(paths, stdinName: args.options['name']) : <FileEntry>[];
+  TransferEngine.maxBytesPerSecond = _parseRate(args.options['limit']) ?? 0;
   if (text == null && files.isEmpty) throw const WraithException('nothing to send (empty folder?)');
 
   final peer = await _resolve(identity, target);
@@ -372,6 +381,9 @@ Future<int> _web(DeviceIdentity identity, List<String> paths, _Args args) async 
     onStopped: () {
       if (!done.isCompleted) done.complete(0);
     },
+    pin: args.options['pin'],
+    maxDownloads: int.tryParse(args.options['max'] ?? ''),
+    ttl: Duration(minutes: int.tryParse(args.options['minutes'] ?? '') ?? 30),
   );
   await share.start();
   final urls = share.urls(await _localAddresses());
@@ -384,11 +396,51 @@ Future<int> _web(DeviceIdentity identity, List<String> paths, _Args args) async 
   for (final u in urls) {
     stdout.writeln(_cyan(u));
   }
-  stdout.writeln(_dim('plain HTTP on your network — not end-to-end encrypted · expires in 30 min · Ctrl+C to stop'));
+  stdout.writeln(_dim('plain HTTP on your network — not end-to-end encrypted · '
+      'expires in ${share.ttl.inMinutes} min'
+      '${share.pin != null ? ' · PIN protected' : ''}'
+      '${share.maxDownloads != null ? ' · stops after ${share.maxDownloads} download(s)' : ''} · Ctrl+C to stop'));
   final sub = ProcessSignal.sigint.watch().listen((_) => share.stop());
   final code = await done.future;
   await sub.cancel();
   return code;
+}
+
+Future<int> _ring(DeviceIdentity identity, TrustStore trust, _Args args) async {
+  final target = args.options['to'];
+  if (target == null) {
+    stderr.writeln(_red('usage: sudosend ring --to <device>'));
+    return 2;
+  }
+  final peer = await _resolve(identity, target);
+  if (peer == null) {
+    stderr.writeln(_red('device "$target" not found'));
+    return 3;
+  }
+  final engine = TransferEngine(
+    identity: identity,
+    trust: trust,
+    saveDir: () async => _defaultInbox(),
+    onIncoming: (r) => r.respond(false),
+    onJob: (_) {},
+  );
+  stdout.writeln('🔔 ringing ${_cyan(peer.name)}…');
+  final job = await engine.send(peer, const [], ring: true);
+  if (job.status == TransferStatus.done) {
+    stdout.writeln(_green('✔ ${job.peerName} is ringing'));
+    return 0;
+  }
+  stderr.writeln(_red('✖ ${job.error ?? 'declined — ringing works between trusted devices only'}'));
+  return 1;
+}
+
+int? _parseRate(String? v) {
+  if (v == null) return null;
+  final m = RegExp(r'^(\d+(?:\.\d+)?)\s*([kKmMgG]?)').firstMatch(v.trim());
+  if (m == null) return null;
+  final n = double.parse(m.group(1)!);
+  final mult = switch (m.group(2)!.toLowerCase()) { 'k' => 1024, 'm' => 1024 * 1024, 'g' => 1024 * 1024 * 1024, _ => 1 };
+  return (n * mult).round();
 }
 
 Future<int> _verify(List<String> paths) async {

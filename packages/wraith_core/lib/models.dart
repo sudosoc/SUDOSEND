@@ -89,6 +89,9 @@ class TransferJob {
   /// A clipboard-sync push (handled silently by the apps).
   bool clipboard = false;
 
+  /// A "find my device" ring request (no files).
+  bool ring = false;
+
   final String id;
   final TransferDirection direction;
   final List<FileEntry> files;

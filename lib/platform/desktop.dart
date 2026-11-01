@@ -102,3 +102,58 @@ class SingleInstance {
     }
   }
 }
+
+/// "Find my device" on desktop: repeats a system alert sound until stopped.
+class DesktopRinger {
+  Timer? _timer;
+
+  bool get ringing => _timer != null;
+
+  void start({Duration duration = const Duration(seconds: 45)}) {
+    stop();
+    var elapsed = 0;
+    _timer = Timer.periodic(const Duration(milliseconds: 1500), (t) {
+      elapsed += 1500;
+      if (elapsed > duration.inMilliseconds) {
+        stop();
+        return;
+      }
+      unawaited(_beep());
+    });
+    unawaited(_beep());
+  }
+
+  void stop() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  static Future<void> _beep() async {
+    try {
+      if (Platform.isLinux) {
+        const sounds = [
+          '/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga',
+          '/usr/share/sounds/freedesktop/stereo/phone-incoming-call.oga',
+          '/usr/share/sounds/freedesktop/stereo/bell.oga',
+        ];
+        for (final s in sounds) {
+          if (File(s).existsSync()) {
+            final r = await Process.run('paplay', [s]).catchError((Object _) => ProcessResult(0, 1, '', ''));
+            if (r.exitCode == 0) return;
+            final r2 = await Process.run('pw-play', [s]).catchError((Object _) => ProcessResult(0, 1, '', ''));
+            if (r2.exitCode == 0) return;
+          }
+        }
+        stdout.write('\x07');
+      } else if (Platform.isWindows) {
+        await Process.run('powershell', ['-NoProfile', '-Command', '[System.Media.SystemSounds]::Hand.Play()']);
+      } else if (Platform.isMacOS) {
+        await Process.run('afplay', ['/System/Library/Sounds/Glass.aiff']);
+      }
+    } catch (_) {}
+  }
+}
+
+/// Home folder of the current user (desktop).
+String homeDir() =>
+    Platform.environment[Platform.isWindows ? 'USERPROFILE' : 'HOME'] ?? Directory.current.path;
