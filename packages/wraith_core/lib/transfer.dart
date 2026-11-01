@@ -140,6 +140,11 @@ class TransferEngine {
 
   /// Optional per-sender destination (e.g. a subfolder named after the device).
   final Future<Directory> Function(String peerName, String fingerprint)? saveDirFor;
+
+  /// Optional smart placement: maps a received file's relative path to its
+  /// path under the inbox (e.g. device/category/date/name). Not used for
+  /// folder sync. Every returned segment is re-sanitized here.
+  List<String> Function(String peerName, String fingerprint, List<String> segments)? placeFile;
   final void Function(IncomingRequest request) onIncoming;
   final void Function(TransferJob job) onJob;
 
@@ -671,7 +676,11 @@ class TransferEngine {
       final targets = <_Target>[];
       final resume = <String, int>{};
       for (var i = 0; i < files.length; i++) {
-        final segs = segments[i];
+        final placer = syncRoot == null ? placeFile : null;
+        final segs = placer == null
+            ? segments[i]
+            : [for (final s in placer(hs.peerName, hs.peerFingerprint, segments[i])) sanitizeFileName(s)];
+        if (segs.isEmpty) throw const WraithException('Unsafe path rejected');
         final dir = Directory(p.joinAll([root.path, ...segs.sublist(0, segs.length - 1)]));
         final base = segs.last;
         final part = File(p.join(dir.path, '.$base.${hs.peerFingerprint.substring(0, 8)}-${files[i].size}.sudosend-part'));

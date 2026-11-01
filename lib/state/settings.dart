@@ -6,6 +6,62 @@ import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+/// What one trusted device is allowed to do here. Global feature switches
+/// still apply on top: a feature that is off is off for every device.
+class DevicePrefs {
+  DevicePrefs({
+    this.folder,
+    this.autoAccept,
+    this.clipboard = true,
+    this.ring = true,
+    this.chat = true,
+    this.sync = true,
+    this.speedTest = true,
+    this.keepMetadata = false,
+  });
+
+  /// Folder name for this device's files (null = its device name).
+  String? folder;
+
+  /// Accept files without asking (null = follow the global setting).
+  bool? autoAccept;
+  bool clipboard;
+  bool ring;
+  bool chat;
+  bool sync;
+  bool speedTest;
+
+  /// Send photos to this device with their metadata (e.g. your own backup).
+  bool keepMetadata;
+
+  Map<String, Object?> toJson() => {
+        if (folder != null) 'folder': folder,
+        if (autoAccept != null) 'autoAccept': autoAccept,
+        'clipboard': clipboard,
+        'ring': ring,
+        'chat': chat,
+        'sync': sync,
+        'speedTest': speedTest,
+        'keepMetadata': keepMetadata,
+      };
+
+  static DevicePrefs fromJson(Object? raw) {
+    if (raw is! Map) return DevicePrefs();
+    bool b(String k, bool d) => raw[k] is bool ? raw[k] as bool : d;
+    final folder = raw['folder'];
+    return DevicePrefs(
+      folder: folder is String && folder.trim().isNotEmpty ? folder : null,
+      autoAccept: raw['autoAccept'] is bool ? raw['autoAccept'] as bool : null,
+      clipboard: b('clipboard', true),
+      ring: b('ring', true),
+      chat: b('chat', true),
+      sync: b('sync', true),
+      speedTest: b('speedTest', true),
+      keepMetadata: b('keepMetadata', false),
+    );
+  }
+}
+
 /// One folder kept in sync with one trusted device.
 class SyncPair {
   SyncPair({
@@ -106,6 +162,20 @@ class SettingsController extends ChangeNotifier {
   bool webShare = true;
   /// Queue sends for trusted devices that are offline.
   bool offlineQueue = true;
+
+  /// Smart organization of received files: device / type / date folders.
+  bool organize = true;
+  bool organizeByDevice = true;
+  bool organizeByType = true;
+  bool organizeByDate = true;
+
+  /// Photo metadata before sending: off | location | all.
+  String metadata = 'location';
+
+  /// Per-device permissions, keyed by fingerprint.
+  Map<String, DevicePrefs> devicePrefs = {};
+
+  DevicePrefs prefsFor(String fingerprint) => devicePrefs[fingerprint] ?? DevicePrefs();
   /// Android: phone-to-phone Wi-Fi Direct links.
   bool wifiDirect = true;
   /// Look for a new version on GitHub once at startup.
@@ -154,6 +224,16 @@ class SettingsController extends ChangeNotifier {
         allowSpeedTest = (m['allowSpeedTest'] as bool?) ?? allowSpeedTest;
         webShare = (m['webShare'] as bool?) ?? webShare;
         offlineQueue = (m['offlineQueue'] as bool?) ?? offlineQueue;
+        organize = (m['organize'] as bool?) ?? organize;
+        organizeByDevice = (m['organizeByDevice'] as bool?) ?? organizeByDevice;
+        organizeByType = (m['organizeByType'] as bool?) ?? organizeByType;
+        organizeByDate = (m['organizeByDate'] as bool?) ?? organizeByDate;
+        final md = m['metadata'];
+        if (md == 'off' || md == 'location' || md == 'all') metadata = md as String;
+        final prefs = m['devicePrefs'];
+        if (prefs is Map) {
+          devicePrefs = {for (final e in prefs.entries) '${e.key}': DevicePrefs.fromJson(e.value)};
+        }
         wifiDirect = (m['wifiDirect'] as bool?) ?? wifiDirect;
         autoUpdateCheck = (m['autoUpdateCheck'] as bool?) ?? autoUpdateCheck;
         final pairs = m['syncPairs'];
@@ -196,6 +276,12 @@ class SettingsController extends ChangeNotifier {
         'allowSpeedTest': allowSpeedTest,
         'webShare': webShare,
         'offlineQueue': offlineQueue,
+        'organize': organize,
+        'organizeByDevice': organizeByDevice,
+        'organizeByType': organizeByType,
+        'organizeByDate': organizeByDate,
+        'metadata': metadata,
+        'devicePrefs': {for (final e in devicePrefs.entries) e.key: e.value.toJson()},
         'wifiDirect': wifiDirect,
         'autoUpdateCheck': autoUpdateCheck,
         'syncPairs': [for (final s in syncPairs) s.toJson()],

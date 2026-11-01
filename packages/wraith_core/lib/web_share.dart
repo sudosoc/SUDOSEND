@@ -35,6 +35,7 @@ class WebShare {
   WebShare({
     required this.files,
     required this.saveDir,
+    this.uploadDirFor,
     this.text,
     this.allowUpload = false,
     this.deviceName = 'SUDOSEND',
@@ -59,6 +60,9 @@ class WebShare {
   final bool allowUpload;
   final String deviceName;
   final Future<Directory> Function() saveDir;
+
+  /// Optional per-file folder for uploads (smart organization).
+  final Future<Directory> Function(String fileName)? uploadDirFor;
   final void Function(WebShareEvent event)? onEvent;
   final void Function()? onStopped;
   final Duration ttl;
@@ -239,7 +243,7 @@ class WebShare {
     if (rest.length == 1 && rest[0] == 'u' && req.method == 'POST' && allowUpload) {
       final raw = req.uri.queryParameters['name'] ?? 'upload';
       final name = sanitizeFileName(raw);
-      final dir = await saveDir();
+      final dir = await (uploadDirFor?.call(name) ?? saveDir());
       await dir.create(recursive: true);
       final part = File(p.join(dir.path, '.$name.web-part'));
       final sink = part.openWrite();

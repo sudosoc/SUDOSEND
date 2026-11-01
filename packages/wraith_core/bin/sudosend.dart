@@ -12,6 +12,7 @@ import 'package:qr/qr.dart';
 import 'package:wraith_core/discovery.dart';
 import 'package:wraith_core/identity.dart';
 import 'package:wraith_core/models.dart';
+import 'package:wraith_core/organize.dart';
 import 'package:wraith_core/pairing.dart';
 import 'package:wraith_core/receipt.dart';
 import 'package:wraith_core/transfer.dart';
@@ -28,7 +29,7 @@ SUDOSEND $_version — secure local file sharing (Wraith Protocol)
 Usage:
   sudosend send <file|folder>... --to <device|ip[:port]>
   sudosend send --text "message" --to <device|ip[:port]>
-  sudosend receive [--dir PATH] [--yes] [--trust] [--once] [--qr]
+  sudosend receive [--dir PATH] [--yes] [--trust] [--once] [--qr] [--organize]
   sudosend devices [--wait SECONDS]
   sudosend id [--name NEW_NAME]
   sudosend verify <receipt.json>
@@ -571,6 +572,7 @@ Future<int> _receive(DeviceIdentity identity, TrustStore trust, _Args args) asyn
   final autoAccept = args.flags.contains('yes');
   final autoTrust = args.flags.contains('trust');
   final once = args.flags.contains('once');
+  final organize = args.flags.contains('organize');
   final finished = Completer<int>();
 
   late final TransferEngine engine;
@@ -644,6 +646,10 @@ Future<int> _receive(DeviceIdentity identity, TrustStore trust, _Args args) asyn
       });
     },
   );
+  if (organize) {
+    const rules = OrganizeRules();
+    engine.placeFile = (name, fp, segs) => rules.place(name, segs, DateTime.now());
+  }
   await engine.start();
   final discovery = Discovery(identity: identity, transferPort: engine.port, onChanged: () {});
   await discovery.start();

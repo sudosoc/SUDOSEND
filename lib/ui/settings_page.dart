@@ -13,6 +13,7 @@ import '../state/app_controller.dart';
 import '../state/updater.dart' show kReleaseRepo;
 import 'about_pages.dart';
 import 'background.dart';
+import 'device_page.dart';
 import 'glass.dart';
 import 'home.dart' show showRenameDialog;
 import 'receive_tab.dart' show InfoRow;
@@ -153,14 +154,60 @@ class SettingsPage extends StatelessWidget {
             ],
             _divider,
             _Switch(
-              icon: Icons.create_new_folder_rounded,
+              icon: Icons.account_tree_rounded,
               color: AppColors.amber,
-              title: context.tr('s_sender_folders'),
-              subtitle: context.tr('s_sender_folders_sub'),
-              info: 'i_sender_folders',
-              value: s.senderFolders,
-              onChanged: (v) => s.update((x) => x.senderFolders = v),
+              title: context.tr('org_title'),
+              subtitle: context.tr('org_sub'),
+              info: 'i_organize',
+              value: s.organize,
+              onChanged: (v) => s.update((x) => x.organize = v),
             ),
+            if (s.organize) ...[
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 50),
+                child: Column(
+                  children: [
+                    _SubSwitch(
+                      label: context.tr('org_by_device'),
+                      value: s.organizeByDevice,
+                      onChanged: (v) => s.update((x) => x.organizeByDevice = v),
+                    ),
+                    _SubSwitch(
+                      label: context.tr('org_by_type'),
+                      value: s.organizeByType,
+                      onChanged: (v) => s.update((x) => x.organizeByType = v),
+                    ),
+                    _SubSwitch(
+                      label: context.tr('org_by_date'),
+                      value: s.organizeByDate,
+                      onChanged: (v) => s.update((x) => x.organizeByDate = v),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.black.withValues(alpha: 0.2),
+                      ),
+                      child: Text(controller.organizeExample(),
+                          textDirection: TextDirection.ltr, style: kMono.copyWith(fontSize: 11.5, color: AppColors.cyan)),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              _divider,
+              _Switch(
+                icon: Icons.create_new_folder_rounded,
+                color: AppColors.amber,
+                title: context.tr('s_sender_folders'),
+                subtitle: context.tr('s_sender_folders_sub'),
+                info: 'i_sender_folders',
+                value: s.senderFolders,
+                onChanged: (v) => s.update((x) => x.senderFolders = v),
+              ),
+            ],
             _divider,
             _Switch(
               icon: Icons.verified_user_rounded,
@@ -433,6 +480,34 @@ class SettingsPage extends StatelessWidget {
               onChanged: controller.setStealth,
             ),
             _divider,
+            _Header(
+              icon: Icons.location_off_rounded,
+              color: AppColors.pink,
+              title: context.tr('md_title'),
+              subtitle: context.tr('md_sub'),
+              info: 'i_metadata',
+            ),
+            const SizedBox(height: 10),
+            SegmentedButton<String>(
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                foregroundColor: WidgetStateProperty.resolveWith(
+                    (st) => st.contains(WidgetState.selected) ? AppColors.ink : AppColors.text),
+                backgroundColor: WidgetStateProperty.resolveWith(
+                    (st) => st.contains(WidgetState.selected) ? AppColors.pink : Colors.white.withValues(alpha: 0.04)),
+                side: WidgetStatePropertyAll(BorderSide(color: Colors.white.withValues(alpha: 0.14))),
+              ),
+              segments: [
+                ButtonSegment(value: 'off', label: Text(context.tr('md_off'))),
+                ButtonSegment(value: 'location', label: Text(context.tr('md_location'))),
+                ButtonSegment(value: 'all', label: Text(context.tr('md_all'))),
+              ],
+              selected: {s.metadata},
+              onSelectionChanged: (v) => s.update((x) => x.metadata = v.first),
+            ),
+            const SizedBox(height: 6),
+            Text(context.tr('md_${s.metadata}_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+            _divider,
             _DeviceList(
               title: context.tr('s_trusted'),
               empty: context.tr('s_trusted_none'),
@@ -440,6 +515,9 @@ class SettingsPage extends StatelessWidget {
               color: AppColors.mint,
               info: 'i_trusted',
               devices: controller.trust.all,
+              onOpen: (d) => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => DevicePage(controller: controller, fingerprint: d.fingerprint, name: d.name),
+              )),
               actionLabel: context.tr('s_revoke'),
               actionIcon: Icons.remove_moderator_outlined,
               onAction: controller.untrust,
@@ -741,6 +819,35 @@ class _Header extends StatelessWidget {
   }
 }
 
+/// Compact indented switch for sub-options.
+class _SubSwitch extends StatelessWidget {
+  const _SubSwitch({required this.label, required this.value, required this.onChanged});
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => onChanged(!value),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 13.5))),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            thumbColor: WidgetStateProperty.resolveWith(
+                (st) => st.contains(WidgetState.selected) ? AppColors.ink : AppColors.muted),
+            trackColor: WidgetStateProperty.resolveWith(
+                (st) => st.contains(WidgetState.selected) ? AppColors.amber : Colors.white.withValues(alpha: 0.08)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Switch extends StatelessWidget {
   const _Switch({
     required this.icon,
@@ -808,6 +915,7 @@ class _DeviceList extends StatelessWidget {
     required this.color,
     this.info,
     required this.devices,
+    this.onOpen,
     required this.actionLabel,
     required this.actionIcon,
     required this.onAction,
@@ -819,6 +927,9 @@ class _DeviceList extends StatelessWidget {
   final Color color;
   final String? info;
   final List<KnownDevice> devices;
+
+  /// Opens per-device settings (trusted list only).
+  final void Function(KnownDevice d)? onOpen;
   final String actionLabel;
   final IconData actionIcon;
   final Future<void> Function(String fingerprint) onAction;
@@ -844,7 +955,10 @@ class _DeviceList extends StatelessWidget {
           )
         else
           for (final d in devices)
-            Padding(
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: onOpen == null ? null : () => onOpen!(d),
+              child: Padding(
               padding: const EdgeInsetsDirectional.only(start: 50),
               child: Row(
                 children: [
@@ -866,8 +980,10 @@ class _DeviceList extends StatelessWidget {
                     },
                     icon: Icon(actionIcon, color: color, size: 20),
                   ),
+                  if (onOpen != null) const Icon(Icons.chevron_right_rounded, color: AppColors.muted, size: 20),
                 ],
               ),
+            ),
             ),
       ],
     );

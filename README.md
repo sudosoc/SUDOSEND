@@ -52,6 +52,9 @@
 - 📋 **Universal clipboard** — copy on one device, paste on your others (Pushbullet charges for this)
 - 🌐 **Share with any browser** — send to *and receive from* a device that doesn't have the app,
   even an iPhone: it scans a QR and gets a download/upload page (Send Anywhere / Feem-style)
+- 🗂️ **Smart file organization** — received files file themselves into `SUDOSEND/<device>/<type>/<date>/`
+- 🧹 **Photo privacy** — GPS location (or all metadata) is stripped from photos before sending, no quality loss
+- 🔐 **Per-device permissions** — decide what each trusted device may do (auto-accept, ring, clipboard, sync…)
 - 📶 **No Wi-Fi? Make one** — Android creates a private hotspot; the other phone joins by scanning a QR
 - 📡 **Wi-Fi Direct** — two Android phones link directly, no router and no hotspot, and both keep their Wi-Fi and mobile data
 - 🔒 **Protected, self-destructing links** — PIN, expiry (10 min – 2 h), one-download links (WeTransfer Pro / Send Anywhere Plus)
@@ -240,6 +243,7 @@ sudosend                                    # no arguments → opens the app
 sudosend receive                            # wait for files, asks before accepting
 sudosend receive --yes --trust --once       # unattended, exit after one transfer
 sudosend receive --qr                       # print a pairing QR in the terminal
+sudosend receive --organize                # sort into <device>/<type>/<date>/
 sudosend send report.pdf photos/ --to laptop      # device name (prefix) …
 sudosend send --text "https://…" --to 192.168.1.20  # … or IP address
 sudosend send file.iso --to 'sudosend://pair?…'     # … or a pairing link

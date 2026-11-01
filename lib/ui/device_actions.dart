@@ -7,6 +7,7 @@ import 'package:wraith_core/util.dart';
 import '../app/scope.dart';
 import '../state/app_controller.dart';
 import 'chat_page.dart';
+import 'device_page.dart';
 import 'glass.dart';
 import 'sync_page.dart';
 import 'theme.dart';
@@ -39,6 +40,7 @@ Future<void> showDeviceActions(BuildContext context, AppController controller, P
           _ActionTile(icon: Icons.notifications_active_rounded, color: AppColors.amber, label: ctx.tr('ring'), value: 'ring'),
           if (controller.syncSupported)
             _ActionTile(icon: Icons.sync_alt_rounded, color: AppColors.violet, label: ctx.tr('sync_new'), value: 'sync'),
+          _ActionTile(icon: Icons.tune_rounded, color: AppColors.pink, label: ctx.tr('dp_open'), value: 'prefs'),
         ],
       ),
     ),
@@ -49,6 +51,10 @@ Future<void> showDeviceActions(BuildContext context, AppController controller, P
     case 'chat':
       await Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (_) => ChatThreadPage(controller: controller, fingerprint: peer.id, name: peer.name),
+      ));
+    case 'prefs':
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => DevicePage(controller: controller, fingerprint: peer.id, name: peer.name),
       ));
     case 'speed':
       await showSpeedTest(context, controller, peer);

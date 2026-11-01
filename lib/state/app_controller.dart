@@ -11,7 +11,9 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:wraith_core/discovery.dart';
 import 'package:wraith_core/identity.dart';
+import 'package:wraith_core/metadata.dart';
 import 'package:wraith_core/models.dart';
+import 'package:wraith_core/organize.dart';
 import 'package:wraith_core/pairing.dart';
 import 'package:wraith_core/receipt.dart';
 import 'package:wraith_core/sync.dart';
@@ -115,17 +117,18 @@ class AppController extends ChangeNotifier {
         identity: identity,
         trust: trust,
         saveDir: () async => saveDir!,
-        saveDirFor: (name, fp) async => settings.senderFolders
+        saveDirFor: (name, fp) async => !settings.organize && settings.senderFolders
             ? Directory(p.join(saveDir!.path, sanitizeFileName(name)))
             : saveDir!,
         autoAccept: (r) {
           if (!r.trusted) return false;
-          if (r.ring) return settings.allowRing;
-          if (r.clipboard) return settings.clipboardSync;
-          if (r.speedTest) return settings.allowSpeedTest;
-          if (r.chat && settings.chat) return true;
+          final d = settings.prefsFor(r.fingerprint);
+          if (r.ring) return settings.allowRing && d.ring;
+          if (r.clipboard) return settings.clipboardSync && d.clipboard;
+          if (r.speedTest) return settings.allowSpeedTest && d.speedTest;
+          if (r.chat && settings.chat && d.chat) return true;
           if (r.syncInvite != null) return false; // always asks: a folder must be chosen
-          return settings.autoAcceptTrusted;
+          return d.autoAccept ?? settings.autoAcceptTrusted;
         },
         onIncoming: _onIncoming,
         onJob: _addJob,
@@ -135,6 +138,7 @@ class AppController extends ChangeNotifier {
         },
       );
       _engine.syncFolder = _syncFolderFor;
+      _engine.placeFile = _placeFile;
       await _engine.start();
 
       _discovery = Discovery(identity: identity, transferPort: _engine.port, onChanged: _onPeersChanged)
@@ -179,6 +183,7 @@ class AppController extends ChangeNotifier {
         await _importShare();
         _updateService();
       }
+      unawaited(_cleanScrubDir());
       if (initialArgs.isNotEmpty) await addPaths(initialArgs);
       if (settings.autoUpdateCheck && !Platform.isIOS) {
         unawaited(Future<void>.delayed(const Duration(seconds: 8), () => checkForUpdates(silent: true)));
@@ -204,7 +209,7 @@ class AppController extends ChangeNotifier {
       r.respond(false);
       return;
     }
-    if (r.syncInvite != null && !syncSupported) {
+    if (r.syncInvite != null && (!syncSupported || (r.trusted && !settings.prefsFor(r.fingerprint).sync))) {
       r.respond(false);
       return;
     }
@@ -722,7 +727,13 @@ class AppController extends ChangeNotifier {
       text: text,
       allowUpload: upload,
       deviceName: identity.name,
-      saveDir: () async => settings.senderFolders ? Directory(p.join(saveDir!.path, 'Browser')) : saveDir!,
+      saveDir: () async => !settings.organize && settings.senderFolders ? Directory(p.join(saveDir!.path, 'Browser')) : saveDir!,
+      uploadDirFor: settings.organize
+          ? (name) async {
+              final parts = _placeFile('Browser', '', [name]);
+              return Directory(p.joinAll([saveDir!.path, ...parts.sublist(0, parts.length - 1)]));
+            }
+          : null,
       onEvent: _onWebEvent,
       pin: pin,
       ttl: ttl,
@@ -940,9 +951,10 @@ class AppController extends ChangeNotifier {
 
   /// Sends with automatic retries (3 attempts) for dropped connections; each
   /// retry resumes where the last one stopped.
-  Future<TransferJob> _sendWithRetry(Peer peer, List<FileEntry> files,
+  Future<TransferJob> _sendWithRetry(Peer peer, List<FileEntry> input,
       {String? text, String? pairToken, Map<int, Uint8List>? previews}) async {
     var target = peer;
+    final files = await _scrubFor(peer, input);
     var job = await _engine.send(target, files, text: text, pairToken: pairToken, previews: previews);
     for (final wait in const [Duration(seconds: 3), Duration(seconds: 10)]) {
       if (!_retryable(job)) break;
@@ -1111,6 +1123,80 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  // ─────────────────────────── Smart organization ───────────────────────────
+
+  /// Where a received file goes, relative to the inbox.
+  List<String> _placeFile(String peerName, String fingerprint, List<String> segments) {
+    if (!settings.organize) return segments;
+    final rules = OrganizeRules(
+      byDevice: settings.organizeByDevice,
+      byType: settings.organizeByType,
+      byDate: settings.organizeByDate,
+    );
+    final folder = fingerprint.isEmpty ? null : settings.devicePrefs[fingerprint]?.folder;
+    return rules.place(folder ?? peerName, segments, DateTime.now());
+  }
+
+  /// Example path for the settings screen.
+  String organizeExample() =>
+      p.joinAll(['SUDOSEND', ..._placeFile('Galaxy A52', '', ['photo.jpg'])]);
+
+  // ─────────────────────────── Photo metadata ───────────────────────────
+
+  Directory? _scrubDir;
+
+  /// Copies of JPEG/PNG files with location (or all) metadata removed, in a
+  /// temp folder; other files and devices allowed to get originals pass through.
+  Future<List<FileEntry>> _scrubFor(Peer peer, List<FileEntry> files) async {
+    final mode = metadataModeFrom(settings.metadata);
+    if (mode == MetadataMode.off || files.isEmpty) return files;
+    if (trust.isTrusted(peer.id) && settings.prefsFor(peer.id).keepMetadata) return files;
+    if (!files.any((f) => canScrub(f.name))) return files;
+    final dir = _scrubDir ??= Directory(p.join((await getTemporaryDirectory()).path, 'sudosend-clean'));
+    final batch = await Directory(p.join(dir.path, '${DateTime.now().microsecondsSinceEpoch}')).create(recursive: true);
+    final out = <FileEntry>[];
+    var i = 0;
+    for (final f in files) {
+      final path = f.path;
+      if (path == null || !canScrub(f.name) || f.size > 80 * 1024 * 1024) {
+        out.add(f);
+        continue;
+      }
+      try {
+        final cleaned = await compute(_scrubFile, (path, mode.index));
+        if (cleaned == null) {
+          out.add(f);
+          continue;
+        }
+        final copy = File(p.join(batch.path, '${i++}_${p.basename(path)}'));
+        await copy.writeAsBytes(cleaned, flush: true);
+        out.add(FileEntry(name: f.name, size: cleaned.length, path: copy.path, mtime: f.mtime));
+      } catch (_) {
+        out.add(f); // never block a transfer because of metadata
+      }
+    }
+    return out;
+  }
+
+  /// Removes scrubbed copies from earlier sessions.
+  Future<void> _cleanScrubDir() async {
+    try {
+      final dir = Directory(p.join((await getTemporaryDirectory()).path, 'sudosend-clean'));
+      if (await dir.exists()) await dir.delete(recursive: true);
+    } catch (_) {}
+  }
+
+  // ─────────────────────────── Per-device permissions ───────────────────────────
+
+  Future<void> updateDevicePrefs(String fingerprint, void Function(DevicePrefs d) change) async {
+    await settings.update((s) {
+      final d = s.devicePrefs[fingerprint] ?? DevicePrefs();
+      change(d);
+      s.devicePrefs = {...s.devicePrefs, fingerprint: d};
+    });
+    notifyListeners();
+  }
+
   // ─────────────────────────── Previews ───────────────────────────
 
   Future<Map<int, Uint8List>?> _previewsFor(List<FileEntry> files) async {
@@ -1204,7 +1290,7 @@ class AppController extends ChangeNotifier {
   bool get syncSupported => !Platform.isIOS && settings.folderSync;
 
   Directory? _syncFolderFor(String id, String fingerprint) {
-    if (!settings.folderSync) return null;
+    if (!settings.folderSync || !settings.prefsFor(fingerprint).sync) return null;
     for (final s in settings.syncPairs) {
       if (s.id == id && s.fingerprint == fingerprint && s.enabled) return Directory(s.path);
     }
@@ -1553,3 +1639,6 @@ class AppController extends ChangeNotifier {
     super.dispose();
   }
 }
+
+/// Runs in a background isolate: reads a photo and strips its metadata.
+Uint8List? _scrubFile((String, int) job) => scrubMetadata(File(job.$1).readAsBytesSync(), MetadataMode.values[job.$2]);

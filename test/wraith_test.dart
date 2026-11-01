@@ -8,7 +8,9 @@ import 'package:wraith_core/identity.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:wraith_core/aead.dart';
 import 'package:wraith_core/chacha_poly.dart';
+import 'package:wraith_core/metadata.dart';
 import 'package:wraith_core/models.dart';
+import 'package:wraith_core/organize.dart';
 import 'package:wraith_core/pairing.dart';
 import 'package:wraith_core/receipt.dart';
 import 'package:wraith_core/sync.dart';
@@ -670,6 +672,155 @@ void main() {
     final after = await t.sender.fetchManifest(t.peer, 'S1');
     expect(planPush(await buildManifest(aliceFolder), after), isEmpty);
     expect(planPush(after, await buildManifest(aliceFolder)), isEmpty);
+  });
+
+  test('categorize sorts by extension, unknown goes to Other Files', () {
+    expect(categorize('Report.PDF'), FileCategory.documents);
+    expect(categorize('IMG_0001.HEIC'), FileCategory.pictures);
+    expect(categorize('clip.mkv'), FileCategory.videos);
+    expect(categorize('voice.opus'), FileCategory.audio);
+    expect(categorize('backup.tar.gz'), FileCategory.archives);
+    expect(categorize('app-release.apk'), FileCategory.applications);
+    expect(categorize('main.dart'), FileCategory.code);
+    expect(categorize('Dockerfile'), FileCategory.code);
+    expect(categorize('mystery.xyz123'), FileCategory.other);
+    expect(categorize('noextension'), FileCategory.other);
+    expect(categorize('.hidden'), FileCategory.other);
+  });
+
+  test('organize rules build device/type/date paths; folders stay whole', () {
+    final day = DateTime(2026, 11, 2, 23, 59);
+    const rules = OrganizeRules();
+    expect(rules.place('Galaxy A52', ['photo.jpg'], day), ['Galaxy A52', 'Pictures', '2026-11-02', 'photo.jpg']);
+    expect(rules.place('Laptop', ['Album', '2026', 'a.txt'], day), ['Laptop', 'Folders', '2026-11-02', 'Album', '2026', 'a.txt']);
+    expect(rules.place('../evil', ['x.pdf'], day).first, isNot(contains('/')));
+    expect(const OrganizeRules(byDevice: false, byDate: false).place('P', ['a.zip'], day), ['Archives', 'a.zip']);
+  });
+
+  test('received files land in device/category/date folders', () async {
+    final t = await _pair();
+    t.receiver.placeFile = (name, fp, segs) => const OrganizeRules().place('Android', segs, DateTime(2026, 11, 2));
+    final a = File(p.join(t.tmp.path, 'report.pdf'))..writeAsStringSync('pdf');
+    final b = File(p.join(t.tmp.path, 'photo.jpg'))..writeAsStringSync('jpg');
+    final c = File(p.join(t.tmp.path, 'thing.weird'))..writeAsStringSync('??');
+    final d = File(p.join(t.tmp.path, 'a.txt'))..writeAsStringSync('in a folder');
+    final job = await t.sender.send(t.peer, [
+      FileEntry(name: 'report.pdf', size: 3, path: a.path),
+      FileEntry(name: 'photo.jpg', size: 3, path: b.path),
+      FileEntry(name: 'thing.weird', size: 2, path: c.path),
+      FileEntry(name: 'Project/docs/a.txt', size: 11, path: d.path),
+    ]);
+    expect(job.status, TransferStatus.done, reason: job.error);
+    String at(List<String> parts) => p.joinAll([t.inbox.path, 'Android', ...parts]);
+    expect(File(at(['Documents', '2026-11-02', 'report.pdf'])).readAsStringSync(), 'pdf');
+    expect(File(at(['Pictures', '2026-11-02', 'photo.jpg'])).readAsStringSync(), 'jpg');
+    expect(File(at(['Other Files', '2026-11-02', 'thing.weird'])).readAsStringSync(), '??');
+    expect(File(at(['Folders', '2026-11-02', 'Project', 'docs', 'a.txt'])).readAsStringSync(), 'in a folder');
+  });
+
+  group('metadata scrubbing', () {
+    // Builds a JPEG header: SOI, optional APP0, an EXIF APP1 (IFD0 with
+    // Orientation and a GPS pointer, GPS IFD with a latitude), XMP, then a
+    // stand-in scan segment.
+    Uint8List jpeg({required bool little}) {
+      final t = BytesBuilder();
+      void u16(int v) => t.add(little ? [v & 0xFF, v >> 8] : [v >> 8, v & 0xFF]);
+      void u32(int v) => t.add(little
+          ? [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, v >> 24]
+          : [v >> 24, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF]);
+      t.add(little ? [0x49, 0x49] : [0x4D, 0x4D]);
+      u16(42);
+      u32(8);
+      // IFD0 at 8: 2 entries
+      u16(2);
+      u16(0x0112); u16(3); u32(1); u16(6); u16(0); // Orientation = 6
+      u16(0x8825); u16(4); u32(1); u32(38); // GPS IFD at 38
+      u32(0); // next IFD
+      // GPS IFD at 38: 1 entry, GPSLatitude (RATIONAL x3 = 24 bytes) at 56
+      u16(1);
+      u16(0x0002); u16(5); u32(3); u32(56);
+      u32(0);
+      // value at 56
+      for (final v in [30, 1, 7, 1, 5, 1]) {
+        u32(v);
+      }
+      final tiff = t.takeBytes();
+      final app1 = [...'Exif'.codeUnits, 0, 0, ...tiff];
+      final xmp = [...'http://ns.adobe.com/xap/1.0/'.codeUnits, 0, ...'<x:xmpmeta>GPS</x:xmpmeta>'.codeUnits];
+      final out = BytesBuilder()
+        ..add([0xFF, 0xD8])
+        ..add([0xFF, 0xE0, 0x00, 0x07, 0x4A, 0x46, 0x49, 0x46, 0x00]) // APP0 "JFIF"
+        ..add([0xFF, 0xE1, (app1.length + 2) >> 8, (app1.length + 2) & 0xFF, ...app1])
+        ..add([0xFF, 0xE1, (xmp.length + 2) >> 8, (xmp.length + 2) & 0xFF, ...xmp])
+        ..add([0xFF, 0xDA, 0x00, 0x04, 0x01, 0x02, 0x11, 0x22, 0x33, 0xFF, 0xD9]);
+      return out.takeBytes();
+    }
+
+    bool containsSeq(List<int> hay, List<int> needle) {
+      outer:
+      for (var i = 0; i + needle.length <= hay.length; i++) {
+        for (var j = 0; j < needle.length; j++) {
+          if (hay[i + j] != needle[j]) continue outer;
+        }
+        return true;
+      }
+      return false;
+    }
+
+    for (final little in [true, false]) {
+      test('location mode empties GPS, drops XMP, keeps orientation (${little ? 'II' : 'MM'})', () {
+        final src = jpeg(little: little);
+        final out = scrubMetadata(src, MetadataMode.location)!;
+        final latitude = little ? [30, 0, 0, 0, 1, 0, 0, 0, 7, 0, 0, 0] : [0, 0, 0, 30, 0, 0, 0, 1, 0, 0, 0, 7];
+        expect(containsSeq(src, latitude), isTrue);
+        expect(containsSeq(out, latitude), isFalse, reason: 'GPS values must be gone');
+        expect(containsSeq(out, 'xmpmeta'.codeUnits), isFalse);
+        expect(containsSeq(out, 'Exif'.codeUnits), isTrue, reason: 'EXIF (date, orientation) stays');
+        expect(out.sublist(out.length - 11), src.sublist(src.length - 11), reason: 'image data untouched');
+      });
+    }
+
+    test('all mode keeps only orientation, JFIF and the image data', () {
+      final src = jpeg(little: true);
+      final out = scrubMetadata(src, MetadataMode.all)!;
+      expect(containsSeq(out, 'xmpmeta'.codeUnits), isFalse);
+      expect(containsSeq(out, [0x8825 >> 8, 0x8825 & 0xFF]), isFalse);
+      // JFIF first, then the minimal EXIF with Orientation = 6 (big-endian).
+      expect(out.sublist(2, 4), [0xFF, 0xE0]);
+      expect(containsSeq(out, [0x01, 0x12, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x06]), isTrue);
+      expect(out.sublist(out.length - 11), src.sublist(src.length - 11));
+      expect(out.length, lessThan(src.length));
+    });
+
+    test('clean or unknown files are returned as null (left alone)', () {
+      final clean = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xDA, 0x00, 0x02, 0xFF, 0xD9]);
+      expect(scrubMetadata(clean, MetadataMode.all), isNull);
+      expect(scrubMetadata(Uint8List.fromList('not an image'.codeUnits), MetadataMode.all), isNull);
+      expect(scrubMetadata(jpeg(little: true), MetadataMode.off), isNull);
+      final broken = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE1, 0x7F, 0xFF, 0x00]);
+      expect(scrubMetadata(broken, MetadataMode.all), isNull);
+    });
+
+    test('PNG text and eXIf chunks are removed', () {
+      List<int> chunk(String type, List<int> data) => [
+            (data.length >> 24) & 0xFF, (data.length >> 16) & 0xFF, (data.length >> 8) & 0xFF, data.length & 0xFF,
+            ...type.codeUnits, ...data, 0, 0, 0, 0,
+          ];
+      final png = Uint8List.fromList([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        ...chunk('IHDR', List<int>.filled(13, 1)),
+        ...chunk('eXIf', [1, 2, 3]),
+        ...chunk('tEXt', 'Author\u0000Seif'.codeUnits),
+        ...chunk('IDAT', [9, 9, 9]),
+        ...chunk('IEND', const []),
+      ]);
+      final loc = scrubMetadata(png, MetadataMode.location)!;
+      expect(containsSeq(loc, 'eXIf'.codeUnits), isFalse);
+      expect(containsSeq(loc, 'tEXt'.codeUnits), isTrue);
+      final all = scrubMetadata(png, MetadataMode.all)!;
+      expect(containsSeq(all, 'tEXt'.codeUnits), isFalse);
+      expect(containsSeq(all, 'IDAT'.codeUnits), isTrue);
+    });
   });
 }
 
