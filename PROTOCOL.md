@@ -78,8 +78,8 @@ payload = ChaCha20-Poly1305(key_dir, nonce = 0x00000000 ‖ u64 counter_dir, typ
 | Type | Name | Body |
 |---|---|---|
 | 1 | AUTH | 64-byte signature |
-| 2 | OFFER | `{"files":[…], "text"?: "…", "pair"?: "<token>", "clip"?: true, "ring"?: true}` |
-| 3 | ACCEPT | `{"resume":{"<index>": bytes_already_held}}` |
+| 2 | OFFER | `{"files":[{name,size,mtime?}…], "text"?, "pair"?, "clip"?, "ring"?, "chat"?, "sync"?, "previews"?, "speedtest"?, "syncManifest"?, "syncInvite"?}` (§13) |
+| 3 | ACCEPT | `{"resume":{"<index>": bytes_already_held}, "caps":["z"]}` |
 | 4 | DECLINE | — |
 | 5 | FILE_START | `{"i":0,"name":…,"size":…,"offset":…}` |
 | 6 | DATA | raw bytes (≤ 256 KiB) |
@@ -88,6 +88,7 @@ payload = ChaCha20-Poly1305(key_dir, nonce = 0x00000000 ‖ u64 counter_dir, typ
 | 9 | RESULT | `{"ok":true,"verified":n,"receipt":"<signed JSON>","sig":b64}` |
 | 10 | CANCEL | — |
 | 11 | ERROR | UTF-8 reason |
+| 12 | DATA_Z | raw-deflate bytes that inflate to ≤ 256 KiB (§13) |
 
 ## 5. Folders, text and resume
 
@@ -176,8 +177,36 @@ protocol violation closes the connection and deletes the partial file.
   correct PIN sets an HMAC session cookie scoped to the share path) and can stop after a set
   number of downloads.
 
+## 13. Compression, previews, messages, speed test, folder sync (v0.7)
+
+- **Compression.** The receiver lists `"z"` in ACCEPT `caps`. The sender may then send any chunk as
+  DATA_Z (raw deflate, level 1) when that shrinks it by ≥ 10 %; extensions that are already
+  compressed are skipped and a file stops trying after 3 misses. The receiver inflates with a hard
+  output cap of `min(256 KiB, bytes still expected)`, so a decompression bomb is rejected. SHA-256
+  is computed over the inflated bytes. Old receivers send no caps and get plain DATA.
+- **Previews.** `"previews": {"<file index>": base64 PNG}` — at most 8, each ≤ ~100 KB; invalid
+  indexes or oversized entries are dropped. They are inside the encrypted OFFER like everything else.
+- **Messages.** `"chat": true` on a text offer marks it as a message for the receiver's thread view.
+  It changes nothing on the wire otherwise.
+- **Speed test.** An OFFER with no files and `"speedtest": true`. Receivers accept only from trusted
+  devices (if allowed), then count DATA bytes until DONE and answer RESULT `{"ok", "bytes", "ms"}`.
+  Nothing is written to disk.
+- **Folder sync.** Pairs are identified by a random id and bound to a fingerprint on both sides.
+  - `"syncInvite": {"id","name"}` asks the user to pick a local folder; ACCEPT/DECLINE is the answer.
+  - `"syncManifest": "<id>"` is answered (trusted devices only) with ACCEPT
+    `{"manifest": base64(gzip(JSON [{p,s,m}]))}` — relative path, size, mtime in ms. Hidden entries
+    are skipped. Unknown id or untrusted device → DECLINE.
+  - A push is a normal file OFFER with `"sync": "<id>"` and per-file `mtime`. It is auto-accepted
+    only from the bound fingerprint. Files land at their relative path (no renaming); an existing
+    file is first moved to `.sudosend-archive/<timestamp>/`, and the received file gets the
+    sender's mtime so the next comparison sees them as equal.
+  - Each side pushes what the other lacks or has older (> 2 s difference). Deletions are never sent.
+
 ## Known limitations
 
 - Discovery metadata (device name, fingerprint) is visible on the LAN — use stealth mode to stop announcing.
 - iOS blocks broadcast/multicast for apps without an Apple-granted entitlement: on iPhone use QR or IP.
 - File sizes and names are visible to the receiver before acceptance (by design).
+- Folder sync is last-writer-wins by modification time: two edits to the same file between rounds
+  keep the newer one live and the older one in the archive. Clocks that are badly wrong skew this.
+- Where a file system refuses to set modification times, a synced file may be sent back once.

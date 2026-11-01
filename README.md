@@ -59,7 +59,17 @@
 - 📂 **Hot folders** (desktop) — drop anything into `SUDOSEND Outbox/<device>/` and it's sent by itself (Resilio-style)
 - 🔔 **Find my device** — make your phone ring at full volume, even on silent (AirDroid Premium)
 - 🚦 **Upload speed limit** and 📊 **per-device data usage**
+- 🔄 **Two-way folder sync** — keep a folder identical on two trusted devices; older versions go to
+  an archive, deletions are never propagated (Resilio Sync Pro / SyncBack Pro-style)
+- 🗜️ **Smart compression** — text, code, logs and documents shrink on the wire; photos and videos are left alone
+- 🖼️ **Previews before accepting** — see thumbnails of incoming photos before you say yes
+- 💬 **Messages** — encrypted text threads between your trusted devices
+- ⚡ **Real speed test** — measures actual encrypted throughput between two devices, not a link-rate guess
+- 📺 **Android TV** (remote/D-pad) and a compact mode for small screens / Wear OS
 - 🧾 Signed delivery receipts, multi-device send, no file-size limits, no ads, no account
+
+Every extra can be switched off in **Settings → Features**, and each one has an **(i)** button that
+explains what it does, in English and Arabic.
 
 **Only in SUDOSEND**
 - **Signed proof of delivery** — every transfer ends with a receipt the *receiver's device key* signs:
@@ -242,6 +252,7 @@ sudosend web --upload                       # let browsers send files to you
 sudosend web secret.pdf --pin 4821 --max 1  # PIN-protected, self-destructs after 1 download
 sudosend ring --to phone                    # find my phone (trusted devices)
 sudosend send big.iso --to nas --limit 5M   # cap upload speed
+sudosend speedtest --to laptop              # real encrypted throughput (trusted devices)
 sudosend --help
 ```
 
@@ -265,6 +276,9 @@ Standalone binaries (`sudosend-cli-*`) are on the Releases page for servers with
 | Android: "App not installed" when updating | The new APK is signed with a different key than the installed one (only happens once, when moving to release-signed builds). Uninstall, then install. |
 | Laggy UI on a Raspberry Pi or old phone | Settings → Visual effects → **Lite** (automatic on Raspberry Pi and low-RAM phones). |
 | Browser link doesn't open on the other device | Both must be on the same Wi-Fi/hotspot; allow TCP 47840–47849 in your firewall. |
+| Folder sync doesn't start | Both devices must trust each other and be online; check *Settings → Features → Folder sync*. Not available on iOS. |
+| Speed test is refused | The other device must trust you and have *Allow speed tests* on. |
+| Watch (Wear OS) doesn't see devices | Watches usually reach the network through the phone's Bluetooth link, where LAN discovery doesn't work. Turn on the watch's own Wi-Fi (same network), or use **By IP**. |
 | Hotspot won't start (Android) | Turn off the normal hotspot/tethering, turn on Location (Android ≤ 12), allow *Nearby devices*. |
 | Updated the app and devices ask for the code again | The device key couldn't be unlocked (e.g. OS key store reset) and was recreated — pair again. |
 
@@ -368,6 +382,12 @@ test/                   RFC 8439 vectors, loopback E2E: transfer, resume, tamper
 | Deliver to an offline device later (outbox) | ✅ | — | — | — |
 | Find my device (ring) | ✅ free | — | ✅ | — |
 | Upload speed limit | ✅ | — | — | — |
+| Two-way folder sync | ✅ free | — | — | — |
+| On-the-fly compression | ✅ | — | — | — |
+| Image previews before accepting | ✅ | — | — | ✅ |
+| Encrypted messages between devices | ✅ | — | ⚠️ SMS relay | — |
+| Built-in speed test | ✅ | — | — | — |
+| Android TV with remote | ✅ | ⚠️ | — | — |
 | Arabic UI with RTL | ✅ | ✅ | ✅ | ✅ |
 
 *✅ yes · ⚠️ partly · ❌ no · — not offered or not documented. Based on each project's public
@@ -381,8 +401,7 @@ ChaCha20-Poly1305 with counter nonces, and SHA-256 on every file.
 
 ## Roadmap
 
-- Send to several devices at once
-- Wi-Fi Direct / hotspot mode when there is no router
+- Folder sync on iOS (needs security-scoped bookmarks)
 - Signed & notarized builds (Windows code signing, Apple notarization, App Store / Play Store)
 
 ## License
