@@ -101,6 +101,7 @@ object Bridge {
                         pendingShare = null
                     }
                     "openFile" -> result.success(openFile(call.argument<String>("path") ?: ""))
+                    "openUrl" -> result.success(openUrl(call.argument<String>("url") ?: ""))
                     "vaultSeal" -> {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                             result.success(KeystoreVault.seal(call.argument<ByteArray>("data")!!))
@@ -150,6 +151,17 @@ object Bridge {
     fun onPermissionResult(granted: Boolean) {
         pendingPermission?.success(granted)
         pendingPermission = null
+    }
+
+    private fun openUrl(url: String): Boolean {
+        val uri = android.net.Uri.parse(url)
+        if (uri.scheme != "http" && uri.scheme != "https") return false
+        return try {
+            app.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (e: ActivityNotFoundException) {
+            false
+        }
     }
 
     private fun openFile(path: String): Boolean {

@@ -2,6 +2,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'receipt.dart';
+
 class WraithException implements Exception {
   const WraithException(this.message);
   final String message;
@@ -104,6 +106,9 @@ class TransferJob {
   String? error;
   int verifiedFiles = 0;
   final List<String> savedPaths = [];
+
+  /// Signed proof of delivery (set when the transfer completes).
+  DeliveryReceipt? receipt;
   bool cancelRequested = false;
   DateTime? finishedAt;
   int _lastNotifyMs = -1000;

@@ -48,6 +48,15 @@
 - **Notifications** with Accept / Decline right from the notification
 - **History** of every transfer, with *Open* and *Show in folder*
 
+**Only in SUDOSEND**
+- **Signed proof of delivery** — every transfer ends with a receipt the *receiver's device key* signs:
+  who sent what to whom, when, and the SHA-256 of every file. Export it and anyone can check it
+  offline with `sudosend verify receipt.json`. Built for evidence handling, audits and "I never got it" disputes.
+- **Send to several devices at once** — select devices, one tap
+- **Pipe anything from the terminal** — `tar c project | sudosend send - --name project.tar --to laptop`
+- **Received links open with one tap**, received text can go **straight to the clipboard**
+- **A folder per sender** and a **JSON transfer log** export
+
 **Security**
 - **End-to-end encryption**: X25519 + ChaCha20-Poly1305, fresh keys per transfer
 - **QR pairing**: scan once → both devices trust each other, no code to compare
@@ -67,13 +76,17 @@
 
 ## Install
 
-All files are on the **[Releases page](https://github.com/sudosoc/SUDOSEND/releases/latest)**.
+All files are on the **[Releases page](https://github.com/sudosoc/SUDOSEND/releases/latest)** —
+each one is labelled with its system in parentheses, e.g. **SUDOSEND (Android) — arm64-v8a**.
 
 ### Which file do I download?
 
 | Your device | Download | Install with |
 |---|---|---|
-| Android phone / tablet | `sudosend-android.apk` | tap it |
+| Android — most phones (64-bit) | `sudosend-android-arm64-v8a.apk` | tap it |
+| Android — older 32-bit phones | `sudosend-android-armeabi-v7a.apk` | tap it |
+| Android — emulator / Chromebook | `sudosend-android-x86_64.apk` | tap it |
+| Android — not sure | `sudosend-android-universal.apk` (works everywhere, bigger) | tap it |
 | Windows 10 / 11 | `sudosend-windows-x64-setup.exe` | double-click |
 | Windows (no install) | `sudosend-windows-x64-portable.zip` | unzip, run `sudosend.exe` |
 | Kali / Debian / Ubuntu / Mint on a **PC or laptop** | `sudosend_<version>_amd64.deb` | `sudo apt install ./sudosend_*_amd64.deb` |
@@ -88,7 +101,8 @@ All files are on the **[Releases page](https://github.com/sudosoc/SUDOSEND/relea
 
 ### Android
 
-1. Download `sudosend-android.apk` on the phone.
+1. Download the APK for your phone's CPU (almost every phone from 2017 on is **arm64-v8a**;
+   check *Settings → About phone*, or a CPU-info app — if unsure take **universal**).
 2. Open it. Android asks to allow installs from this source (your browser or file manager). Allow it, go back, and tap **Install**.
 3. Open **SUDOSEND**. Received files are saved in **Download/SUDOSEND**.
 
@@ -206,6 +220,9 @@ sudosend send --text "https://…" --to 192.168.1.20  # … or IP address
 sudosend send file.iso --to 'sudosend://pair?…'     # … or a pairing link
 sudosend devices                            # list devices on the network
 sudosend id --name Seif-Pi                  # show/rename this device
+tar c dir | sudosend send - --name dir.tar --to pi   # send from a pipe (stdin)
+sudosend receive --receipts ~/receipts      # keep a signed receipt for every transfer
+sudosend verify ~/receipts/receipt-*.json   # check receipts offline
 sudosend --help
 ```
 
@@ -297,6 +314,7 @@ packages/wraith_core/   pure-Dart protocol core, shared by the app and the CLI
   lib/chacha_poly.dart    optimised RFC 8439 ChaCha20-Poly1305
   lib/aead.dart           AEAD engines (inline / isolate pool)
   lib/pairing.dart        QR pairing links
+  lib/receipt.dart        signed delivery receipts
   lib/discovery.dart      UDP announce / probe / listen
   lib/transfer.dart       sender + receiver state machines (resume, folders, text)
   lib/identity.dart       Ed25519 identity, key vaults, trusted/blocked devices
@@ -309,6 +327,23 @@ test/                   RFC 8439 vectors, loopback E2E: transfer, resume, tamper
 ```
 
 ---
+
+## Comparison
+
+| | SUDOSEND | LocalSend | KDE Connect | Quick Share |
+|---|:-:|:-:|:-:|:-:|
+| Android · Windows · Linux · macOS · iOS | ✅ | ✅ | ⚠️ iOS limited | ❌ no Linux / iOS |
+| Works with no internet and no account | ✅ | ✅ | ✅ | ⚠️ account for some modes |
+| Verify the other device (code or QR) | ✅ | — | ✅ pairing | ✅ |
+| **Signed proof of delivery**, verifiable offline | ✅ | — | — | — |
+| SHA-256 verification of every file | ✅ | — | — | — |
+| Resume interrupted transfers | ✅ | — | — | — |
+| Flood protection + block list | ✅ | — | — | — |
+| CLI with pipes and terminal QR | ✅ | — | ⚠️ `kdeconnect-cli` | — |
+| Arabic UI with RTL | ✅ | ✅ | ✅ | ✅ |
+
+*✅ yes · ⚠️ partly · ❌ no · — not offered or not documented. Based on each project's public
+documentation as of late 2026 — corrections welcome via an issue.*
 
 ## Security
 

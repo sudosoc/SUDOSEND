@@ -9,6 +9,7 @@ import 'package:wraith_core/aead.dart';
 import 'package:wraith_core/chacha_poly.dart';
 import 'package:wraith_core/models.dart';
 import 'package:wraith_core/pairing.dart';
+import 'package:wraith_core/receipt.dart';
 import 'package:wraith_core/transfer.dart';
 import 'package:wraith_core/util.dart';
 
@@ -188,6 +189,70 @@ void main() {
     final f = File(p.join(t.tmp.path, 'x'))..writeAsStringSync('x');
     final job = await t.sender.send(t.peer, [FileEntry(name: 'x', size: 1, path: f.path)]);
     expect(job.status, TransferStatus.declined);
+  });
+
+  test('signed delivery receipts: verified by sender, exportable, tamper-evident', () async {
+    TransferJob? received;
+    final t = await _pair();
+    final tmpRx = TransferEngine(
+      identity: t.bob,
+      trust: t.bobTrust,
+      saveDir: () async => t.inbox,
+      onIncoming: (r) => r.respond(true),
+      onJob: (j) => received = j,
+      basePort: 0,
+    );
+    await tmpRx.start();
+    addTearDown(tmpRx.stop);
+    final f = File(p.join(t.tmp.path, 'evidence.bin'))..writeAsBytesSync(List<int>.generate(70000, (i) => i & 0xFF));
+    final peer = Peer(
+      id: t.bob.fingerprint,
+      name: 'bob',
+      platform: 'linux',
+      address: InternetAddress.loopbackIPv4,
+      port: tmpRx.port,
+      lastSeen: DateTime.now(),
+    );
+    final job = await t.sender.send(peer, [FileEntry(name: 'evidence.bin', size: 70000, path: f.path)]);
+    expect(job.status, TransferStatus.done, reason: job.error);
+    final receipt = job.receipt!;
+    expect(await receipt.verifySignature(), isTrue);
+    expect(receipt.signerFingerprint, t.bob.fingerprint);
+    expect((receipt.data['sender'] as Map)['fingerprint'], t.alice.fingerprint);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(received!.receipt!.body, receipt.body);
+
+    final exported = DeliveryReceipt.parse(receipt.toPrettyJson());
+    expect(await exported.verifySignature(), isTrue);
+
+    final forged = DeliveryReceipt(
+      body: receipt.body.replaceFirst('"total_bytes":70000', '"total_bytes":70001'),
+      signature: receipt.signature,
+      signerKey: receipt.signerKey,
+    );
+    expect(await forged.verifySignature(), isFalse);
+  });
+
+  test('per-sender folders', () async {
+    final t = await _pair();
+    final rx = TransferEngine(
+      identity: t.bob,
+      trust: t.bobTrust,
+      saveDir: () async => t.inbox,
+      saveDirFor: (name, fp) async => Directory(p.join(t.inbox.path, 'from-${fp.substring(0, 4)}')),
+      onIncoming: (r) => r.respond(true),
+      onJob: (_) {},
+      basePort: 0,
+    );
+    await rx.start();
+    addTearDown(rx.stop);
+    final f = File(p.join(t.tmp.path, 'x.txt'))..writeAsStringSync('hi');
+    final job = await t.sender.send(
+      Peer(id: t.bob.fingerprint, name: 'b', platform: 'x', address: InternetAddress.loopbackIPv4, port: rx.port, lastSeen: DateTime.now()),
+      [FileEntry(name: 'x.txt', size: 2, path: f.path)],
+    );
+    expect(job.status, TransferStatus.done);
+    expect(File(p.join(t.inbox.path, 'from-${t.alice.fingerprint.substring(0, 4)}', 'x.txt')).readAsStringSync(), 'hi');
   });
 
   group('ChaCha20-Poly1305 (fast implementation)', () {

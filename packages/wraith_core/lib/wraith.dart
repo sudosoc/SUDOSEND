@@ -280,9 +280,17 @@ class Handshake {
     required this.peerName,
     required this.peerPlatform,
     required this.sas,
+    required this.peerIdentityKey,
+    required this.transcript,
   });
 
   final SecureChannel channel;
+
+  /// The peer's long-term Ed25519 public key (proven by its AUTH signature).
+  final List<int> peerIdentityKey;
+
+  /// SHA-256 transcript hash — unique per session; receipts are bound to it.
+  final List<int> transcript;
   final String peerFingerprint;
   final String peerName;
   final String peerPlatform;
@@ -434,6 +442,8 @@ Future<Handshake> wraithHandshake({
       peerName: peer.name,
       peerPlatform: peer.platform,
       sas: sas,
+      peerIdentityKey: peer.identity,
+      transcript: transcript,
     );
   } on WraithException {
     rethrow;

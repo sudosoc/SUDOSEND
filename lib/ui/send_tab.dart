@@ -326,28 +326,48 @@ class _FileRow extends StatelessWidget {
   }
 }
 
-class _DevicesSection extends StatelessWidget {
+class _DevicesSection extends StatefulWidget {
   const _DevicesSection({required this.controller});
   final AppController controller;
 
   @override
+  State<_DevicesSection> createState() => _DevicesSectionState();
+}
+
+class _DevicesSectionState extends State<_DevicesSection> {
+  AppController get controller => widget.controller;
+  bool _selecting = false;
+  final Set<String> _chosen = {};
+
+  @override
   Widget build(BuildContext context) {
     final peers = controller.peers;
+    _chosen.removeWhere((id) => !peers.any((p) => p.id == id));
+    if (peers.length < 2) _selecting = false;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SectionTitle(
           context.tr('nearby'),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
+          trailing: Wrap(
             children: [
-              if (hasCamera)
+              if (peers.length >= 2)
+                TextButton.icon(
+                  onPressed: () => setState(() {
+                    _selecting = !_selecting;
+                    _chosen.clear();
+                  }),
+                  icon: Icon(_selecting ? Icons.close_rounded : Icons.checklist_rounded, size: 17, color: AppColors.cyan),
+                  label: Text(context.tr(_selecting ? 'cancel' : 'select'), style: const TextStyle(color: AppColors.cyan)),
+                ),
+              if (hasCamera && !_selecting)
                 TextButton.icon(
                   onPressed: () => _scan(context),
                   icon: const Icon(Icons.qr_code_scanner_rounded, size: 17, color: AppColors.cyan),
                   label: Text(context.tr('scan_qr'), style: const TextStyle(color: AppColors.cyan)),
                 ),
-              TextButton.icon(
+              if (!_selecting)
+                TextButton.icon(
                 onPressed: () => _sendToTarget(context),
                 icon: const Icon(Icons.link_rounded, size: 17, color: AppColors.cyan),
                 label: Text(context.tr('by_link'), style: const TextStyle(color: AppColors.cyan)),
@@ -376,15 +396,40 @@ class _DevicesSection extends StatelessWidget {
             ),
           )
         else
+        ...[
           for (final peer in peers)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _PeerTile(
                 peer: peer,
                 trusted: controller.trust.isTrusted(peer.id),
-                onTap: () => _send(context, peer),
+                selected: _selecting ? _chosen.contains(peer.id) : null,
+                onTap: _selecting
+                    ? () => setState(() => _chosen.contains(peer.id) ? _chosen.remove(peer.id) : _chosen.add(peer.id))
+                    : () => _send(context, peer),
               ),
             ),
+          if (_selecting)
+            GlowButton(
+              label: context.tr('send_to_n', {'n': _chosen.length}),
+              icon: Icons.call_split_rounded,
+              expand: true,
+              onPressed: _chosen.isEmpty
+                  ? null
+                  : () {
+                      if (!controller.hasSelection) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('pick_first'))));
+                        return;
+                      }
+                      final targets = peers.where((p) => _chosen.contains(p.id)).toList();
+                      setState(() {
+                        _selecting = false;
+                        _chosen.clear();
+                      });
+                      unawaited(controller.sendToMany(targets));
+                    },
+            ),
+        ],
       ],
     );
   }
@@ -476,11 +521,14 @@ class _DevicesSection extends StatelessWidget {
 }
 
 class _PeerTile extends StatelessWidget {
-  const _PeerTile({required this.peer, required this.trusted, required this.onTap});
+  const _PeerTile({required this.peer, required this.trusted, required this.onTap, this.selected});
 
   final Peer peer;
   final bool trusted;
   final VoidCallback onTap;
+
+  /// null = normal mode; true/false = multi-select mode.
+  final bool? selected;
 
   @override
   Widget build(BuildContext context) {
@@ -488,6 +536,7 @@ class _PeerTile extends StatelessWidget {
     return Glass(
       onTap: onTap,
       padding: const EdgeInsets.all(14),
+      borderColor: selected == true ? AppColors.cyan : null,
       child: Row(
         children: [
           IconBadge(icon: platformIcon(peer.platform), color: color),
@@ -522,16 +571,19 @@ class _PeerTile extends StatelessWidget {
               ],
             ),
           ),
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.06),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          if (selected != null)
+            Checkbox(value: selected, onChanged: (_) => onTap())
+          else
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.06),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+              ),
+              child: const Icon(Icons.north_east_rounded, size: 18, color: AppColors.cyan),
             ),
-            child: const Icon(Icons.north_east_rounded, size: 18, color: AppColors.cyan),
-          ),
         ],
       ),
     );

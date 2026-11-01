@@ -13,12 +13,13 @@ import 'package:wraith_core/discovery.dart';
 import 'package:wraith_core/identity.dart';
 import 'package:wraith_core/models.dart';
 import 'package:wraith_core/pairing.dart';
+import 'package:wraith_core/receipt.dart';
 import 'package:wraith_core/transfer.dart';
 import 'package:wraith_core/util.dart';
 import 'package:wraith_core/vault_windows.dart';
 import 'package:wraith_core/wraith.dart';
 
-const _version = '0.3.1';
+const _version = '0.4.0';
 
 const _usage = '''
 SUDOSEND $_version — secure local file sharing (Wraith Protocol)
@@ -29,6 +30,14 @@ Usage:
   sudosend receive [--dir PATH] [--yes] [--trust] [--once] [--qr]
   sudosend devices [--wait SECONDS]
   sudosend id [--name NEW_NAME]
+  sudosend verify <receipt.json>
+
+Pipes:
+  tar c dir | sudosend send - --name dir.tar --to laptop   (send stdin)
+
+Receipts (signed proof of delivery):
+  --receipts DIR   save the signed receipt of each finished transfer to DIR
+  sudosend verify receipt.json   check one anywhere, offline
 
 Targets:
   --to laptop        device name (case-insensitive prefix) or fingerprint prefix
@@ -67,7 +76,7 @@ class _Args {
     }
   }
 
-  static const _valued = {'to', 'dir', 'text', 'wait', 'name'};
+  static const _valued = {'to', 'dir', 'text', 'wait', 'name', 'receipts'};
   final List<String> positional = [];
   final Map<String, String> options = {};
   final Set<String> flags = {};
@@ -143,6 +152,8 @@ Future<int> _run(_Args args) async {
       return _devices(identity, int.tryParse(args.options['wait'] ?? '') ?? 4);
     case 'send':
       return _send(identity, trust, rest, args);
+    case 'verify':
+      return _verify(rest);
     case 'receive':
       return _receive(identity, trust, args);
     default:
@@ -201,9 +212,20 @@ Future<int> _devices(DeviceIdentity identity, int seconds) async {
 
 // ─────────────────────────── send ───────────────────────────
 
-Future<List<FileEntry>> _collect(List<String> paths) async {
+File? _stdinTemp;
+
+Future<List<FileEntry>> _collect(List<String> paths, {String? stdinName}) async {
   final files = <FileEntry>[];
   for (final raw in paths) {
+    if (raw == '-') {
+      // Buffer stdin to a private temp file: the protocol announces sizes first.
+      final dir = await Directory.systemTemp.createTemp('sudosend_stdin_');
+      final tmp = File(p.join(dir.path, 'stdin'));
+      await stdin.pipe(tmp.openWrite());
+      _stdinTemp = tmp;
+      files.add(FileEntry(name: stdinName ?? 'stdin.bin', size: await tmp.length(), path: tmp.path));
+      continue;
+    }
     final type = await FileSystemEntity.type(raw);
     if (type == FileSystemEntityType.file) {
       final f = File(raw);
@@ -254,7 +276,7 @@ Future<int> _send(DeviceIdentity identity, TrustStore trust, List<String> paths,
     stdout.write(_usage);
     return 2;
   }
-  final files = text == null ? await _collect(paths) : <FileEntry>[];
+  final files = text == null ? await _collect(paths, stdinName: args.options['name']) : <FileEntry>[];
   if (text == null && files.isEmpty) throw const WraithException('nothing to send (empty folder?)');
 
   final peer = await _resolve(identity, target);
@@ -300,13 +322,58 @@ Future<int> _send(DeviceIdentity identity, TrustStore trust, List<String> paths,
   });
   final job = await engine.send(peer, files, text: text, pairToken: PairingInfo.tryParse(target)?.token);
   await sigint.cancel();
+  try {
+    await _stdinTemp?.parent.delete(recursive: true);
+  } catch (_) {}
+  await _saveReceipt(job, args.options['receipts']);
   return _reportSend(job);
+}
+
+Future<void> _saveReceipt(TransferJob job, String? dirPath) async {
+  final receipt = job.receipt;
+  if (dirPath == null || receipt == null) return;
+  final dir = await Directory(dirPath).create(recursive: true);
+  final stamp = DateTime.now().toUtc().toIso8601String().replaceAll(':', '-').split('.').first;
+  final file = File(p.join(dir.path, 'receipt-$stamp-${job.peerName.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}.json'));
+  await file.writeAsString(receipt.toPrettyJson());
+  stdout.writeln(_dim('  receipt → ${file.path}'));
+}
+
+Future<int> _verify(List<String> paths) async {
+  if (paths.isEmpty) {
+    stderr.writeln(_red('usage: sudosend verify <receipt.json>'));
+    return 2;
+  }
+  var allOk = true;
+  for (final path in paths) {
+    try {
+      final receipt = DeliveryReceipt.parse(await File(path).readAsString());
+      final ok = await receipt.verifySignature();
+      final d = receipt.data;
+      final files = (d['files'] as List).cast<Map<String, dynamic>>();
+      stdout.writeln('${ok ? _green('✔ VALID') : _red('✖ INVALID')}  $path');
+      stdout.writeln('  from     ${(d['sender'] as Map)['name']}  ${_dim(groupFingerprint(((d['sender'] as Map)['fingerprint']) as String, groups: 4))}');
+      stdout.writeln('  to       ${(d['receiver'] as Map)['name']}  ${_dim(groupFingerprint(receipt.signerFingerprint, groups: 4))} (signer)');
+      stdout.writeln('  when     ${d['completed']}');
+      for (final f in files.take(20)) {
+        stdout.writeln('  ${f['sha256']}  ${formatBytes(f['size'] as int).padLeft(9)}  ${f['name']}');
+      }
+      if (files.length > 20) stdout.writeln('  … ${files.length - 20} more');
+      if (d['text_sha256'] != null) stdout.writeln('  text sha256 ${d['text_sha256']}');
+      allOk &= ok;
+    } catch (e) {
+      stderr.writeln(_red('✖ $path: ${describeError(e)}'));
+      allOk = false;
+    }
+  }
+  return allOk ? 0 : 1;
 }
 
 int _reportSend(TransferJob job) {
   switch (job.status) {
     case TransferStatus.done:
-      stdout.writeln(_green('✔ delivered and SHA-256 verified by ${job.peerName}'));
+      stdout.writeln(_green('✔ delivered and SHA-256 verified by ${job.peerName}'
+          '${job.receipt != null ? ' · signed receipt ✓' : ''}'));
       return 0;
     case TransferStatus.declined:
       stdout.writeln(_yellow('✖ ${job.peerName} declined'));
@@ -388,6 +455,7 @@ Future<int> _receive(DeviceIdentity identity, TrustStore trust, _Args args) asyn
           } else {
             stdout.writeln(_green('✔ ${job.verifiedFiles} file(s) verified → ${dir.path}'));
           }
+          unawaited(_saveReceipt(job, args.options['receipts']));
         } else {
           stdout.writeln(_red('✖ ${job.error ?? job.status.name}'));
         }

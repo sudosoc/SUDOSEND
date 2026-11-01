@@ -20,9 +20,10 @@ class HistoryEntry {
     this.error,
     this.firstName,
     this.savedPaths = const [],
+    this.receiptPath,
   });
 
-  factory HistoryEntry.fromJob(TransferJob job) => HistoryEntry(
+  factory HistoryEntry.fromJob(TransferJob job, {String? receiptPath}) => HistoryEntry(
         id: job.id,
         direction: job.direction,
         peerName: job.peerName,
@@ -35,6 +36,7 @@ class HistoryEntry {
         error: job.error,
         firstName: job.files.isEmpty ? null : job.files.first.name,
         savedPaths: List.of(job.savedPaths.take(50)),
+        receiptPath: receiptPath,
       );
 
   factory HistoryEntry.fromJson(Map<String, dynamic> m) => HistoryEntry(
@@ -50,6 +52,7 @@ class HistoryEntry {
         error: m['error'] as String?,
         firstName: m['first'] as String?,
         savedPaths: [for (final s in (m['saved'] as List<dynamic>? ?? const [])) s as String],
+        receiptPath: m['receipt'] as String?,
       );
 
   final String id;
@@ -65,6 +68,9 @@ class HistoryEntry {
   final String? firstName;
   final List<String> savedPaths;
 
+  /// Signed delivery receipt stored in the app's data folder.
+  final String? receiptPath;
+
   Map<String, Object?> toJson() => {
         'id': id,
         'dir': direction.name,
@@ -78,6 +84,7 @@ class HistoryEntry {
         'error': error,
         'first': firstName,
         'saved': savedPaths,
+        'receipt': receiptPath,
       };
 }
 
@@ -111,6 +118,9 @@ class HistoryStore {
     if (entries.length > limit) entries.removeRange(limit, entries.length);
     await _save();
   }
+
+  /// Pretty JSON of the whole history (for export / audit).
+  String exportJson() => const JsonEncoder.withIndent('  ').convert([for (final e in entries) e.toJson()]);
 
   Future<void> clear() async {
     entries.clear();

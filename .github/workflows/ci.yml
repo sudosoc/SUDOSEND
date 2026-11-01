@@ -51,6 +51,18 @@ jobs:
           XDG_CONFIG_HOME=$T/alice ./sudosend-cli send --text "hello from CI 🔐" --to 127.0.0.1
           wait $RX
           grep -q "hello from CI" $T/receive2.log
+          # stdin pipe + signed receipts + offline verification
+          XDG_CONFIG_HOME=$T/bob ./sudosend-cli receive --dir $T/inbox3 --yes --once --receipts $T/rx-receipts > $T/receive3.log 2>&1 &
+          RX=$!
+          sleep 3
+          tar c lib | XDG_CONFIG_HOME=$T/alice ./sudosend-cli send - --name lib.tar --to 127.0.0.1 --receipts $T/tx-receipts
+          wait $RX
+          cat $T/receive3.log
+          tar c lib | cmp - $T/inbox3/lib.tar
+          ./sudosend-cli verify $T/tx-receipts/*.json $T/rx-receipts/*.json
+          f=$(ls $T/tx-receipts/*.json | head -n1)
+          sed -i 's/"signed_body": "{/"signed_body": "{ /' "$f"
+          if ./sudosend-cli verify "$f"; then echo "tampered receipt accepted!"; exit 1; fi
           echo "CLI E2E passed"
 
   android:
@@ -72,19 +84,28 @@ jobs:
         run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY/CodeQL" || true
       - name: Pre-install NDK
         run: ./tool/install_ndk.sh
+      - run: ./tool/ci_run.sh flutter build apk --release --split-per-abi
       - run: ./tool/ci_run.sh flutter build apk --release
-      - run: cp build/app/outputs/flutter-apk/app-release.apk sudosend-android.apk
+      - name: Collect APKs
+        run: |
+          mkdir -p dist
+          out=build/app/outputs/flutter-apk
+          cp $out/app-arm64-v8a-release.apk   dist/sudosend-android-arm64-v8a.apk
+          cp $out/app-armeabi-v7a-release.apk dist/sudosend-android-armeabi-v7a.apk
+          cp $out/app-x86_64-release.apk      dist/sudosend-android-x86_64.apk
+          cp $out/app-release.apk             dist/sudosend-android-universal.apk
+          ls -la dist
       - name: Sign with the release key
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: ./tool/sign_apk.sh sudosend-android.apk
+        run: for apk in dist/*.apk; do ./tool/sign_apk.sh "$apk"; done
       - uses: actions/upload-artifact@v4
         with:
           name: sudosend-android
-          path: sudosend-android.apk
+          path: dist/*
 
   linux:
     name: Linux x64 app + CLI + .deb
@@ -277,28 +298,8 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+      - name: Publish release with labelled downloads
         if: steps.tag.outputs.publish == 'true'
-        with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: SUDOSEND ${{ steps.tag.outputs.tag }}
-          target_commitish: ${{ github.sha }}
-          files: dist/*
-          generate_release_notes: true
-          body: |
-            ## Which file do I need?
-
-            | System | File |
-            |---|---|
-            | Android | `sudosend-android.apk` |
-            | Windows 10/11 | `sudosend-windows-x64-setup.exe` (installer) or `…-portable.zip` |
-            | Kali / Debian / Ubuntu / Raspberry Pi OS — PC (x86_64) | `sudosend_*_amd64.deb` |
-            | Kali / Debian / Ubuntu / Raspberry Pi OS — Raspberry Pi / ARM64 | `sudosend_*_arm64.deb` |
-            | Any other Linux | `sudosend-linux-x64.tar.gz` or `sudosend-linux-arm64.tar.gz` → `./install.sh` |
-            | macOS 11+ (Apple Silicon & Intel) | `sudosend-macos.zip` |
-            | iPhone / iPad (sideload) | `sudosend-ios-unsigned.ipa` |
-            | CLI only | `sudosend-cli-*` |
-
-            Not sure about your CPU on Linux? Run `uname -m`: `x86_64` → x64/amd64, `aarch64` → arm64.
-
-            Full install guide: [README](https://github.com/${{ github.repository }}#install)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./tool/publish_release.sh "${{ steps.tag.outputs.tag }}" dist

@@ -11,6 +11,7 @@ import '../platform/desktop.dart';
 import '../state/app_controller.dart';
 import '../state/history.dart';
 import 'glass.dart';
+import 'receipt_dialog.dart';
 import 'theme.dart';
 
 class TransfersTab extends StatelessWidget {
@@ -161,7 +162,15 @@ class _JobCard extends StatelessWidget {
           ],
           if (job.isText && (job.status == TransferStatus.done || outgoing)) ...[
             const SizedBox(height: 14),
-            _TextPanel(text: job.text!, showCopy: !outgoing && job.status == TransferStatus.done),
+            _TextPanel(
+              text: job.text!,
+              showCopy: !outgoing && job.status == TransferStatus.done,
+              onOpenLink: controller.openUrl,
+            ),
+          ],
+          if (job.receipt != null) ...[
+            const SizedBox(height: 10),
+            _ReceiptChip(onTap: () => showReceiptDialog(context, controller, job.receipt!)),
           ],
           if (job.status == TransferStatus.done && !job.isText) ...[
             const SizedBox(height: 10),
@@ -313,8 +322,47 @@ class _HistoryTile extends StatelessWidget {
               ],
             ),
           ),
+          if (entry.receiptPath != null)
+            IconButton(
+              tooltip: context.tr('receipt'),
+              icon: const Icon(Icons.verified_rounded, color: AppColors.mint, size: 20),
+              onPressed: () async {
+                final receipt = await controller.loadReceipt(entry.receiptPath!);
+                if (receipt != null && context.mounted) await showReceiptDialog(context, controller, receipt);
+              },
+            ),
           StatusChip(status: entry.status, outgoing: outgoing),
         ],
+      ),
+    );
+  }
+}
+
+class _ReceiptChip extends StatelessWidget {
+  const _ReceiptChip({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: AppColors.mint.withValues(alpha: 0.10),
+          border: Border.all(color: AppColors.mint.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.verified_rounded, size: 16, color: AppColors.mint),
+            const SizedBox(width: 6),
+            Text(context.tr('receipt_chip'),
+                style: const TextStyle(color: AppColors.mint, fontSize: 12.5, fontWeight: FontWeight.w700)),
+          ],
+        ),
       ),
     );
   }
@@ -446,9 +494,17 @@ class StatusChip extends StatelessWidget {
 }
 
 class _TextPanel extends StatelessWidget {
-  const _TextPanel({required this.text, required this.showCopy});
+  const _TextPanel({required this.text, required this.showCopy, required this.onOpenLink});
   final String text;
   final bool showCopy;
+  final Future<bool> Function(String url) onOpenLink;
+
+  String? get _link {
+    final t = text.trim();
+    final uri = Uri.tryParse(t);
+    if (uri == null || t.contains(RegExp(r'\s'))) return null;
+    return (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty ? t : null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -469,17 +525,28 @@ class _TextPanel extends StatelessWidget {
           ),
           if (showCopy) ...[
             const SizedBox(height: 10),
-            Align(
-              alignment: AlignmentDirectional.centerEnd,
-              child: GhostButton(
-                label: context.tr('copy'),
-                icon: Icons.copy_rounded,
-                color: AppColors.cyan,
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: text));
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('copied'))));
-                },
-              ),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              alignment: WrapAlignment.end,
+              children: [
+                if (_link != null)
+                  GhostButton(
+                    label: context.tr('open_link'),
+                    icon: Icons.open_in_new_rounded,
+                    color: AppColors.violet,
+                    onPressed: () => onOpenLink(_link!),
+                  ),
+                GhostButton(
+                  label: context.tr('copy'),
+                  icon: Icons.copy_rounded,
+                  color: AppColors.cyan,
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: text));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('copied'))));
+                  },
+                ),
+              ],
             ),
           ],
         ],

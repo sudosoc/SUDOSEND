@@ -143,6 +143,24 @@ class SettingsPage extends StatelessWidget {
             ],
             divider,
             _Switch(
+              icon: Icons.create_new_folder_rounded,
+              color: AppColors.amber,
+              title: context.tr('s_sender_folders'),
+              subtitle: context.tr('s_sender_folders_sub'),
+              value: s.senderFolders,
+              onChanged: (v) => s.update((x) => x.senderFolders = v),
+            ),
+            divider,
+            _Switch(
+              icon: Icons.content_paste_go_rounded,
+              color: AppColors.cyan,
+              title: context.tr('s_auto_copy'),
+              subtitle: context.tr('s_auto_copy_sub'),
+              value: s.autoCopyText,
+              onChanged: (v) => s.update((x) => x.autoCopyText = v),
+            ),
+            divider,
+            _Switch(
               icon: Icons.verified_user_rounded,
               color: AppColors.mint,
               title: context.tr('s_auto_accept'),
@@ -209,6 +227,34 @@ class SettingsPage extends StatelessWidget {
               actionLabel: context.tr('s_unblock'),
               actionIcon: Icons.lock_open_rounded,
               onAction: controller.unblock,
+            ),
+            divider,
+            Row(
+              children: [
+                const IconBadge(icon: Icons.receipt_long_rounded, color: AppColors.mint, size: 38),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(context.tr('s_audit'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                      Text(context.tr('s_audit_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GhostButton(
+                  label: context.tr('s_export'),
+                  icon: Icons.download_rounded,
+                  color: AppColors.mint,
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final saved = context.tr('history_exported');
+                    final path = await controller.exportHistory();
+                    if (path != null) messenger.showSnackBar(SnackBar(content: Text('$saved · $path')));
+                  },
+                ),
+              ],
             ),
             divider,
             Row(

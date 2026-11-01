@@ -79,6 +79,7 @@ class NativeBridge {
       (await _invoke<bool>('requestPermission', {'name': name})) ?? true;
 
   Future<bool> openFile(String path) async => (await _invoke<bool>('openFile', {'path': path})) ?? false;
+  Future<bool> openUrl(String url) async => (await _invoke<bool>('openUrl', {'url': url})) ?? false;
 
   Future<SharedPayload?> takeShare() async {
     final raw = await _invoke<Map<Object?, Object?>>('takeShare');

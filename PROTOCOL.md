@@ -85,7 +85,7 @@ payload = ChaCha20-Poly1305(key_dir, nonce = 0x00000000 ‖ u64 counter_dir, typ
 | 6 | DATA | raw bytes (≤ 256 KiB) |
 | 7 | FILE_END | `{"i":0,"sha256":b64}` |
 | 8 | DONE | — |
-| 9 | RESULT | `{"ok":true,"verified":n}` |
+| 9 | RESULT | `{"ok":true,"verified":n,"receipt":"<signed JSON>","sig":b64}` |
 | 10 | CANCEL | — |
 | 11 | ERROR | UTF-8 reason |
 
@@ -116,13 +116,25 @@ as a QR code. `t` is 128 random bits, single use, valid ≤ 10 minutes.
 - An attacker who did not see the screen cannot produce `t`; one who copies the QR still cannot
   impersonate the receiver (no private key for `fp`).
 
-## 7. Flood control
+## 7. Signed delivery receipts
+
+At DONE the receiver builds a receipt (JSON: sender and receiver names + fingerprints, UTC
+completion time, session transcript hash `TH`, and name / size / SHA-256 of every file, or the
+SHA-256 of a text message) and signs `"WRAITH/1 receipt\n" ‖ receipt` with its Ed25519 identity
+key. The sender verifies the signature with the key proven in the handshake and checks that the
+session hash and every file hash match what it sent; any mismatch fails the transfer.
+
+Exported receipts (`sudosend-receipt/1`) carry the exact signed text, the signature and the
+signer's public key, so they can be verified offline by anyone (`sudosend verify`). A receipt
+proves that the holder of that device key acknowledged those exact bytes in that session.
+
+## 8. Flood control
 
 A receiver drops connections beyond 8 concurrent sessions, 3 per IP, or 20 new connections per
 IP per minute. Only one approval prompt per IP (and 3 overall) can be open at a time; extra
 requests are declined. Fingerprints on the user's block list are declined before any prompt.
 
-## 8. Performance
+## 9. Performance
 
 Frames are sealed and opened by an `AeadEngine`: an optimised pure-Dart RFC 8439
 implementation (unrolled ChaCha20 rounds, 26-bit-limb Poly1305) run on a pool of worker
@@ -131,7 +143,7 @@ order while several are encrypted in parallel, and the receiver opens up to 6 fr
 The socket is flushed every 1 MiB instead of every frame. Files ≥ 4 MiB are hashed on a
 background isolate. CI benchmarks every build on x64 and ARM64.
 
-## 9. Session flow
+## 10. Session flow
 
 ```
 C: OFFER                    S: shows SAS + files → user accepts → ACCEPT

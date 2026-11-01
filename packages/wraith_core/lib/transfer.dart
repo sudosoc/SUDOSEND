@@ -10,6 +10,7 @@ import 'hashing.dart';
 import 'identity.dart';
 import 'models.dart';
 import 'pairing.dart';
+import 'receipt.dart';
 import 'util.dart';
 import 'wraith.dart';
 
@@ -99,6 +100,7 @@ class TransferEngine {
     required this.onJob,
     this.autoAccept,
     this.onRejected,
+    this.saveDirFor,
     this.limits = const ConnectionLimits(),
     this.basePort = kTransferPort,
   });
@@ -106,6 +108,9 @@ class TransferEngine {
   final DeviceIdentity identity;
   final TrustStore trust;
   final Future<Directory> Function() saveDir;
+
+  /// Optional per-sender destination (e.g. a subfolder named after the device).
+  final Future<Directory> Function(String peerName, String fingerprint)? saveDirFor;
   final void Function(IncomingRequest request) onIncoming;
   final void Function(TransferJob job) onJob;
 
@@ -314,6 +319,7 @@ class TransferEngine {
 
       job.update(() => job.status = TransferStatus.transferring);
       final clock = Stopwatch()..start();
+      final sent = <ReceiptFile>[];
 
       for (var i = 0; i < files.length; i++) {
         final f = files[i];
@@ -356,13 +362,31 @@ class TransferEngine {
         }
         await raf.close();
         raf = null;
-        await channel.sendJson(Frame.fileEnd, {'i': i, 'sha256': base64Encode(await hasher.close())});
+        final digest = await hasher.close();
+        sent.add(ReceiptFile(f.name, f.size, hexOf(digest)));
+        await channel.sendJson(Frame.fileEnd, {'i': i, 'sha256': base64Encode(digest)});
       }
 
       await channel.send(Frame.done);
       job.update(() => job.status = TransferStatus.verifying);
       final result = (await channel.expect(Frame.result, timeout: _idleTimeout)).json();
       if (result['ok'] != true) throw const WraithException('Receiver could not verify the files');
+      final receiptBody = result['receipt'];
+      if (receiptBody is String && result['sig'] is String) {
+        final receipt = DeliveryReceipt(
+          body: receiptBody,
+          signature: base64Decode(result['sig'] as String),
+          signerKey: hs.peerIdentityKey,
+        );
+        await receipt.verifyFor(
+          senderFingerprint: identity.fingerprint,
+          receiverFingerprint: hs.peerFingerprint,
+          transcript: hs.transcript,
+          sent: sent,
+          text: text,
+        );
+        job.receipt = receipt;
+      }
       job.update(() => job.verifiedFiles = files.length);
       job.finish(TransferStatus.done);
     } catch (e) {
@@ -481,7 +505,7 @@ class TransferEngine {
 
       // Work out where every file goes and whether a partial copy from an
       // earlier, interrupted attempt by the same device can be resumed.
-      final root = await saveDir();
+      final root = await (saveDirFor?.call(hs.peerName, hs.peerFingerprint) ?? saveDir());
       await root.create(recursive: true);
       final targets = <_Target>[];
       final resume = <String, int>{};
@@ -523,6 +547,7 @@ class TransferEngine {
       var index = -1;
       var written = 0;
       ChunkHasher? hasher;
+      final received = <ReceiptFile>[];
 
       while (true) {
         final msg = await channel.receive(timeout: _idleTimeout);
@@ -578,13 +603,15 @@ class TransferEngine {
           final expected = base64Decode(m['sha256'] as String);
           await out.close();
           raf = null;
-          if (!constantTimeEquals(await h.close(), expected)) {
+          final digest = await h.close();
+          if (!constantTimeEquals(digest, expected)) {
             throw WraithException('SHA-256 mismatch on "${files[index].name}" — file discarded');
           }
           final dest = await uniqueFile(targets[index].dir, targets[index].baseName);
           await part.rename(dest.path);
           partFile = null;
           hasher = null;
+          received.add(ReceiptFile(files[index].name, files[index].size, hexOf(digest)));
           activeJob.update(() {
             activeJob.savedPaths.add(dest.path);
             activeJob.verifiedFiles++;
@@ -593,7 +620,21 @@ class TransferEngine {
           if (index != files.length - 1 || raf != null) {
             throw const WraithException('Transfer ended early');
           }
-          await channel.sendJson(Frame.result, {'ok': true, 'verified': files.length});
+          final receipt = await DeliveryReceipt.create(
+            receiver: identity,
+            senderFingerprint: hs.peerFingerprint,
+            senderName: hs.peerName,
+            files: received,
+            transcript: hs.transcript,
+            text: text,
+          );
+          activeJob.receipt = receipt;
+          await channel.sendJson(Frame.result, {
+            'ok': true,
+            'verified': files.length,
+            'receipt': receipt.body,
+            'sig': base64Encode(receipt.signature),
+          });
           activeJob.finish(TransferStatus.done);
           return;
         } else if (msg.type == Frame.cancel) {

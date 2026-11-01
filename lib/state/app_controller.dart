@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart' show AppLifecycleListener, AppLifecycleState, WidgetsBinding;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -10,6 +13,7 @@ import 'package:wraith_core/discovery.dart';
 import 'package:wraith_core/identity.dart';
 import 'package:wraith_core/models.dart';
 import 'package:wraith_core/pairing.dart';
+import 'package:wraith_core/receipt.dart';
 import 'package:wraith_core/transfer.dart';
 import 'package:wraith_core/util.dart';
 import 'package:wraith_core/vault_windows.dart';
@@ -32,6 +36,7 @@ class AppController extends ChangeNotifier {
   late TrustStore trust;
   late HistoryStore history;
   late Discovery _discovery;
+  late Directory _support;
   late TransferEngine _engine;
 
   bool ready = false;
@@ -83,6 +88,7 @@ class AppController extends ChangeNotifier {
     try {
       await _native.acquireMulticastLock();
       final support = await getApplicationSupportDirectory();
+      _support = support;
       await settings.load(support);
       SeedVault? vault;
       if (Platform.isAndroid) {
@@ -99,6 +105,9 @@ class AppController extends ChangeNotifier {
         identity: identity,
         trust: trust,
         saveDir: () async => saveDir!,
+        saveDirFor: (name, fp) async => settings.senderFolders
+            ? Directory(p.join(saveDir!.path, sanitizeFileName(name)))
+            : saveDir!,
         autoAccept: (r) => settings.autoAcceptTrusted && r.trusted,
         onIncoming: _onIncoming,
         onJob: _addJob,
@@ -202,7 +211,14 @@ class AppController extends ChangeNotifier {
   }
 
   void _onJobFinished(TransferJob job) {
-    unawaited(history.add(HistoryEntry.fromJob(job)));
+    unawaited(_record(job));
+    if (job.status == TransferStatus.done &&
+        job.isText &&
+        job.direction == TransferDirection.incoming &&
+        settings.autoCopyText) {
+      unawaited(Clipboard.setData(ClipboardData(text: job.text!)));
+      _messages.add(t('copied_auto', {'name': job.peerName}));
+    }
     notifyListeners();
     if (!settings.notifications || job.status == TransferStatus.cancelled) return;
     final incoming = job.direction == TransferDirection.incoming;
@@ -223,6 +239,59 @@ class AppController extends ChangeNotifier {
     } else if (!foreground) {
       unawaited(desktopNotify(title, body));
     }
+  }
+
+  Future<void> _record(TransferJob job) async {
+    String? receiptPath;
+    final receipt = job.receipt;
+    if (receipt != null) {
+      try {
+        final dir = await Directory(p.join(_support.path, 'receipts')).create(recursive: true);
+        final file = File(p.join(dir.path, '${job.id}.json'));
+        await file.writeAsString(receipt.toPrettyJson());
+        receiptPath = file.path;
+      } catch (_) {}
+    }
+    await history.add(HistoryEntry.fromJob(job, receiptPath: receiptPath));
+    notifyListeners();
+  }
+
+  Future<DeliveryReceipt?> loadReceipt(String path) async {
+    try {
+      return DeliveryReceipt.parse(await File(path).readAsString());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Lets the user save a file (receipt, history export). Returns the path or null.
+  Future<String?> exportText(String fileName, String content) async {
+    final bytes = Uint8List.fromList(utf8.encode(content));
+    final path = await FilePicker.platform.saveFile(fileName: fileName, bytes: bytes);
+    if (path == null) return null;
+    if (isDesktop) {
+      final f = File(path);
+      if (!await f.exists() || await f.length() == 0) await f.writeAsBytes(bytes);
+    }
+    return path;
+  }
+
+  Future<String?> exportReceipt(DeliveryReceipt receipt) {
+    final d = receipt.data;
+    final when = (d['completed'] as String? ?? '').split('.').first.replaceAll(':', '-');
+    return exportText('sudosend-receipt-$when.json', receipt.toPrettyJson());
+  }
+
+  Future<String?> exportHistory() => exportText(
+        'sudosend-history-${DateTime.now().toIso8601String().split('T').first}.json',
+        history.exportJson(),
+      );
+
+  Future<bool> openUrl(String url) async {
+    final scheme = Uri.tryParse(url)?.scheme;
+    if (scheme != 'http' && scheme != 'https') return false;
+    if (Platform.isAndroid) return _native.openUrl(url);
+    return openWithSystem(url);
   }
 
   String _lastService = '';
@@ -386,6 +455,19 @@ class AppController extends ChangeNotifier {
     tab = 2;
     notifyListeners();
     await _engine.send(peer, files, text: text, pairToken: pairToken);
+    notifyListeners();
+  }
+
+  /// Sends the current selection to several devices in parallel.
+  Future<void> sendToMany(List<Peer> peers) async {
+    if (!hasSelection || peers.isEmpty) return;
+    final files = List<FileEntry>.of(selected);
+    final text = selectedText;
+    selected.clear();
+    selectedText = null;
+    tab = 2;
+    notifyListeners();
+    await Future.wait([for (final peer in peers) _engine.send(peer, files, text: text)]);
     notifyListeners();
   }
 

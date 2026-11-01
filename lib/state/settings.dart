@@ -16,6 +16,8 @@ class SettingsController extends ChangeNotifier {
   bool stealth = false;
   bool backgroundReceive = false;
   bool notifications = true;
+  bool autoCopyText = false;
+  bool senderFolders = false;
   String? saveDir;
 
   /// Effective UI language.
@@ -37,6 +39,8 @@ class SettingsController extends ChangeNotifier {
         stealth = (m['stealth'] as bool?) ?? stealth;
         backgroundReceive = (m['backgroundReceive'] as bool?) ?? backgroundReceive;
         notifications = (m['notifications'] as bool?) ?? notifications;
+        autoCopyText = (m['autoCopyText'] as bool?) ?? autoCopyText;
+        senderFolders = (m['senderFolders'] as bool?) ?? senderFolders;
         saveDir = m['saveDir'] as String?;
       }
     } catch (_) {
@@ -59,6 +63,8 @@ class SettingsController extends ChangeNotifier {
         'stealth': stealth,
         'backgroundReceive': backgroundReceive,
         'notifications': notifications,
+        'autoCopyText': autoCopyText,
+        'senderFolders': senderFolders,
         'saveDir': saveDir,
       }));
     } catch (_) {}
