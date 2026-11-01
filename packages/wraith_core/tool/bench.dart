@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:cryptography/dart.dart';
 import 'package:path/path.dart' as p;
 import 'package:wraith_core/aead.dart';
+import 'package:wraith_core/hashing.dart';
 import 'package:wraith_core/identity.dart';
 import 'package:wraith_core/models.dart';
 import 'package:wraith_core/transfer.dart';
@@ -25,7 +26,14 @@ Future<void> main(List<String> args) async {
   final chunk = Uint8List(kChunkSize)..fillRange(0, kChunkSize, 7);
   const n = 256; // 64 MiB of AEAD work
 
-  final inline = CipherAead(DartChacha20.poly1305Aead());
+  final library = CipherAead(DartChacha20.poly1305Aead());
+  final libraryRate = await _mbps(32 * kChunkSize, () async {
+    for (var i = 0; i < 32; i++) {
+      await library.seal(key, i, chunk);
+    }
+  });
+
+  const inline = FastAead();
   final inlineRate = await _mbps(n * kChunkSize, () async {
     for (var i = 0; i < n; i++) {
       await inline.seal(key, i, chunk);
@@ -44,6 +52,13 @@ Future<void> main(List<String> args) async {
       hasher.add(chunk);
     }
     hasher.close();
+  });
+  final bg = ChunkHasher.create(1 << 30);
+  final bgRate = await _mbps(n * kChunkSize, () async {
+    for (var i = 0; i < n; i++) {
+      bg.add(chunk);
+    }
+    await bg.close();
   });
 
   // End-to-end loopback transfer through the real engine.
@@ -88,8 +103,9 @@ Future<void> main(List<String> args) async {
   pool.dispose();
 
   final cores = Platform.numberOfProcessors;
-  final line = 'cores=$cores workers=${pool.workers} | AEAD inline ${inlineRate.toStringAsFixed(0)} MB/s · '
-      'AEAD pool ${poolRate.toStringAsFixed(0)} MB/s · SHA-256 ${shaRate.toStringAsFixed(0)} MB/s · '
+  final line = 'cores=$cores workers=${pool.workers} | package:cryptography ${libraryRate.toStringAsFixed(0)} MB/s · '
+      'FastAead ${inlineRate.toStringAsFixed(0)} MB/s · pool ${poolRate.toStringAsFixed(0)} MB/s · '
+      'SHA-256 ${shaRate.toStringAsFixed(0)} MB/s (bg isolate ${bgRate.toStringAsFixed(0)}) · '
       'loopback transfer ${e2e.toStringAsFixed(0)} MB/s (${job.status.name}${job.error == null ? '' : ': ${job.error}'})';
   stdout.writeln('::notice title=Wraith benchmark ($arch)::$line');
   if (job.status != TransferStatus.done) exit(1);

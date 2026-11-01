@@ -4,7 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:wraith_core/identity.dart';
+import 'package:cryptography/cryptography.dart';
 import 'package:wraith_core/aead.dart';
+import 'package:wraith_core/chacha_poly.dart';
 import 'package:wraith_core/models.dart';
 import 'package:wraith_core/pairing.dart';
 import 'package:wraith_core/transfer.dart';
@@ -186,6 +188,50 @@ void main() {
     final f = File(p.join(t.tmp.path, 'x'))..writeAsStringSync('x');
     final job = await t.sender.send(t.peer, [FileEntry(name: 'x', size: 1, path: f.path)]);
     expect(job.status, TransferStatus.declined);
+  });
+
+  group('ChaCha20-Poly1305 (fast implementation)', () {
+    Uint8List hex(String h) {
+      final clean = h.replaceAll(RegExp(r'\s'), '');
+      return Uint8List.fromList([for (var i = 0; i < clean.length; i += 2) int.parse(clean.substring(i, i + 2), radix: 16)]);
+    }
+
+    test('RFC 8439 §2.8.2 AEAD test vector', () {
+      final key = hex('808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f');
+      final nonce = hex('070000004041424344454647');
+      final aad = hex('50515253c0c1c2c3c4c5c6c7');
+      final pt = Uint8List.fromList(
+          "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it."
+              .codeUnits);
+      final sealed = ChaCha20Poly1305.seal(key, nonce, pt, aad: aad);
+      expect(sealed.sublist(0, 16), hex('d31a8d34648e60db7b86afbc53ef7ec2'));
+      expect(sealed.sublist(sealed.length - 16), hex('1ae10b594f09e26a7e902ecbd0600691'));
+      expect(ChaCha20Poly1305.open(key, nonce, sealed, aad: aad), pt);
+    });
+
+    test('matches package:cryptography for many lengths', () async {
+      final reference = Chacha20.poly1305Aead();
+      for (final length in [0, 1, 15, 16, 17, 63, 64, 65, 255, 1000, 4097, 65536, 262144 + 3]) {
+        final key = Uint8List.fromList(List<int>.generate(32, (i) => (i * 7 + length) & 0xFF));
+        final nonce = Uint8List.fromList(List<int>.generate(12, (i) => (i * 3 + length) & 0xFF));
+        final pt = Uint8List.fromList(List<int>.generate(length, (i) => (i * 31 + 11) & 0xFF));
+        final box = await reference.encrypt(pt, secretKey: SecretKey(key), nonce: nonce);
+        final ours = ChaCha20Poly1305.seal(key, nonce, pt);
+        expect(ours.sublist(0, length), box.cipherText, reason: 'ciphertext, length $length');
+        expect(ours.sublist(length), box.mac.bytes, reason: 'tag, length $length');
+        expect(ChaCha20Poly1305.open(key, nonce, ours), pt);
+      }
+    });
+
+    test('unaligned input views work', () {
+      final key = Uint8List(32);
+      final nonce = Uint8List(12);
+      final backing = Uint8List(5000);
+      final view = Uint8List.sublistView(backing, 3, 4003);
+      final sealed = ChaCha20Poly1305.seal(key, nonce, view);
+      expect(ChaCha20Poly1305.open(key, nonce, Uint8List(10)), isNull);
+      expect(ChaCha20Poly1305.open(key, nonce, sealed), view);
+    });
   });
 
   group('AEAD engines', () {

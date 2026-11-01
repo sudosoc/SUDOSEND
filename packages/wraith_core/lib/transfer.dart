@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 
+import 'hashing.dart';
 import 'identity.dart';
 import 'models.dart';
 import 'pairing.dart';
@@ -315,7 +317,7 @@ class TransferEngine {
           if (o is int && o > 0 && o <= f.size) offset = o;
         }
 
-        final hasher = Sha256Stream();
+        final hasher = ChunkHasher.create(f.size);
         raf = await File(f.path!).open();
 
         // Resume: the receiver already holds [offset] bytes. Hash them locally
@@ -348,7 +350,7 @@ class TransferEngine {
         }
         await raf.close();
         raf = null;
-        await channel.sendJson(Frame.fileEnd, {'i': i, 'sha256': base64Encode(hasher.close())});
+        await channel.sendJson(Frame.fileEnd, {'i': i, 'sha256': base64Encode(await hasher.close())});
       }
 
       await channel.send(Frame.done);
@@ -514,7 +516,7 @@ class TransferEngine {
       final clock = Stopwatch()..start();
       var index = -1;
       var written = 0;
-      Sha256Stream? hasher;
+      ChunkHasher? hasher;
 
       while (true) {
         final msg = await channel.receive(timeout: _idleTimeout);
@@ -533,13 +535,13 @@ class TransferEngine {
           if (m['offset'] != target.offset) throw const WraithException('Protocol violation (resume offset)');
           index = i;
           written = target.offset;
-          final h = Sha256Stream();
+          final h = ChunkHasher.create(files[i].size);
           hasher = h;
           await target.dir.create(recursive: true);
           partFile = target.part;
           if (target.offset > 0) {
             await for (final chunk in target.part.openRead(0, target.offset)) {
-              h.add(chunk);
+              h.add(chunk is Uint8List ? chunk : Uint8List.fromList(chunk));
             }
             raf = await target.part.open(mode: FileMode.append);
             activeJob.resumedBytes += target.offset;
@@ -570,7 +572,7 @@ class TransferEngine {
           final expected = base64Decode(m['sha256'] as String);
           await out.close();
           raf = null;
-          if (!constantTimeEquals(h.close(), expected)) {
+          if (!constantTimeEquals(await h.close(), expected)) {
             throw WraithException('SHA-256 mismatch on "${files[index].name}" — file discarded');
           }
           final dest = await uniqueFile(targets[index].dir, targets[index].baseName);

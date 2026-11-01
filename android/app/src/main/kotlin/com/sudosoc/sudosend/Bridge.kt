@@ -1,0 +1,171 @@
+package com.sudosoc.sudosend
+
+import android.Manifest
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.wifi.WifiManager
+import android.os.Build
+import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.webkit.MimeTypeMap
+import androidx.core.content.FileProvider
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.lang.ref.WeakReference
+
+/** Native side of the `sudosend/native` method channel. */
+object Bridge {
+    private const val CHANNEL = "sudosend/native"
+
+    lateinit var app: Context
+    private var channel: MethodChannel? = null
+    private val main = Handler(Looper.getMainLooper())
+    private var multicastLock: WifiManager.MulticastLock? = null
+
+    var activity: WeakReference<Activity>? = null
+    var pendingShare: Map<String, Any?>? = null
+    private var pendingPermission: MethodChannel.Result? = null
+
+    fun emit(method: String, args: Any?) {
+        main.post { channel?.invokeMethod(method, args) }
+    }
+
+    fun attach(engine: FlutterEngine) {
+        val ch = MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL)
+        channel = ch
+        ch.setMethodCallHandler { call, result ->
+            try {
+                when (call.method) {
+                    "acquireMulticastLock" -> {
+                        if (multicastLock == null) {
+                            val wifi = app.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                            multicastLock = wifi.createMulticastLock("sudosend-discovery").apply {
+                                setReferenceCounted(false)
+                                acquire()
+                            }
+                        }
+                        result.success(true)
+                    }
+                    "releaseMulticastLock" -> {
+                        multicastLock?.let { if (it.isHeld) it.release() }
+                        multicastLock = null
+                        result.success(true)
+                    }
+                    "downloadsDir" -> {
+                        @Suppress("DEPRECATION")
+                        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                        result.success(dir.absolutePath)
+                    }
+                    "service" -> {
+                        TransferService.update(
+                            app,
+                            call.argument<String>("mode") ?: "off",
+                            call.argument<String>("title") ?: "SUDOSEND",
+                            call.argument<String>("text") ?: "",
+                            call.argument<Int>("progress") ?: -1,
+                        )
+                        result.success(true)
+                    }
+                    "notifyIncoming" -> {
+                        Notifications.incoming(
+                            app,
+                            call.argument<String>("id") ?: "",
+                            call.argument<String>("title") ?: "",
+                            call.argument<String>("text") ?: "",
+                            call.argument<String>("accept") ?: "Accept",
+                            call.argument<String>("decline") ?: "Decline",
+                        )
+                        result.success(true)
+                    }
+                    "notify" -> {
+                        Notifications.info(
+                            app,
+                            call.argument<String>("id") ?: "",
+                            call.argument<String>("title") ?: "",
+                            call.argument<String>("text") ?: "",
+                        )
+                        result.success(true)
+                    }
+                    "cancelNotification" -> {
+                        Notifications.cancel(app, call.argument<String>("id") ?: "")
+                        result.success(true)
+                    }
+                    "requestPermission" -> requestPermission(call.argument<String>("name") ?: "", result)
+                    "takeShare" -> {
+                        result.success(pendingShare)
+                        pendingShare = null
+                    }
+                    "openFile" -> result.success(openFile(call.argument<String>("path") ?: ""))
+                    "vaultSeal" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            result.success(KeystoreVault.seal(call.argument<ByteArray>("data")!!))
+                        } else {
+                            result.error("unsupported", "Android Keystore needs Android 6+", null)
+                        }
+                    }
+                    "vaultOpen" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            result.success(KeystoreVault.open(call.argument<ByteArray>("data")!!))
+                        } else {
+                            result.error("unsupported", "Android Keystore needs Android 6+", null)
+                        }
+                    }
+                    "sdkInt" -> result.success(Build.VERSION.SDK_INT)
+                    else -> result.notImplemented()
+                }
+            } catch (e: Exception) {
+                result.error("native", e.message, null)
+            }
+        }
+    }
+
+    private fun requestPermission(name: String, result: MethodChannel.Result) {
+        val permission = when (name) {
+            "notifications" -> if (Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null
+            "storage" -> if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) Manifest.permission.WRITE_EXTERNAL_STORAGE else null
+            else -> null
+        }
+        if (permission == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            result.success(true)
+            return
+        }
+        if (app.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
+            result.success(true)
+            return
+        }
+        val act = activity?.get()
+        if (act == null || pendingPermission != null) {
+            result.success(false)
+            return
+        }
+        pendingPermission = result
+        act.requestPermissions(arrayOf(permission), 4711)
+    }
+
+    fun onPermissionResult(granted: Boolean) {
+        pendingPermission?.success(granted)
+        pendingPermission = null
+    }
+
+    private fun openFile(path: String): Boolean {
+        val file = File(path)
+        if (!file.exists()) return false
+        val uri = FileProvider.getUriForFile(app, "${app.packageName}.files", file)
+        val ext = MimeTypeMap.getFileExtensionFromUrl(file.name).lowercase()
+        val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "*/*"
+        val intent = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, mime)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try {
+            app.startActivity(Intent.createChooser(intent, file.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (e: ActivityNotFoundException) {
+            false
+        }
+    }
+}

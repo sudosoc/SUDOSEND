@@ -7,9 +7,10 @@
 //  * [CipherAead]   — in the calling isolate, through package:cryptography.
 //                     With cryptography_flutter enabled this is the OS's
 //                     native implementation (Android, iOS, macOS).
-//  * [IsolateAead]  — a pool of worker isolates running the pure-Dart cipher,
-//                     so large frames are processed on several CPU cores in
-//                     parallel (Windows, Linux, CLI).
+//  * [FastAead]     — the optimised pure-Dart RFC 8439 implementation in
+//                     chacha_poly.dart, in the calling isolate.
+//  * [IsolateAead]  — a pool of worker isolates running [FastAead], so large
+//                     frames are processed on several CPU cores in parallel.
 
 import 'dart:async';
 import 'dart:io';
@@ -18,8 +19,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
-import 'package:cryptography/dart.dart';
-
+import 'chacha_poly.dart';
 import 'models.dart';
 
 const int kTagLength = 16;
@@ -47,6 +47,19 @@ abstract class AeadEngine {
 }
 
 const _tampered = WraithException('Integrity check failed — traffic was tampered with');
+
+/// Optimised pure-Dart ChaCha20-Poly1305 in the current isolate.
+class FastAead implements AeadEngine {
+  const FastAead();
+
+  @override
+  Future<Uint8List> seal(Uint8List key, int counter, Uint8List plaintext) async =>
+      ChaCha20Poly1305.seal(key, wraithNonce(counter), plaintext);
+
+  @override
+  Future<Uint8List> open(Uint8List key, int counter, Uint8List sealed) async =>
+      ChaCha20Poly1305.open(key, wraithNonce(counter), sealed) ?? (throw _tampered);
+}
 
 /// Seals in the current isolate with any package:cryptography cipher.
 class CipherAead implements AeadEngine {
@@ -91,7 +104,7 @@ class IsolateAead implements AeadEngine {
   static const int inlineThreshold = 16 * 1024;
 
   final int _size;
-  final CipherAead _inline = CipherAead(DartChacha20.poly1305Aead());
+  final FastAead _inline = const FastAead();
   final List<_Worker> _workers = [];
   Future<void>? _starting;
   int _next = 0;
@@ -185,7 +198,7 @@ class _Worker {
 void _aeadWorkerMain(SendPort out) {
   final inbox = ReceivePort();
   out.send(inbox.sendPort);
-  final cipher = CipherAead(DartChacha20.poly1305Aead());
+  const cipher = FastAead();
   inbox.listen((dynamic msg) async {
     final m = msg as List<dynamic>;
     final id = m[0] as int;
