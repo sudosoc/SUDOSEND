@@ -879,9 +879,8 @@ class AppController extends ChangeNotifier {
       await root.create(recursive: true);
       final readme = File(p.join(root.path, 'README.txt'));
       if (!await readme.exists()) {
-        await readme.writeAsString('Drop files or folders into a device's folder here and SUDOSEND sends them '
-            'automatically when that device is online. Delivered items move to its "Sent" folder.
-');
+        await readme.writeAsString("Drop files or folders into a device's folder here and SUDOSEND sends them "
+            'automatically when that device is online. Delivered items move to its "Sent" folder.\n');
       }
       for (final device in trust.all) {
         final dir = Directory(p.join(root.path, sanitizeFileName(device.name)));
