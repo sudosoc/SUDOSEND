@@ -17,9 +17,10 @@ import 'package:wraith_core/receipt.dart';
 import 'package:wraith_core/transfer.dart';
 import 'package:wraith_core/util.dart';
 import 'package:wraith_core/vault_windows.dart';
+import 'package:wraith_core/web_share.dart';
 import 'package:wraith_core/wraith.dart';
 
-const _version = '0.4.0';
+const _version = '0.5.0';
 
 const _usage = '''
 SUDOSEND $_version — secure local file sharing (Wraith Protocol)
@@ -31,6 +32,9 @@ Usage:
   sudosend devices [--wait SECONDS]
   sudosend id [--name NEW_NAME]
   sudosend verify <receipt.json>
+  sudosend web [file|folder]... [--text T] [--upload] [--dir PATH]
+               share with any device that has a browser (no app needed);
+               --upload also lets visitors send files to you
 
 Pipes:
   tar c dir | sudosend send - --name dir.tar --to laptop   (send stdin)
@@ -154,6 +158,8 @@ Future<int> _run(_Args args) async {
       return _send(identity, trust, rest, args);
     case 'verify':
       return _verify(rest);
+    case 'web':
+      return _web(identity, rest, args);
     case 'receive':
       return _receive(identity, trust, args);
     default:
@@ -337,6 +343,52 @@ Future<void> _saveReceipt(TransferJob job, String? dirPath) async {
   final file = File(p.join(dir.path, 'receipt-$stamp-${job.peerName.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}.json'));
   await file.writeAsString(receipt.toPrettyJson());
   stdout.writeln(_dim('  receipt → ${file.path}'));
+}
+
+Future<int> _web(DeviceIdentity identity, List<String> paths, _Args args) async {
+  final files = paths.isEmpty ? <FileEntry>[] : await _collect(paths, stdinName: args.options['name']);
+  final upload = args.flags.contains('upload');
+  final text = args.options['text'];
+  if (files.isEmpty && text == null && !upload) {
+    stderr.writeln(_red('web needs files, --text or --upload'));
+    return 2;
+  }
+  final dir = Directory(args.options['dir'] ?? _defaultInbox().path).absolute;
+  final done = Completer<int>();
+  final share = WebShare(
+    files: files,
+    text: text,
+    allowUpload: upload,
+    deviceName: identity.name,
+    saveDir: () async => dir,
+    onEvent: (e) {
+      final what = switch (e.kind) {
+        'download' => '⇡ ${e.address} downloaded ${e.name}',
+        'upload' => '⇣ ${e.address} uploaded ${e.name} (${formatBytes(e.size)}) → ${dir.path}',
+        _ => '· ${e.address} opened the page',
+      };
+      stdout.writeln(e.kind == 'visit' ? _dim(what) : _green(what));
+    },
+    onStopped: () {
+      if (!done.isCompleted) done.complete(0);
+    },
+  );
+  await share.start();
+  final urls = share.urls(await _localAddresses());
+  if (urls.isEmpty) {
+    stderr.writeln(_red('no network address found'));
+    await share.stop();
+    return 1;
+  }
+  stdout.write(renderQr(urls.first));
+  for (final u in urls) {
+    stdout.writeln(_cyan(u));
+  }
+  stdout.writeln(_dim('plain HTTP on your network — not end-to-end encrypted · expires in 30 min · Ctrl+C to stop'));
+  final sub = ProcessSignal.sigint.watch().listen((_) => share.stop());
+  final code = await done.future;
+  await sub.cancel();
+  return code;
 }
 
 Future<int> _verify(List<String> paths) async {

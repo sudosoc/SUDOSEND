@@ -60,24 +60,27 @@ class Glass extends StatelessWidget {
       );
     }
     final g = glow;
-    final reduced = context.reducedEffects;
+    final level = context.effects;
+    final live = level == 'full';
+    final lite = level == 'lite';
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: r,
-        // Reduced effects: an opaque panel instead of a live blur.
-        color: reduced ? const Color(0xE6101631) : null,
-        boxShadow: g == null || reduced
+        // Without a live blur, a deep translucent navy gives the frosted look
+        // at a fraction of the GPU cost.
+        color: live ? null : (lite ? const Color(0xF0101631) : const Color(0xB30E1530)),
+        boxShadow: g == null || lite
             ? const []
-            : [BoxShadow(color: g.withValues(alpha: 0.28), blurRadius: 40, spreadRadius: -10)],
+            : [BoxShadow(color: g.withValues(alpha: live ? 0.28 : 0.20), blurRadius: 40, spreadRadius: -10)],
       ),
       child: ClipRRect(
         borderRadius: r,
-        child: reduced
-            ? surface
-            : BackdropFilter(
+        child: live
+            ? BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
                 child: surface,
-              ),
+              )
+            : surface,
       ),
     );
   }

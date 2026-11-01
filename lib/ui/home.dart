@@ -97,7 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         _Header(controller: c, compact: constraints.maxWidth < 420),
                         Expanded(
                           child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 260),
+                            duration: context.reducedEffects ? Duration.zero : const Duration(milliseconds: 220),
                             switchInCurve: Curves.easeOutCubic,
                             transitionBuilder: (child, anim) => FadeTransition(
                               opacity: anim,

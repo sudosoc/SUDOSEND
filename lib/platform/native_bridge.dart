@@ -32,6 +32,9 @@ class NativeBridge {
 
   final StreamController<void> _shares = StreamController<void>.broadcast();
   final StreamController<NotificationAction> _actions = StreamController<NotificationAction>.broadcast();
+  final StreamController<void> _hotspotStopped = StreamController<void>.broadcast();
+
+  Stream<void> get hotspotStopped => _hotspotStopped.stream;
 
   /// Fires when another app shared files/text to SUDOSEND; fetch with [takeShare].
   Stream<void> get shares => _shares.stream;
@@ -43,6 +46,8 @@ class NativeBridge {
     switch (call.method) {
       case 'onShare':
         _shares.add(null);
+      case 'onHotspotStopped':
+        _hotspotStopped.add(null);
       case 'onNotificationAction':
         final m = Map<String, dynamic>.from(call.arguments as Map);
         _actions.add(NotificationAction(m['id'] as String, m['action'] as String));
@@ -80,6 +85,24 @@ class NativeBridge {
 
   Future<bool> openFile(String path) async => (await _invoke<bool>('openFile', {'path': path})) ?? false;
   Future<bool> openUrl(String url) async => (await _invoke<bool>('openUrl', {'url': url})) ?? false;
+
+  Future<bool> isLowRam() async => (await _invoke<bool>('isLowRam')) ?? false;
+
+  /// Starts a local-only hotspot. Returns (ssid, password); throws a
+  /// user-readable message on failure.
+  Future<({String ssid, String password})> startHotspot() async {
+    if (!available) throw 'Hotspot mode is available on Android';
+    try {
+      final m = await _channel.invokeMethod<Map<Object?, Object?>>('startHotspot');
+      final ssid = m?['ssid'] as String?;
+      if (ssid == null) throw 'Hotspot did not report its name';
+      return (ssid: ssid, password: (m?['password'] as String?) ?? '');
+    } on PlatformException catch (e) {
+      throw e.message ?? e.code;
+    }
+  }
+
+  Future<void> stopHotspot() => _invoke<bool>('stopHotspot');
 
   Future<SharedPayload?> takeShare() async {
     final raw = await _invoke<Map<Object?, Object?>>('takeShare');

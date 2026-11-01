@@ -7,6 +7,7 @@ import 'package:wraith_core/util.dart';
 import 'package:wraith_core/wraith.dart' show kProtocol;
 
 import '../app/scope.dart';
+import '../platform/desktop.dart';
 import '../state/app_controller.dart';
 import 'background.dart';
 import 'glass.dart';
@@ -149,6 +150,15 @@ class SettingsPage extends StatelessWidget {
               subtitle: context.tr('s_sender_folders_sub'),
               value: s.senderFolders,
               onChanged: (v) => s.update((x) => x.senderFolders = v),
+            ),
+            divider,
+            _Switch(
+              icon: Icons.sync_rounded,
+              color: AppColors.violet,
+              title: context.tr('s_clip_sync'),
+              subtitle: context.tr(isDesktop ? 's_clip_sync_sub' : 's_clip_sync_sub_mobile'),
+              value: s.clipboardSync,
+              onChanged: (v) => s.update((x) => x.clipboardSync = v),
             ),
             divider,
             _Switch(
@@ -309,14 +319,41 @@ class SettingsPage extends StatelessWidget {
               onSelectionChanged: (v) => s.update((x) => x.language = v.first),
             ),
             divider,
-            _Switch(
-              icon: Icons.blur_off_rounded,
-              color: AppColors.amber,
-              title: context.tr('s_effects'),
-              subtitle: context.tr('s_effects_sub'),
-              value: s.reduceEffects,
-              onChanged: (v) => s.update((x) => x.reduceEffects = v),
+            Row(
+              children: [
+                const IconBadge(icon: Icons.auto_awesome_rounded, color: AppColors.amber, size: 38),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(context.tr('s_effects'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                      Text(context.tr('s_effects_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                    ],
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 12),
+            SegmentedButton<String>(
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                foregroundColor: WidgetStateProperty.resolveWith(
+                    (st) => st.contains(WidgetState.selected) ? AppColors.ink : AppColors.text),
+                backgroundColor: WidgetStateProperty.resolveWith(
+                    (st) => st.contains(WidgetState.selected) ? AppColors.amber : Colors.white.withValues(alpha: 0.04)),
+                side: WidgetStatePropertyAll(BorderSide(color: Colors.white.withValues(alpha: 0.14))),
+              ),
+              segments: [
+                ButtonSegment(value: 'lite', label: Text(context.tr('fx_lite'))),
+                ButtonSegment(value: 'balanced', label: Text(context.tr('fx_balanced'))),
+                ButtonSegment(value: 'full', label: Text(context.tr('fx_full'))),
+              ],
+              selected: {s.effects},
+              onSelectionChanged: (v) => s.update((x) => x.effects = v.first),
+            ),
+            const SizedBox(height: 6),
+            Text(context.tr('fx_${s.effects}_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
           ],
         ),
       ),

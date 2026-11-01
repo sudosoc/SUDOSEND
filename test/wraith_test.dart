@@ -10,6 +10,7 @@ import 'package:wraith_core/chacha_poly.dart';
 import 'package:wraith_core/models.dart';
 import 'package:wraith_core/pairing.dart';
 import 'package:wraith_core/receipt.dart';
+import 'package:wraith_core/web_share.dart';
 import 'package:wraith_core/transfer.dart';
 import 'package:wraith_core/util.dart';
 
@@ -253,6 +254,66 @@ void main() {
     );
     expect(job.status, TransferStatus.done);
     expect(File(p.join(t.inbox.path, 'from-${t.alice.fingerprint.substring(0, 4)}', 'x.txt')).readAsStringSync(), 'hi');
+  });
+
+  test('browser share: page, download, upload, wrong token', () async {
+    final tmp = await Directory.systemTemp.createTemp('sudosend_web_');
+    addTearDown(() => tmp.delete(recursive: true));
+    final inbox = await Directory(p.join(tmp.path, 'inbox')).create();
+    final src = File(p.join(tmp.path, 'report.pdf'))..writeAsBytesSync(List<int>.generate(5000, (i) => i & 0xFF));
+    final events = <WebShareEvent>[];
+    final share = WebShare(
+      files: [FileEntry(name: 'report.pdf', size: 5000, path: src.path)],
+      text: 'hello <b>',
+      allowUpload: true,
+      saveDir: () async => inbox,
+      onEvent: events.add,
+      basePort: 0,
+    );
+    await share.start();
+    addTearDown(share.stop);
+    final base = share.urls([InternetAddress.loopbackIPv4]).single;
+    final client = HttpClient();
+    addTearDown(client.close);
+
+    Future<(int, List<int>)> get(String url) async {
+      final res = await (await client.getUrl(Uri.parse(url))).close();
+      return (res.statusCode, await res.fold<List<int>>(<int>[], (a, b) => a..addAll(b)));
+    }
+
+    final (pageStatus, page) = await get(base);
+    expect(pageStatus, 200);
+    final html = String.fromCharCodes(page);
+    expect(html, contains('report.pdf'));
+    expect(html, isNot(contains('hello <b>')), reason: 'text must be HTML-escaped');
+
+    final (fileStatus, bytes) = await get('${base}f/0');
+    expect(fileStatus, 200);
+    expect(bytes, src.readAsBytesSync());
+
+    final (badStatus, _) = await get(base.replaceFirst(share.token, newPairingToken()));
+    expect(badStatus, 404);
+
+    final req = await client.postUrl(Uri.parse('${base}u?name=${Uri.encodeComponent('../../evil.txt')}'));
+    req.add('uploaded!'.codeUnits);
+    final res = await req.close();
+    await res.drain<void>();
+    expect(res.statusCode, 200);
+    expect(File(p.join(inbox.path, 'evil.txt')).readAsStringSync(), 'uploaded!');
+    expect(File(p.join(tmp.path, 'evil.txt')).existsSync(), isFalse);
+    expect(events.map((e) => e.kind), containsAll(['visit', 'download', 'upload']));
+  });
+
+  test('clipboard pushes are flagged on both sides', () async {
+    IncomingRequest? seen;
+    final t = await _pair(onIncoming: (r) {
+      seen = r;
+      r.respond(true);
+    });
+    final job = await t.sender.send(t.peer, const [], text: 'copied!', clipboard: true);
+    expect(job.status, TransferStatus.done);
+    expect(job.clipboard, isTrue);
+    expect(seen!.clipboard, isTrue);
   });
 
   group('ChaCha20-Poly1305 (fast implementation)', () {

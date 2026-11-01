@@ -99,7 +99,9 @@ class CipherAead implements AeadEngine {
 /// Spreads sealing/opening of large frames over a pool of worker isolates.
 /// Small frames are handled inline (message passing would cost more).
 class IsolateAead implements AeadEngine {
-  IsolateAead({int? workers}) : _size = workers ?? max(1, min(4, Platform.numberOfProcessors - 1));
+  // Leave two cores for the UI and raster threads (and the hash isolate), so
+  // a busy transfer never makes the interface stutter.
+  IsolateAead({int? workers}) : _size = workers ?? max(1, min(4, Platform.numberOfProcessors - 2));
 
   static const int inlineThreshold = 16 * 1024;
 

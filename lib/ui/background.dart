@@ -22,8 +22,9 @@ class _AnimatedBackgroundState extends State<AnimatedBackground>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Reduced effects: a still backdrop (no per-frame repaints).
-    if (context.reducedEffects) {
+    // Only "full" effects animate the backdrop: a moving backdrop forces
+    // every frame to be redrawn (and every blur to be recomputed).
+    if (!context.fullEffects) {
       _controller.stop();
     } else if (!_controller.isAnimating) {
       _controller.repeat();

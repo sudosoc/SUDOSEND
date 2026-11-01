@@ -37,6 +37,7 @@ class IncomingRequest {
     required this.files,
     this.text,
     this.paired = false,
+    this.clipboard = false,
   })  : id = '${DateTime.now().microsecondsSinceEpoch}-${_seq++}',
         totalBytes = files.fold<int>(0, (a, f) => a + f.size);
 
@@ -55,6 +56,9 @@ class IncomingRequest {
 
   /// The sender presented a valid one-time QR pairing token.
   final bool paired;
+
+  /// A universal-clipboard push (text only).
+  final bool clipboard;
 
   final Completer<IncomingDecision> _completer = Completer<IncomingDecision>();
   Future<IncomingDecision> get decision => _completer.future;
@@ -255,7 +259,8 @@ class TransferEngine {
   /// Sends [files] (or a [text] message when [files] is empty) to [peer].
   /// [pairToken] comes from a scanned QR code / pairing link.
   /// Completes when the transfer has finished, successfully or not.
-  Future<TransferJob> send(Peer peer, List<FileEntry> files, {String? text, String? pairToken}) async {
+  Future<TransferJob> send(Peer peer, List<FileEntry> files,
+      {String? text, String? pairToken, bool clipboard = false}) async {
     if (text != null && text.length > kMaxTextLength) {
       throw const WraithException('Text is too long (64 KB max)');
     }
@@ -266,7 +271,7 @@ class TransferEngine {
       files: files,
       text: text,
       status: TransferStatus.connecting,
-    );
+    )..clipboard = clipboard && text != null;
     onJob(job);
 
     Socket? socket;
@@ -304,6 +309,7 @@ class TransferEngine {
         'files': [for (final f in files) {'name': f.name, 'size': f.size}],
         if (text != null) 'text': text,
         if (pairToken != null) 'pair': pairToken,
+        if (clipboard && text != null) 'clip': true,
       });
 
       final reply = await channel.receive(timeout: _approvalTimeout + const Duration(seconds: 10));
@@ -465,6 +471,7 @@ class TransferEngine {
         files: files,
         text: text,
         paired: paired,
+        clipboard: offer['clip'] == true && text != null && rawFiles.isEmpty,
       );
 
       if (paired || (autoAccept?.call(request) ?? false)) {
@@ -538,7 +545,8 @@ class TransferEngine {
       )
         ..peerFingerprint = hs.peerFingerprint
         ..peerTrusted = trusted || decision.trust || paired
-        ..sas = hs.sas;
+        ..sas = hs.sas
+        ..clipboard = request.clipboard;
       job = activeJob;
       onJob(activeJob);
       await channel.sendJson(Frame.accept, {'resume': resume});

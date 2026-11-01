@@ -17,6 +17,7 @@ import 'package:wraith_core/receipt.dart';
 import 'package:wraith_core/transfer.dart';
 import 'package:wraith_core/util.dart';
 import 'package:wraith_core/vault_windows.dart';
+import 'package:wraith_core/web_share.dart';
 import 'package:wraith_core/wraith.dart';
 
 import '../app/strings.dart';
@@ -108,7 +109,9 @@ class AppController extends ChangeNotifier {
         saveDirFor: (name, fp) async => settings.senderFolders
             ? Directory(p.join(saveDir!.path, sanitizeFileName(name)))
             : saveDir!,
-        autoAccept: (r) => settings.autoAcceptTrusted && r.trusted,
+        autoAccept: (r) => r.clipboard
+            ? (r.trusted && settings.clipboardSync)
+            : (settings.autoAcceptTrusted && r.trusted),
         onIncoming: _onIncoming,
         onJob: _addJob,
         onRejected: (address, reason) {
@@ -125,15 +128,28 @@ class AppController extends ChangeNotifier {
 
       _lifecycle = AppLifecycleListener(onStateChange: (state) {
         foreground = state == AppLifecycleState.resumed;
-        if (foreground) unawaited(_refreshAddresses().then((_) => notifyListeners()));
+        if (foreground) {
+          unawaited(_refreshAddresses().then((_) => notifyListeners()));
+          // Mobile OSes only allow clipboard reads in the foreground.
+          if (!isDesktop && settings.clipboardSync) unawaited(pollClipboard());
+        }
       });
       foreground = WidgetsBinding.instance.lifecycleState == null ||
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
 
       _subs.add(_native.shares.listen((_) => _importShare()));
       _subs.add(_native.notificationActions.listen(_onNotificationAction));
+      _subs.add(_native.hotspotStopped.listen((_) {
+        hotspot = null;
+        notifyListeners();
+      }));
+      settings.addListener(_applySettings);
       if (isDesktop) unawaited(SingleInstance.listen((args) => addPaths(args)));
 
+      if (Platform.isAndroid && !settings.effectsChosen && await _native.isLowRam()) {
+        settings.effects = 'lite';
+      }
+      _applySettings();
       ready = true;
       notifyListeners();
 
@@ -159,6 +175,12 @@ class AppController extends ChangeNotifier {
   // ─────────────────────────── Incoming ───────────────────────────
 
   void _onIncoming(IncomingRequest r) {
+    // Clipboard pushes never prompt: accepted silently from trusted devices
+    // when sync is on (see autoAccept), declined otherwise.
+    if (r.clipboard) {
+      r.respond(false);
+      return;
+    }
     _pendingRequests[r.id] = r;
     tab = 1;
     notifyListeners();
@@ -197,6 +219,22 @@ class AppController extends ChangeNotifier {
   // ─────────────────────────── Jobs ───────────────────────────
 
   void _addJob(TransferJob job) {
+    if (job.clipboard) {
+      // Silent: not shown in the list or kept in history.
+      var finished = false;
+      job.changes.listen((_) {
+        if (finished || job.isActive) return;
+        finished = true;
+        if (job.direction == TransferDirection.incoming && job.status == TransferStatus.done) {
+          _lastRemoteClip = job.text;
+          _lastClip = job.text;
+          unawaited(Clipboard.setData(ClipboardData(text: job.text!)));
+          if (foreground) _messages.add(t('clip_received', {'name': job.peerName}));
+        }
+        job.dispose();
+      });
+      return;
+    }
     jobs.insert(0, job);
     var wasActive = job.isActive;
     _jobSubs[job.id] = job.changes.listen((_) {
@@ -304,7 +342,13 @@ class AppController extends ChangeNotifier {
     String mode;
     String text;
     var progress = -1;
-    if (active.isNotEmpty) {
+    if (active.isEmpty && (webShare?.running ?? false)) {
+      mode = 'active';
+      text = t('svc_web');
+    } else if (active.isEmpty && hotspot != null) {
+      mode = 'active';
+      text = t('svc_hotspot', {'ssid': hotspot!.ssid});
+    } else if (active.isNotEmpty) {
       mode = 'active';
       final total = active.fold<int>(0, (a, j) => a + j.totalBytes);
       final done = active.fold<int>(0, (a, j) => a + j.doneBytes);
@@ -534,6 +578,160 @@ class AppController extends ChangeNotifier {
 
   // ─────────────────────────── Settings ───────────────────────────
 
+  // ─────────────────────────── Effects & clipboard ───────────────────────────
+
+  Timer? _clipTimer;
+  String? _lastClip;
+  String? _lastRemoteClip;
+
+  void _applySettings() {
+    TransferJob.progressIntervalMs = settings.reduceEffects ? 300 : 150;
+    final wantPolling = settings.clipboardSync && isDesktop;
+    if (wantPolling && _clipTimer == null) {
+      unawaited(Clipboard.getData(Clipboard.kTextPlain).then((d) => _lastClip = d?.text));
+      _clipTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) => unawaited(pollClipboard()));
+    } else if (!wantPolling && _clipTimer != null) {
+      _clipTimer!.cancel();
+      _clipTimer = null;
+    }
+  }
+
+  List<Peer> get trustedOnline => peers.where((p) => trust.isTrusted(p.id)).toList();
+
+  /// Pushes the clipboard to trusted devices if it changed. Returns how many
+  /// devices it was sent to. [force] sends even if unchanged (manual button).
+  Future<int> pollClipboard({bool force = false}) async {
+    if (!ready) return 0;
+    String? text;
+    try {
+      text = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+    } catch (_) {
+      return 0;
+    }
+    if (text == null || text.trim().isEmpty || text.length > kMaxTextLength) return 0;
+    if (!force && (text == _lastClip || text == _lastRemoteClip)) {
+      _lastClip = text;
+      return 0;
+    }
+    _lastClip = text;
+    final targets = trustedOnline;
+    for (final peer in targets) {
+      unawaited(_engine.send(peer, const [], text: text, clipboard: true));
+    }
+    return targets.length;
+  }
+
+  // ─────────────────────────── Browser share ───────────────────────────
+
+  WebShare? webShare;
+  final List<WebShareEvent> webEvents = [];
+
+  List<String> get webUrls => webShare == null ? const [] : webShare!.urls(localAddresses);
+
+  /// Shares the current selection (if [withSelection]) with browsers, and
+  /// optionally lets browsers upload files to this device.
+  Future<String?> startWebShare({required bool upload, required bool withSelection}) async {
+    await stopWebShare();
+    final files = withSelection ? List<FileEntry>.of(selected) : <FileEntry>[];
+    final text = withSelection ? selectedText : null;
+    if (files.isEmpty && text == null && !upload) return t('err_pick_first');
+    webEvents.clear();
+    final share = WebShare(
+      files: files,
+      text: text,
+      allowUpload: upload,
+      deviceName: identity.name,
+      saveDir: () async => settings.senderFolders ? Directory(p.join(saveDir!.path, 'Browser')) : saveDir!,
+      onEvent: _onWebEvent,
+      onStopped: () {
+        webShare = null;
+        _lastService = '';
+        _updateService();
+        notifyListeners();
+      },
+    );
+    try {
+      await share.start();
+    } catch (e) {
+      return describeError(e);
+    }
+    webShare = share;
+    _lastService = '';
+    _updateService();
+    notifyListeners();
+    return null;
+  }
+
+  void _onWebEvent(WebShareEvent e) {
+    webEvents.insert(0, e);
+    if (webEvents.length > 200) webEvents.removeLast();
+    if (e.kind == 'upload') {
+      unawaited(history.add(HistoryEntry(
+        id: 'web-${e.at.microsecondsSinceEpoch}',
+        direction: TransferDirection.incoming,
+        peerName: 'Browser ${e.address}',
+        peerPlatform: 'web',
+        fileCount: 1,
+        totalBytes: e.size,
+        status: TransferStatus.done,
+        isText: false,
+        at: e.at,
+        firstName: e.name,
+        savedPaths: [if (e.path != null) e.path!],
+      )));
+      if (settings.notifications && !foreground) {
+        final title = t('notif_received', {'n': 1, 'name': 'Browser ${e.address}'});
+        if (Platform.isAndroid) {
+          unawaited(_native.notify('web-${e.at.microsecondsSinceEpoch}', title, e.name));
+        } else {
+          unawaited(desktopNotify(title, e.name));
+        }
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> stopWebShare() async {
+    final share = webShare;
+    webShare = null;
+    await share?.stop();
+    notifyListeners();
+  }
+
+  // ─────────────────────────── Hotspot (Android) ───────────────────────────
+
+  ({String ssid, String password})? hotspot;
+
+  /// Returns an error message, or null when the hotspot is up.
+  Future<String?> startHotspot() async {
+    if (!await _native.requestPermission('hotspot')) return t('err_hotspot_permission');
+    try {
+      hotspot = await _native.startHotspot();
+    } catch (e) {
+      return '$e';
+    }
+    _lastService = '';
+    _updateService();
+    notifyListeners();
+    // The hotspot interface needs a moment to get its address.
+    for (final delay in const [1, 3, 6]) {
+      unawaited(Future<void>.delayed(Duration(seconds: delay), () async {
+        await _refreshAddresses();
+        await _discovery.rescan();
+        notifyListeners();
+      }));
+    }
+    return null;
+  }
+
+  Future<void> stopHotspot() async {
+    await _native.stopHotspot();
+    hotspot = null;
+    _lastService = '';
+    _updateService();
+    notifyListeners();
+  }
+
   Future<void> setStealth(bool value) async {
     await settings.update((s) => s.stealth = value);
     _discovery.stealth = value;
@@ -644,6 +842,9 @@ class AppController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _clipTimer?.cancel();
+    unawaited(webShare?.stop());
+    if (hotspot != null) unawaited(_native.stopHotspot());
     if (ready) {
       unawaited(_discovery.stop());
       unawaited(_engine.stop());

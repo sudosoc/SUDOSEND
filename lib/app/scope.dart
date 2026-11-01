@@ -3,7 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../state/settings.dart';
 import 'strings.dart';
 
-const String kAppVersion = '0.4.0';
+const String kAppVersion = '0.5.0';
 
 /// Makes settings (language, effects) available to every widget and rebuilds
 /// dependents when they change.
@@ -22,7 +22,10 @@ extension AppContext on BuildContext {
   String tr(String key, [Map<String, Object?> args = const {}]) =>
       trLang(AppScope.maybeOf(this)?.lang ?? 'en', key, args);
 
-  bool get reducedEffects => AppScope.maybeOf(this)?.reduceEffects ?? false;
+  /// full | balanced | lite
+  String get effects => AppScope.maybeOf(this)?.effects ?? 'balanced';
+  bool get reducedEffects => effects == 'lite';
+  bool get fullEffects => effects == 'full';
 }
 
 String trLang(String lang, String key, Map<String, Object?> args) => tr(lang, key, args);

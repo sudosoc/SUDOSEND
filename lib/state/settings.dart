@@ -11,7 +11,13 @@ class SettingsController extends ChangeNotifier {
   File? _file;
 
   String language = 'system'; // system | en | ar
-  bool reduceEffects = Abi.current() == Abi.linuxArm64; // Raspberry Pi & co.
+  /// Visual effects: full (live blur + animated backdrop), balanced (glass
+  /// look without live blur — default), lite (no shadows/animations).
+  String effects = Abi.current() == Abi.linuxArm64 ? 'lite' : 'balanced';
+  bool _effectsSaved = false;
+  bool get effectsChosen => _effectsSaved;
+  bool get reduceEffects => effects == 'lite';
+  bool clipboardSync = false;
   bool autoAcceptTrusted = false;
   bool stealth = false;
   bool backgroundReceive = false;
@@ -34,7 +40,15 @@ class SettingsController extends ChangeNotifier {
       if (await _file!.exists()) {
         final m = jsonDecode(await _file!.readAsString()) as Map<String, dynamic>;
         language = (m['language'] as String?) ?? language;
-        reduceEffects = (m['reduceEffects'] as bool?) ?? reduceEffects;
+        final savedEffects = m['effects'] as String?;
+        if (savedEffects == 'full' || savedEffects == 'balanced' || savedEffects == 'lite') {
+          effects = savedEffects!;
+          _effectsSaved = true;
+        } else if (m['reduceEffects'] == true) {
+          effects = 'lite';
+          _effectsSaved = true;
+        }
+        clipboardSync = (m['clipboardSync'] as bool?) ?? clipboardSync;
         autoAcceptTrusted = (m['autoAcceptTrusted'] as bool?) ?? autoAcceptTrusted;
         stealth = (m['stealth'] as bool?) ?? stealth;
         backgroundReceive = (m['backgroundReceive'] as bool?) ?? backgroundReceive;
@@ -50,7 +64,9 @@ class SettingsController extends ChangeNotifier {
   }
 
   Future<void> update(void Function(SettingsController s) change) async {
+    final before = effects;
     change(this);
+    if (effects != before) _effectsSaved = true;
     notifyListeners();
     final file = _file;
     if (file == null) return;
@@ -58,7 +74,8 @@ class SettingsController extends ChangeNotifier {
       await file.parent.create(recursive: true);
       await file.writeAsString(jsonEncode({
         'language': language,
-        'reduceEffects': reduceEffects,
+        'effects': effects,
+        'clipboardSync': clipboardSync,
         'autoAcceptTrusted': autoAcceptTrusted,
         'stealth': stealth,
         'backgroundReceive': backgroundReceive,

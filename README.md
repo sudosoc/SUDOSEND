@@ -48,6 +48,13 @@
 - **Notifications** with Accept / Decline right from the notification
 - **History** of every transfer, with *Open* and *Show in folder*
 
+**Paid elsewhere — free here**
+- 📋 **Universal clipboard** — copy on one device, paste on your others (Pushbullet charges for this)
+- 🌐 **Share with any browser** — send to *and receive from* a device that doesn't have the app,
+  even an iPhone: it scans a QR and gets a download/upload page (Send Anywhere / Feem-style)
+- 📶 **No Wi-Fi? Make one** — Android creates a private hotspot; the other phone joins by scanning a QR
+- 🧾 Signed delivery receipts, multi-device send, resume, no file-size limits, no ads, no account
+
 **Only in SUDOSEND**
 - **Signed proof of delivery** — every transfer ends with a receipt the *receiver's device key* signs:
   who sent what to whom, when, and the SHA-256 of every file. Export it and anyone can check it
@@ -69,7 +76,8 @@
 
 **App**
 - **Arabic and English**, full right-to-left layout
-- **Glassmorphism UI** with a *reduce effects* switch for older phones and Raspberry Pi
+- **Glassmorphism UI** with three effect levels — *Balanced* (default) keeps the glass look
+  without live blur, *Lite* is automatic on Raspberry Pi and low-end phones
 - **CLI** for Linux, Windows and macOS — prints a pairing QR right in the terminal
 
 ---
@@ -223,6 +231,8 @@ sudosend id --name Seif-Pi                  # show/rename this device
 tar c dir | sudosend send - --name dir.tar --to pi   # send from a pipe (stdin)
 sudosend receive --receipts ~/receipts      # keep a signed receipt for every transfer
 sudosend verify ~/receipts/receipt-*.json   # check receipts offline
+sudosend web report.pdf                     # QR + link: any browser can download it
+sudosend web --upload                       # let browsers send files to you
 sudosend --help
 ```
 
@@ -244,7 +254,9 @@ Standalone binaries (`sudosend-cli-*`) are on the Releases page for servers with
 | *Fingerprint mismatch* error | Something on the network answered pretending to be that device. The transfer was blocked on purpose. |
 | Android stops mid-transfer | Allow notifications for SUDOSEND (the transfer runs as a foreground service), and on Xiaomi/Huawei/Samsung set battery usage to *Unrestricted*. |
 | Android: "App not installed" when updating | The new APK is signed with a different key than the installed one (only happens once, when moving to release-signed builds). Uninstall, then install. |
-| Laggy UI on a Raspberry Pi or old phone | Settings → **Reduce effects**. |
+| Laggy UI on a Raspberry Pi or old phone | Settings → Visual effects → **Lite** (automatic on Raspberry Pi and low-RAM phones). |
+| Browser link doesn't open on the other device | Both must be on the same Wi-Fi/hotspot; allow TCP 47840–47849 in your firewall. |
+| Hotspot won't start (Android) | Turn off the normal hotspot/tethering, turn on Location (Android ≤ 12), allow *Nearby devices*. |
 | Updated the app and devices ask for the code again | The device key couldn't be unlocked (e.g. OS key store reset) and was recreated — pair again. |
 
 ---
@@ -340,6 +352,9 @@ test/                   RFC 8439 vectors, loopback E2E: transfer, resume, tamper
 | Resume interrupted transfers | ✅ | — | — | — |
 | Flood protection + block list | ✅ | — | — | — |
 | CLI with pipes and terminal QR | ✅ | — | ⚠️ `kdeconnect-cli` | — |
+| Universal clipboard | ✅ free | — | ✅ | — |
+| Send to / receive from a plain browser | ✅ | ✅ send only | — | — |
+| Built-in hotspot when there is no Wi-Fi | ✅ Android | — | — | ✅ |
 | Arabic UI with RTL | ✅ | ✅ | ✅ | ✅ |
 
 *✅ yes · ⚠️ partly · ❌ no · — not offered or not documented. Based on each project's public

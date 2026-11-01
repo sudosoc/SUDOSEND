@@ -78,7 +78,7 @@ payload = ChaCha20-Poly1305(key_dir, nonce = 0x00000000 ‖ u64 counter_dir, typ
 | Type | Name | Body |
 |---|---|---|
 | 1 | AUTH | 64-byte signature |
-| 2 | OFFER | `{"files":[{"name":"dir/sub/file","size":…}], "text"?: "…", "pair"?: "<token>"}` |
+| 2 | OFFER | `{"files":[…], "text"?: "…", "pair"?: "<token>", "clip"?: true}` |
 | 3 | ACCEPT | `{"resume":{"<index>": bytes_already_held}}` |
 | 4 | DECLINE | — |
 | 5 | FILE_START | `{"i":0,"name":…,"size":…,"offset":…}` |
@@ -155,6 +155,16 @@ Receiver rules: file names are reduced to a safe basename (no traversal, no rese
 Windows names); bytes beyond the declared size abort the session; data is written to a
 hidden `.name.sudosend-part` file and only renamed after the SHA-256 matches; any
 protocol violation closes the connection and deletes the partial file.
+
+## 11. Clipboard sync and browser sharing
+
+- An OFFER with `"clip": true` (text only) is a universal-clipboard push. Apps accept it silently
+  only from **trusted** devices with clipboard sync enabled, and decline it without a prompt
+  otherwise. It travels over the same encrypted channel as any transfer.
+- *Browser sharing* is a separate, opt-in HTTP server (TCP 47840–47849) for devices without the
+  app, under `/s/<128-bit token>/`. It is **not** end-to-end encrypted (plain HTTP on the LAN);
+  wrong-token probes are rate-limited, uploads are sanitised like normal transfers, and the share
+  expires after 30 minutes or when stopped.
 
 ## Known limitations
 

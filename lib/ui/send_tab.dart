@@ -13,6 +13,7 @@ import 'glass.dart';
 import 'radar.dart';
 import 'scan_page.dart';
 import 'theme.dart';
+import 'web_share_page.dart';
 
 class SendTab extends StatefulWidget {
   const SendTab({super.key, required this.controller});
@@ -166,6 +167,13 @@ class _FilesCard extends StatelessWidget {
             Row(
               children: [
                 GhostButton(label: context.tr('edit'), icon: Icons.edit_rounded, onPressed: () => _editText(context)),
+                const SizedBox(width: 8),
+                GhostButton(
+                  label: context.tr('web_link'),
+                  icon: Icons.public_rounded,
+                  color: AppColors.violet,
+                  onPressed: () => openWebShare(context, controller, upload: false, withSelection: true),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -230,6 +238,12 @@ class _FilesCard extends StatelessWidget {
             children: [
               GhostButton(label: context.tr('add'), icon: Icons.add_rounded, onPressed: controller.pickFiles),
               GhostButton(label: context.tr('folder'), icon: Icons.folder_rounded, onPressed: () => _pickFolder(context)),
+              GhostButton(
+                label: context.tr('web_link'),
+                icon: Icons.public_rounded,
+                color: AppColors.violet,
+                onPressed: () => openWebShare(context, controller, upload: false, withSelection: true),
+              ),
               Padding(
                 padding: const EdgeInsetsDirectional.only(start: 4),
                 child: Text(
@@ -359,6 +373,19 @@ class _DevicesSectionState extends State<_DevicesSection> {
                   }),
                   icon: Icon(_selecting ? Icons.close_rounded : Icons.checklist_rounded, size: 17, color: AppColors.cyan),
                   label: Text(context.tr(_selecting ? 'cancel' : 'select'), style: const TextStyle(color: AppColors.cyan)),
+                ),
+              if (controller.settings.clipboardSync && !_selecting)
+                TextButton.icon(
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final none = context.tr('clip_none');
+                    final sent = await controller.pollClipboard(force: true);
+                    if (!mounted) return;
+                    messenger.showSnackBar(SnackBar(
+                        content: Text(sent == 0 ? none : context.tr('clip_sent', {'n': sent}))));
+                  },
+                  icon: const Icon(Icons.content_paste_go_rounded, size: 17, color: AppColors.cyan),
+                  label: Text(context.tr('clipboard'), style: const TextStyle(color: AppColors.cyan)),
                 ),
               if (hasCamera && !_selecting)
                 TextButton.icon(

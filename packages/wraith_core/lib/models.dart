@@ -83,6 +83,12 @@ class TransferJob {
 
   static int _seq = 0;
 
+  /// Minimum time between progress notifications (UI refresh rate).
+  static int progressIntervalMs = 150;
+
+  /// A clipboard-sync push (handled silently by the apps).
+  bool clipboard = false;
+
   final String id;
   final TransferDirection direction;
   final List<FileEntry> files;
@@ -142,7 +148,7 @@ class TransferJob {
   void addProgress(int bytes, Stopwatch clock) {
     doneBytes += bytes;
     final now = clock.elapsedMilliseconds;
-    if (now - _lastNotifyMs >= 100 || doneBytes >= totalBytes) {
+    if (now - _lastNotifyMs >= progressIntervalMs || doneBytes >= totalBytes) {
       final fresh = doneBytes - resumedBytes;
       speed = now > 0 ? fresh / (now / 1000) : 0;
       _lastNotifyMs = now;

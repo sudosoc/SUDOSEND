@@ -117,6 +117,21 @@ object Bridge {
                         }
                     }
                     "sdkInt" -> result.success(Build.VERSION.SDK_INT)
+                    "isLowRam" -> {
+                        val am = app.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                        result.success(am.isLowRamDevice || Runtime.getRuntime().availableProcessors() <= 4)
+                    }
+                    "startHotspot" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            Hotspot.start(app, result)
+                        } else {
+                            result.error("unsupported", "Needs Android 8 or newer", null)
+                        }
+                    }
+                    "stopHotspot" -> {
+                        Hotspot.stop()
+                        result.success(true)
+                    }
                     else -> result.notImplemented()
                 }
             } catch (e: Exception) {
@@ -129,6 +144,7 @@ object Bridge {
         val permission = when (name) {
             "notifications" -> if (Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null
             "storage" -> if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) Manifest.permission.WRITE_EXTERNAL_STORAGE else null
+            "hotspot" -> if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES else Manifest.permission.ACCESS_FINE_LOCATION
             else -> null
         }
         if (permission == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import '../state/app_controller.dart';
 import 'glass.dart';
 import 'radar.dart';
 import 'theme.dart';
+import 'web_share_page.dart';
 
 class ReceiveTab extends StatefulWidget {
   const ReceiveTab({super.key, required this.controller});
@@ -97,6 +99,7 @@ class _ReceiveTabState extends State<ReceiveTab> {
       );
       final qr = _PairingCard(controller: controller);
       final info = _InfoCard(controller: controller);
+      final noApp = _NoAppCard(controller: controller);
       if (wide) {
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -105,14 +108,22 @@ class _ReceiveTabState extends State<ReceiveTab> {
             children: [
               Expanded(child: Column(children: [header, const SizedBox(height: 22), info])),
               const SizedBox(width: 18),
-              SizedBox(width: 340, child: qr),
+              SizedBox(width: 340, child: Column(children: [qr, const SizedBox(height: 16), noApp])),
             ],
           ),
         );
       }
       return ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [header, const SizedBox(height: 22), qr, const SizedBox(height: 16), info],
+        children: [
+          header,
+          const SizedBox(height: 22),
+          qr,
+          const SizedBox(height: 16),
+          noApp,
+          const SizedBox(height: 16),
+          info,
+        ],
       );
     });
   }
@@ -184,6 +195,93 @@ class _PairingCard extends StatelessWidget {
                 GhostButton(label: context.tr('new_code'), icon: Icons.refresh_rounded, onPressed: controller.refreshPairing),
               ],
             ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Browser receive + hotspot: for when the other side has no app or there is no Wi-Fi.
+class _NoAppCard extends StatelessWidget {
+  const _NoAppCard({required this.controller});
+  final AppController controller;
+
+  static String _wifiEscape(String v) => v.replaceAllMapped(RegExp(r'([\\;,:"])'), (m) => '\\${m[1]}');
+
+  @override
+  Widget build(BuildContext context) {
+    final hotspot = controller.hotspot;
+    return Glass(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const IconBadge(icon: Icons.language_rounded, color: AppColors.violet, size: 40),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(context.tr('noapp_title'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                    Text(context.tr('noapp_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          GhostButton(
+            label: context.tr(controller.webShare != null ? 'web_open' : 'web_receive'),
+            icon: Icons.public_rounded,
+            color: AppColors.violet,
+            expand: true,
+            onPressed: () => controller.webShare != null
+                ? Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => WebSharePage(controller: controller)))
+                : openWebShare(context, controller, upload: true, withSelection: false),
+          ),
+          if (Platform.isAndroid) ...[
+            const SizedBox(height: 10),
+            if (hotspot == null)
+              GhostButton(
+                label: context.tr('hotspot_start'),
+                icon: Icons.wifi_tethering_rounded,
+                color: AppColors.amber,
+                expand: true,
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final error = await controller.startHotspot();
+                  if (error != null) messenger.showSnackBar(SnackBar(content: Text(error)));
+                },
+              )
+            else ...[
+              const SizedBox(height: 4),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+                  child: QrImageView(
+                    data: 'WIFI:T:WPA;S:${_wifiEscape(hotspot.ssid)};P:${_wifiEscape(hotspot.password)};;',
+                    size: 180,
+                    backgroundColor: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(context.tr('hotspot_sub'), textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+              const SizedBox(height: 6),
+              SelectableText('Wi-Fi: ${hotspot.ssid}\n${context.tr('hotspot_password')}: ${hotspot.password}',
+                  textAlign: TextAlign.center, textDirection: TextDirection.ltr, style: kMono.copyWith(fontSize: 13)),
+              const SizedBox(height: 10),
+              GhostButton(
+                label: context.tr('hotspot_stop'),
+                icon: Icons.portable_wifi_off_rounded,
+                color: AppColors.danger,
+                expand: true,
+                onPressed: controller.stopHotspot,
+              ),
+            ],
           ],
         ],
       ),

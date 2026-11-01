@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../app/scope.dart';
 import 'theme.dart';
 
 /// Animated radar: rotating sweep, expanding pulse, and a blip per nearby device.
@@ -18,7 +19,17 @@ class Radar extends StatefulWidget {
 
 class _RadarState extends State<Radar> with SingleTickerProviderStateMixin {
   late final AnimationController _controller =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 3200))..repeat();
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 3200), value: 0.3);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (context.reducedEffects) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
 
   @override
   void dispose() {
