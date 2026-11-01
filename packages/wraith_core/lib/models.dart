@@ -19,6 +19,7 @@ class Peer {
     required this.port,
     required this.lastSeen,
     this.manual = false,
+    this.alternates = const [],
   });
 
   factory Peer.manual(InternetAddress address, int port) => Peer(
@@ -39,6 +40,9 @@ class Peer {
   final int port;
   final DateTime lastSeen;
   final bool manual;
+
+  /// Other addresses to try if [address] does not answer (QR pairing).
+  final List<InternetAddress> alternates;
 }
 
 /// A file to send or being received. [name] is a relative path using '/'

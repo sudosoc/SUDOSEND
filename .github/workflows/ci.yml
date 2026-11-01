@@ -30,6 +30,8 @@ jobs:
       - run: ./tool/ci_run.sh flutter test
       - name: Build CLI
         run: ./tool/ci_run.sh ./tool/build_cli.sh sudosend-cli
+      - name: Benchmark (x64)
+        run: cd packages/wraith_core && dart compile exe tool/bench.dart -o /tmp/bench && /tmp/bench 512
       - name: CLI end-to-end over loopback (folder + file + resume-safe naming)
         run: |
           set -euo pipefail
@@ -127,6 +129,8 @@ jobs:
       - run: ./tool/ci_run.sh ./tool/bootstrap.sh
       - run: ./tool/ci_run.sh flutter build linux --release
       - run: ./tool/ci_run.sh ./tool/build_cli.sh sudosend-cli-linux-arm64
+      - name: Benchmark (ARM64)
+        run: cd packages/wraith_core && dart compile exe tool/bench.dart -o /tmp/bench && /tmp/bench 512
       - run: ./tool/package_linux.sh build/linux/arm64/release/bundle sudosend-cli-linux-arm64 arm64
       - name: Smoke-test the installer
         run: |
@@ -158,6 +162,14 @@ jobs:
       - run: ./tool/ci_run.sh ./tool/bootstrap.sh
       - run: ./tool/ci_run.sh flutter build windows --release
       - run: ./tool/ci_run.sh ./tool/build_cli.sh sudosend-cli-windows-x64.exe
+      - name: CLI identity is sealed with DPAPI and survives a restart
+        run: |
+          export APPDATA="$RUNNER_TEMP/appdata"
+          ./sudosend-cli-windows-x64.exe id > id1.txt
+          ./sudosend-cli-windows-x64.exe id > id2.txt
+          cat id1.txt
+          grep -q "key storage  dpapi" id1.txt
+          diff <(grep fingerprint id1.txt) <(grep fingerprint id2.txt)
       - name: Portable zip
         shell: pwsh
         run: |

@@ -11,6 +11,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:cryptography/cryptography.dart';
 
+import 'aead.dart';
 import 'identity.dart';
 import 'models.dart';
 import 'util.dart';
@@ -147,61 +148,100 @@ class WraithMessage {
 /// ChaCha20-Poly1305 channel with one key per direction and an implicit
 /// 64-bit frame counter as nonce: reordered, replayed, or modified frames
 /// fail authentication.
+///
+/// Throughput: frames are sealed/opened concurrently by the [AeadEngine]
+/// (worker isolates or native code) while the socket keeps moving bytes.
+/// Order is preserved by a write chain on the sending side and a prefetch
+/// queue on the receiving side; nonces are assigned at call time.
 class SecureChannel {
-  SecureChannel._(this._socket, this._reader, this._txKey, this._rxKey);
+  SecureChannel._(this._socket, this._reader, this._txKey, this._rxKey, this._aead);
 
   final Socket _socket;
   final FrameReader _reader;
-  final SecretKey _txKey;
-  final SecretKey _rxKey;
+  final Uint8List _txKey;
+  final Uint8List _rxKey;
+  final AeadEngine _aead;
   int _txCounter = 0;
   int _rxCounter = 0;
   bool _closed = false;
 
-  static final Cipher _aead = Chacha20.poly1305Aead();
+  // Sending: sequential write chain + bounded number of frames in flight.
+  Future<void> _tail = Future<void>.value();
+  final Queue<Future<void>> _inflight = Queue<Future<void>>();
+  int _unflushed = 0;
+  static const int _maxInflight = 8;
+  static const int _flushEvery = 1024 * 1024;
 
-  static List<int> _nonce(int counter) {
-    final b = ByteData(12)
-      ..setUint32(4, counter >> 32)
-      ..setUint32(8, counter & 0xFFFFFFFF);
-    return b.buffer.asUint8List();
-  }
+  // Receiving: frames are read and opened ahead of the consumer.
+  final Queue<Future<WraithMessage>> _prefetch = Queue<Future<WraithMessage>>();
+  Future<Uint8List>? _lastRead;
+  static const int _prefetchDepth = 6;
 
-  Future<void> send(int type, [List<int> body = const []]) async {
+  /// Sends one frame. With [flush] (default) the call completes once the
+  /// frame is handed to the OS. Without it the frame is queued and the call
+  /// only waits when too many frames are in flight (bulk data).
+  Future<void> send(int type, [List<int> body = const [], bool flush = true]) async {
+    if (_closed) throw const WraithException('Connection closed');
     final plain = Uint8List(body.length + 1);
     plain[0] = type;
     plain.setRange(1, plain.length, body);
-    final box = await _aead.encrypt(plain, secretKey: _txKey, nonce: _nonce(_txCounter++));
-    final ct = box.cipherText;
-    final mac = box.mac.bytes;
-    final out = Uint8List(ct.length + mac.length)
-      ..setRange(0, ct.length, ct)
-      ..setRange(ct.length, ct.length + mac.length, mac);
-    writeFrame(_socket, out);
-    await _socket.flush();
+    final sealed = _aead.seal(_txKey, _txCounter++, plain);
+    sealed.ignore();
+    final written = _tail.then((_) async {
+      final frame = await sealed;
+      writeFrame(_socket, frame);
+      _unflushed += frame.length + 4;
+      if (flush || _unflushed >= _flushEvery) {
+        _unflushed = 0;
+        await _socket.flush();
+      }
+    });
+    written.ignore();
+    _tail = written;
+    if (flush) {
+      _inflight.clear();
+      await written;
+      return;
+    }
+    _inflight.add(written);
+    while (_inflight.length > _maxInflight) {
+      await _inflight.removeFirst();
+    }
   }
 
   Future<void> sendJson(int type, Map<String, Object?> message) =>
       send(type, utf8.encode(jsonEncode(message)));
 
-  Future<WraithMessage> receive({Duration? timeout}) async {
-    final pending = _reader.readFrame();
-    final frame = timeout == null ? await pending : await pending.timeout(timeout);
-    if (frame.length < 17) throw const WraithException('Malformed frame');
-    final ct = Uint8List.sublistView(frame, 0, frame.length - 16);
-    final mac = Mac(Uint8List.sublistView(frame, frame.length - 16));
-    final List<int> plain;
-    try {
-      plain = await _aead.decrypt(
-        SecretBox(ct, nonce: _nonce(_rxCounter++), mac: mac),
-        secretKey: _rxKey,
-      );
-    } on SecretBoxAuthenticationError {
-      throw const WraithException('Integrity check failed — traffic was tampered with');
+  /// Waits until every queued frame has been written and flushed.
+  Future<void> drain() async {
+    final done = _tail.then((_) => _socket.flush());
+    _tail = done;
+    _inflight.clear();
+    await done;
+  }
+
+  Future<WraithMessage> _readNext() {
+    final counter = _rxCounter++;
+    final previous = _lastRead;
+    final raw = previous == null ? _reader.readFrame() : previous.then((_) => _reader.readFrame());
+    raw.ignore();
+    _lastRead = raw;
+    final message = raw.then((frame) async {
+      if (frame.length < kTagLength + 1) throw const WraithException('Malformed frame');
+      final plain = await _aead.open(_rxKey, counter, frame);
+      if (plain.isEmpty) throw const WraithException('Empty frame');
+      return WraithMessage(plain[0], Uint8List.sublistView(plain, 1));
+    });
+    message.ignore();
+    return message;
+  }
+
+  Future<WraithMessage> receive({Duration? timeout}) {
+    while (_prefetch.length < _prefetchDepth) {
+      _prefetch.add(_readNext());
     }
-    if (plain.isEmpty) throw const WraithException('Empty frame');
-    final bytes = plain is Uint8List ? plain : Uint8List.fromList(plain);
-    return WraithMessage(bytes[0], Uint8List.sublistView(bytes, 1));
+    final next = _prefetch.removeFirst();
+    return timeout == null ? next : next.timeout(timeout);
   }
 
   /// Receives a frame and insists on [type]; peer errors/cancels become exceptions.
@@ -218,6 +258,9 @@ class SecureChannel {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    try {
+      await _tail.timeout(const Duration(seconds: 2));
+    } catch (_) {}
     try {
       await _reader.cancel();
     } catch (_) {}
@@ -295,6 +338,7 @@ Future<Handshake> wraithHandshake({
   required FrameReader reader,
   required DeviceIdentity me,
   required bool initiator,
+  AeadEngine? aead,
 }) async {
   const step = Duration(seconds: 15);
   try {
@@ -358,14 +402,15 @@ Future<Handshake> wraithHandshake({
     final hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32);
     Future<SecretKey> derive(String label) =>
         hkdf.deriveKey(secretKey: shared, nonce: transcript, info: utf8.encode('$kProtocol $label'));
-    final c2s = await derive('c2s');
-    final s2c = await derive('s2c');
+    final c2s = Uint8List.fromList(await (await derive('c2s')).extractBytes());
+    final s2c = Uint8List.fromList(await (await derive('s2c')).extractBytes());
     final sasBytes = await (await derive('sas')).extractBytes();
     final sasValue =
         ((sasBytes[0] << 24) | (sasBytes[1] << 16) | (sasBytes[2] << 8) | sasBytes[3]) % 1000000;
     final sas = sasValue.toString().padLeft(6, '0');
 
-    final channel = SecureChannel._(socket, reader, initiator ? c2s : s2c, initiator ? s2c : c2s);
+    final channel = SecureChannel._(
+        socket, reader, initiator ? c2s : s2c, initiator ? s2c : c2s, aead ?? AeadEngine.instance);
 
     final ed25519 = Ed25519();
     final signature = await ed25519.sign(

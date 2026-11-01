@@ -29,7 +29,20 @@ class Discovery {
   /// ourselves as a receiver. Sends `probe` instead of `announce`.
   final bool passive;
 
-  String get _beacon => passive ? 'probe' : 'announce';
+  bool _stealth = false;
+
+  /// Stealth: still see other devices, but never announce or answer. Peers
+  /// can only reach this device by IP or QR.
+  bool get stealth => _stealth;
+  set stealth(bool value) {
+    if (value == _stealth) return;
+    if (value) _announce('bye');
+    _stealth = value;
+    if (!value) _announce('announce');
+  }
+
+  bool get _quiet => passive || _stealth;
+  String get _beacon => _quiet ? 'probe' : 'announce';
 
   static final InternetAddress group = InternetAddress('239.255.77.23');
   static final RegExp _fpPattern = RegExp(r'^[0-9A-F]{32}$');
@@ -78,7 +91,7 @@ class Discovery {
   }
 
   Future<void> stop() async {
-    if (!passive) _announce('bye');
+    if (!_quiet) _announce('bye');
     _announceTimer?.cancel();
     _pruneTimer?.cancel();
     _socket?.close();
@@ -149,7 +162,7 @@ class Discovery {
 
     if (type == 'probe') {
       // Someone is looking for receivers; answer unless we are passive too.
-      if (!passive) {
+      if (!_quiet) {
         try {
           _socket?.send(_payload('reply'), dg.address, kDiscoveryPort);
         } catch (_) {}
@@ -181,7 +194,7 @@ class Discovery {
     if (changed) onChanged();
 
     // Answer newcomers directly so they see us immediately.
-    if (type == 'announce' && previous == null && !passive) {
+    if (type == 'announce' && previous == null && !_quiet) {
       try {
         _socket?.send(_payload('reply'), dg.address, kDiscoveryPort);
       } catch (_) {}

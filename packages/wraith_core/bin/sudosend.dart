@@ -4,17 +4,21 @@
 //   dart compile exe bin/sudosend.dart -o sudosend
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'package:qr/qr.dart';
 import 'package:wraith_core/discovery.dart';
 import 'package:wraith_core/identity.dart';
 import 'package:wraith_core/models.dart';
+import 'package:wraith_core/pairing.dart';
 import 'package:wraith_core/transfer.dart';
 import 'package:wraith_core/util.dart';
+import 'package:wraith_core/vault_windows.dart';
 import 'package:wraith_core/wraith.dart';
 
-const _version = '0.2.1';
+const _version = '0.3.0';
 
 const _usage = '''
 SUDOSEND $_version — secure local file sharing (Wraith Protocol)
@@ -22,19 +26,22 @@ SUDOSEND $_version — secure local file sharing (Wraith Protocol)
 Usage:
   sudosend send <file|folder>... --to <device|ip[:port]>
   sudosend send --text "message" --to <device|ip[:port]>
-  sudosend receive [--dir PATH] [--yes] [--trust] [--once]
+  sudosend receive [--dir PATH] [--yes] [--trust] [--once] [--qr]
   sudosend devices [--wait SECONDS]
   sudosend id [--name NEW_NAME]
 
 Targets:
   --to laptop        device name (case-insensitive prefix) or fingerprint prefix
   --to 192.168.1.20  IP address, optionally :port
+  --to 'sudosend://pair?…'  pairing link (from a QR code) — no code to compare
 
 Receive options:
   --dir PATH   where files are saved   (default: ~/Downloads/SUDOSEND)
   --yes        accept every request without asking (the code is still printed)
   --trust      remember accepted devices so they skip the code next time
   --once       exit after the first transfer
+  --qr         print a pairing QR code: the device that scans it is trusted
+               and accepted without a prompt (one use, valid 30 minutes)
 
 Exit codes: 0 ok · 1 failed · 2 usage · 3 declined/not found · 130 interrupted
 ''';
@@ -118,7 +125,7 @@ Future<int> _run(_Args args) async {
     return args.positional.isEmpty && !args.flags.contains('help') ? 2 : 0;
   }
   final config = _configDir();
-  final identity = await DeviceIdentity.loadOrCreate(config);
+  final identity = await DeviceIdentity.loadOrCreate(config, vault: DpapiVault.supported ? DpapiVault() : null);
   final trust = await TrustStore.load(config);
   final command = args.positional.first;
   final rest = args.positional.sublist(1);
@@ -129,6 +136,7 @@ Future<int> _run(_Args args) async {
       if (newName != null) await identity.rename(newName);
       stdout.writeln('${_cyan(identity.name)}  ${platformName()}');
       stdout.writeln('fingerprint  ${groupFingerprint(identity.fingerprint)}');
+      stdout.writeln(_dim('key storage  ${identity.protection}'));
       stdout.writeln(_dim('identity     ${config.path}'));
       return 0;
     case 'devices':
@@ -216,6 +224,8 @@ Future<List<FileEntry>> _collect(List<String> paths) async {
 }
 
 Future<Peer?> _resolve(DeviceIdentity identity, String target) async {
+  final pairing = PairingInfo.tryParse(target);
+  if (pairing != null) return pairing.toPeer();
   final hostPort = RegExp(r'^(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{1,5}))?$').firstMatch(target);
   if (hostPort != null) {
     final address = InternetAddress.tryParse(hostPort.group(1)!);
@@ -288,7 +298,7 @@ Future<int> _send(DeviceIdentity identity, TrustStore trust, List<String> paths,
     current?.cancel();
     stderr.writeln(_yellow('\ncancelling…'));
   });
-  final job = await engine.send(peer, files, text: text);
+  final job = await engine.send(peer, files, text: text, pairToken: PairingInfo.tryParse(target)?.token);
   await sigint.cancel();
   return _reportSend(job);
 }
@@ -348,16 +358,25 @@ Future<int> _receive(DeviceIdentity identity, TrustStore trust, _Args args) asyn
         request.respond(true, trust: autoTrust);
         return;
       }
-      stdout.write('  accept? [y/N/t=trust] ');
-      final answer = (stdin.readLineSync() ?? '').trim().toLowerCase();
-      request.respond(answer == 'y' || answer == 'yes' || answer == 't', trust: answer == 't' || autoTrust);
-      if (!(answer == 'y' || answer == 'yes' || answer == 't')) {
-        stdout.writeln(_dim('  declined'));
-        if (once && !finished.isCompleted) finished.complete(3);
-      }
+      stdout.write('  accept? [y/N/t=trust/b=block] ');
+      unawaited(_nextLine().then((line) {
+        final answer = line.trim().toLowerCase();
+        final yes = answer == 'y' || answer == 'yes' || answer == 't';
+        request.respond(yes, trust: answer == 't' || autoTrust, block: answer == 'b');
+        if (!yes) {
+          stdout.writeln(_dim(answer == 'b' ? '  blocked' : '  declined'));
+          if (once && !finished.isCompleted) finished.complete(3);
+        }
+      }));
     },
+    onRejected: (address, reason) => stderr.writeln(_dim('  refused $address ($reason)')),
+    autoAccept: (request) => request.trusted,
     onJob: (job) {
       final progress = _ProgressPrinter(job);
+      if (job.direction == TransferDirection.incoming) {
+        stdout.writeln('${_cyan('⇣ receiving from ${job.peerName}')}'
+            '${job.peerTrusted ? _green(' (trusted)') : ''}');
+      }
       job.changes.listen((_) {
         progress.render();
         if (job.isActive) return;
@@ -383,6 +402,23 @@ Future<int> _receive(DeviceIdentity identity, TrustStore trust, _Args args) asyn
   stdout.writeln('${_cyan(identity.name)} is visible on port ${engine.port}');
   stdout.writeln('fingerprint ${groupFingerprint(identity.fingerprint)}');
   stdout.writeln(_dim('saving to ${dir.path} · Ctrl+C to stop'));
+  if (args.flags.contains('qr')) {
+    final addresses = await _localAddresses();
+    if (addresses.isEmpty) {
+      stderr.writeln(_yellow('no network address found — cannot build a pairing QR'));
+    } else {
+      final link = PairingInfo(
+        name: identity.name,
+        fingerprint: identity.fingerprint,
+        addresses: addresses,
+        port: engine.port,
+        token: engine.createPairingToken(ttl: const Duration(minutes: 30)),
+      ).toUri();
+      stdout.writeln();
+      stdout.write(renderQr(link));
+      stdout.writeln(_dim('scan with SUDOSEND, or: sudosend send <file> --to \'$link\''));
+    }
+  }
 
   final sub = ProcessSignal.sigint.watch().listen((_) {
     if (!finished.isCompleted) finished.complete(130);
@@ -392,6 +428,43 @@ Future<int> _receive(DeviceIdentity identity, TrustStore trust, _Args args) asyn
   await discovery.stop();
   await engine.stop();
   return code;
+}
+
+final Stream<String> _stdinLines = stdin.transform(utf8.decoder).transform(const LineSplitter()).asBroadcastStream();
+
+Future<String> _nextLine() => _stdinLines.first.catchError((Object _) => '');
+
+Future<List<InternetAddress>> _localAddresses() async {
+  try {
+    final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4);
+    return [
+      for (final i in interfaces)
+        for (final a in i.addresses)
+          if (!a.isLoopback && !a.isLinkLocal) a,
+    ];
+  } catch (_) {
+    return const [];
+  }
+}
+
+/// Renders [data] as a terminal QR code (black on white, two rows per line).
+String renderQr(String data) {
+  final image = QrImage(QrCode.fromData(data: data, errorCorrectLevel: QrErrorCorrectLevel.L));
+  final n = image.moduleCount;
+  const quiet = 2;
+  bool dark(int row, int col) =>
+      row >= 0 && col >= 0 && row < n && col < n && image.isDark(row, col);
+  final out = StringBuffer();
+  for (var row = -quiet; row < n + quiet; row += 2) {
+    out.write('\x1B[30;47m');
+    for (var col = -quiet; col < n + quiet; col++) {
+      final top = dark(row, col);
+      final bottom = dark(row + 1, col);
+      out.write(top && bottom ? '█' : top ? '▀' : bottom ? '▄' : ' ');
+    }
+    out.write('\x1B[0m\n');
+  }
+  return out.toString();
 }
 
 class _ProgressPrinter {

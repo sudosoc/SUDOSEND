@@ -7,15 +7,19 @@ import 'package:path/path.dart' as p;
 
 import 'identity.dart';
 import 'models.dart';
+import 'pairing.dart';
 import 'util.dart';
 import 'wraith.dart';
 
 const int kMaxTextLength = 64 * 1024;
 
 class IncomingDecision {
-  const IncomingDecision(this.accept, {this.trust = false});
+  const IncomingDecision(this.accept, {this.trust = false, this.block = false});
   final bool accept;
   final bool trust;
+
+  /// Decline and block this device's fingerprint from now on.
+  final bool block;
 }
 
 /// A pending "X wants to send you N files / a text" request shown to the user.
@@ -23,15 +27,22 @@ class IncomingRequest {
   IncomingRequest({
     required this.peerName,
     required this.peerPlatform,
+    required this.peerAddress,
     required this.fingerprint,
     required this.sas,
     required this.trusted,
     required this.files,
     this.text,
-  }) : totalBytes = files.fold<int>(0, (a, f) => a + f.size);
+    this.paired = false,
+  })  : id = '${DateTime.now().microsecondsSinceEpoch}-${_seq++}',
+        totalBytes = files.fold<int>(0, (a, f) => a + f.size);
 
+  static int _seq = 0;
+
+  final String id;
   final String peerName;
   final String peerPlatform;
+  final String peerAddress;
   final String fingerprint;
   final String sas;
   final bool trusted;
@@ -39,13 +50,34 @@ class IncomingRequest {
   final String? text;
   final int totalBytes;
 
+  /// The sender presented a valid one-time QR pairing token.
+  final bool paired;
+
   final Completer<IncomingDecision> _completer = Completer<IncomingDecision>();
   Future<IncomingDecision> get decision => _completer.future;
   bool get isPending => !_completer.isCompleted;
 
-  void respond(bool accept, {bool trust = false}) {
-    if (!_completer.isCompleted) _completer.complete(IncomingDecision(accept, trust: trust));
+  void respond(bool accept, {bool trust = false, bool block = false}) {
+    if (!_completer.isCompleted) {
+      _completer.complete(IncomingDecision(accept && !block, trust: trust, block: block));
+    }
   }
+}
+
+/// Limits that keep a hostile device on the LAN from flooding us with
+/// connections or prompts.
+class ConnectionLimits {
+  const ConnectionLimits({
+    this.maxActive = 8,
+    this.maxActivePerIp = 3,
+    this.maxPerMinutePerIp = 20,
+    this.maxPendingPrompts = 3,
+  });
+
+  final int maxActive;
+  final int maxActivePerIp;
+  final int maxPerMinutePerIp;
+  final int maxPendingPrompts;
 }
 
 class _Target {
@@ -63,6 +95,9 @@ class TransferEngine {
     required this.saveDir,
     required this.onIncoming,
     required this.onJob,
+    this.autoAccept,
+    this.onRejected,
+    this.limits = const ConnectionLimits(),
     this.basePort = kTransferPort,
   });
 
@@ -72,11 +107,28 @@ class TransferEngine {
   final void Function(IncomingRequest request) onIncoming;
   final void Function(TransferJob job) onJob;
 
+  /// Return true to accept a request without asking (e.g. trusted devices).
+  final bool Function(IncomingRequest request)? autoAccept;
+
+  /// Called when a connection or request is refused by the flood limits or
+  /// the block list. [reason] is a short machine-readable tag.
+  final void Function(String address, String reason)? onRejected;
+
+  final ConnectionLimits limits;
+
   /// First port to try; 0 means "any free port" (used by tests).
   final int basePort;
 
   ServerSocket? _server;
   int port = kTransferPort;
+
+  int rejectedConnections = 0;
+  int _active = 0;
+  final Map<String, int> _activeByIp = {};
+  final Map<String, List<int>> _hitsByIp = {};
+  final Set<String> _promptingIps = {};
+  int _pendingPrompts = 0;
+  final Map<String, DateTime> _pairTokens = {};
 
   static const Duration _approvalTimeout = Duration(minutes: 2);
   static const Duration _idleTimeout = Duration(seconds: 30);
@@ -96,7 +148,7 @@ class TransferEngine {
       throw const WraithException('Could not open a listening port (47824–47833 busy)');
     }
     port = server.port;
-    server.listen((socket) => unawaited(_handleIncoming(socket)));
+    server.listen(_onConnection);
   }
 
   Future<void> stop() async {
@@ -104,11 +156,93 @@ class TransferEngine {
     _server = null;
   }
 
+  // ─────────────────────────── Pairing tokens ───────────────────────────
+
+  /// Creates a one-time token for a QR code / pairing link.
+  String createPairingToken({Duration ttl = const Duration(minutes: 10)}) {
+    _prunePairTokens();
+    final token = newPairingToken();
+    _pairTokens[token] = DateTime.now().add(ttl);
+    return token;
+  }
+
+  void revokePairingToken(String token) => _pairTokens.remove(token);
+
+  void _prunePairTokens() {
+    final now = DateTime.now();
+    _pairTokens.removeWhere((_, expiry) => expiry.isBefore(now));
+  }
+
+  bool _consumePairingToken(String? token) {
+    if (token == null) return false;
+    _prunePairTokens();
+    String? match;
+    for (final candidate in _pairTokens.keys) {
+      if (constantTimeEquals(utf8.encode(candidate), utf8.encode(token))) match = candidate;
+    }
+    if (match == null) return false;
+    _pairTokens.remove(match);
+    return true;
+  }
+
+  // ─────────────────────────── Flood control ───────────────────────────
+
+  void _onConnection(Socket socket) {
+    final ip = socket.remoteAddress.address;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final hits = _hitsByIp.putIfAbsent(ip, () => <int>[])
+      ..removeWhere((t) => now - t > 60000)
+      ..add(now);
+    if (_hitsByIp.length > 4096) {
+      _hitsByIp.removeWhere((_, v) => v.isEmpty || now - v.last > 60000);
+    }
+    String? reason;
+    if (_active >= limits.maxActive) {
+      reason = 'busy';
+    } else if ((_activeByIp[ip] ?? 0) >= limits.maxActivePerIp) {
+      reason = 'too-many-connections';
+    } else if (hits.length > limits.maxPerMinutePerIp) {
+      reason = 'rate-limit';
+    }
+    if (reason != null) {
+      rejectedConnections++;
+      socket.destroy();
+      onRejected?.call(ip, reason);
+      return;
+    }
+    _active++;
+    _activeByIp[ip] = (_activeByIp[ip] ?? 0) + 1;
+    unawaited(_handleIncoming(socket, ip).whenComplete(() {
+      _active--;
+      final left = (_activeByIp[ip] ?? 1) - 1;
+      if (left <= 0) {
+        _activeByIp.remove(ip);
+      } else {
+        _activeByIp[ip] = left;
+      }
+    }));
+  }
+
   // ─────────────────────────── Sending ───────────────────────────
 
+  Future<Socket> _connect(Peer peer) async {
+    final addresses = [peer.address, ...peer.alternates];
+    Object? lastError;
+    for (final address in addresses) {
+      try {
+        return await Socket.connect(address, peer.port,
+            timeout: addresses.length == 1 ? const Duration(seconds: 8) : const Duration(seconds: 4));
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    throw lastError ?? const WraithException('No address to connect to');
+  }
+
   /// Sends [files] (or a [text] message when [files] is empty) to [peer].
+  /// [pairToken] comes from a scanned QR code / pairing link.
   /// Completes when the transfer has finished, successfully or not.
-  Future<TransferJob> send(Peer peer, List<FileEntry> files, {String? text}) async {
+  Future<TransferJob> send(Peer peer, List<FileEntry> files, {String? text, String? pairToken}) async {
     if (text != null && text.length > kMaxTextLength) {
       throw const WraithException('Text is too long (64 KB max)');
     }
@@ -126,7 +260,7 @@ class TransferEngine {
     SecureChannel? channel;
     RandomAccessFile? raf;
     try {
-      socket = await Socket.connect(peer.address, peer.port, timeout: const Duration(seconds: 8));
+      socket = await _connect(peer);
       socket.setOption(SocketOption.tcpNoDelay, true);
       final reader = FrameReader(socket);
       final hs = await wraithHandshake(socket: socket, reader: reader, me: identity, initiator: true);
@@ -135,6 +269,13 @@ class TransferEngine {
       if (!peer.manual && hs.peerFingerprint != peer.id) {
         throw const WraithException(
             'Fingerprint mismatch — the device that answered is not the one advertised. Possible spoofing.');
+      }
+      if (trust.isBlocked(hs.peerFingerprint)) {
+        throw const WraithException('This device is on your block list');
+      }
+      // A scanned QR code proves the receiver's key out of band.
+      if (pairToken != null && !peer.manual && !trust.isTrusted(hs.peerFingerprint)) {
+        await trust.add(hs.peerFingerprint, hs.peerName);
       }
       final trusted = trust.isTrusted(hs.peerFingerprint);
       job.update(() {
@@ -149,6 +290,7 @@ class TransferEngine {
       await channel.sendJson(Frame.offer, {
         'files': [for (final f in files) {'name': f.name, 'size': f.size}],
         if (text != null) 'text': text,
+        if (pairToken != null) 'pair': pairToken,
       });
 
       final reply = await channel.receive(timeout: _approvalTimeout + const Duration(seconds: 10));
@@ -200,7 +342,7 @@ class TransferEngine {
           final chunk = await raf.read(min(kChunkSize, remaining));
           if (chunk.isEmpty) throw WraithException('"${f.name}" changed while sending');
           hasher.add(chunk);
-          await channel.send(Frame.data, chunk);
+          await channel.send(Frame.data, chunk, false);
           remaining -= chunk.length;
           job.addProgress(chunk.length, clock);
         }
@@ -232,12 +374,13 @@ class TransferEngine {
 
   // ─────────────────────────── Receiving ───────────────────────────
 
-  Future<void> _handleIncoming(Socket socket) async {
+  Future<void> _handleIncoming(Socket socket, String ip) async {
     SecureChannel? channel;
     TransferJob? job;
     RandomAccessFile? raf;
     File? partFile;
     var keepPartial = false;
+    var prompting = false;
     try {
       socket.setOption(SocketOption.tcpNoDelay, true);
       final reader = FrameReader(socket);
@@ -247,6 +390,7 @@ class TransferEngine {
       final offer = (await channel.expect(Frame.offer, timeout: _idleTimeout)).json();
       final rawFiles = offer['files'];
       final rawText = offer['text'];
+      final rawPair = offer['pair'];
       if (rawFiles is! List || rawFiles.length > 100000) throw const WraithException('Invalid offer');
       if (rawText != null && (rawText is! String || rawText.length > kMaxTextLength)) {
         throw const WraithException('Invalid text offer');
@@ -266,17 +410,46 @@ class TransferEngine {
         files.add(FileEntry(name: segs.join('/'), size: size));
       }
 
+      // Read the offer before declining a blocked device, so the reply is not
+      // lost to a TCP reset caused by unread data.
+      if (trust.isBlocked(hs.peerFingerprint)) {
+        onRejected?.call(ip, 'blocked');
+        await channel.send(Frame.decline);
+        return;
+      }
+
+      final paired = _consumePairingToken(rawPair is String ? rawPair : null);
+      if (paired && !trust.isTrusted(hs.peerFingerprint)) {
+        await trust.add(hs.peerFingerprint, hs.peerName);
+      }
       final trusted = trust.isTrusted(hs.peerFingerprint);
       final request = IncomingRequest(
         peerName: hs.peerName,
         peerPlatform: hs.peerPlatform,
+        peerAddress: ip,
         fingerprint: hs.peerFingerprint,
         sas: hs.sas,
         trusted: trusted,
         files: files,
         text: text,
+        paired: paired,
       );
-      onIncoming(request);
+
+      if (paired || (autoAccept?.call(request) ?? false)) {
+        request.respond(true);
+      } else {
+        // One open prompt per address and a small global cap, so nobody can
+        // bury the user under dialogs.
+        if (_promptingIps.contains(ip) || _pendingPrompts >= limits.maxPendingPrompts) {
+          onRejected?.call(ip, 'prompt-flood');
+          await channel.send(Frame.decline);
+          return;
+        }
+        _promptingIps.add(ip);
+        _pendingPrompts++;
+        prompting = true;
+        onIncoming(request);
+      }
       final decision = await request.decision.timeout(
         _approvalTimeout,
         onTimeout: () {
@@ -284,6 +457,14 @@ class TransferEngine {
           return const IncomingDecision(false);
         },
       );
+      if (prompting) {
+        prompting = false;
+        _promptingIps.remove(ip);
+        _pendingPrompts--;
+      }
+      if (decision.block) {
+        await trust.block(hs.peerFingerprint, hs.peerName);
+      }
       if (!decision.accept) {
         await channel.send(Frame.decline);
         return;
@@ -324,7 +505,7 @@ class TransferEngine {
         status: TransferStatus.transferring,
       )
         ..peerFingerprint = hs.peerFingerprint
-        ..peerTrusted = trusted || decision.trust
+        ..peerTrusted = trusted || decision.trust || paired
         ..sas = hs.sas;
       job = activeJob;
       onJob(activeJob);
@@ -423,6 +604,10 @@ class TransferEngine {
           (e is WraithException && e.message.startsWith('Connection closed'));
       job?.fail(e);
     } finally {
+      if (prompting) {
+        _promptingIps.remove(ip);
+        _pendingPrompts--;
+      }
       try {
         await raf?.close();
       } catch (_) {}
