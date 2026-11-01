@@ -34,7 +34,7 @@ jobs:
         run: cd packages/wraith_core && dart compile exe tool/bench.dart -o /tmp/bench && /tmp/bench 512
       - name: CLI end-to-end over loopback (folder + file + resume-safe naming)
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           T=$RUNNER_TEMP
           XDG_CONFIG_HOME=$T/bob ./sudosend-cli id --name ci-bob
           XDG_CONFIG_HOME=$T/bob ./sudosend-cli receive --dir $T/inbox --yes --once > $T/receive.log 2>&1 &

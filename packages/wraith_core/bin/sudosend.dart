@@ -444,9 +444,11 @@ Future<int> _receive(DeviceIdentity identity, TrustStore trust, _Args args) asyn
         stdout.writeln('${_cyan('⇣ receiving from ${job.peerName}')}'
             '${job.peerTrusted ? _green(' (trusted)') : ''}');
       }
-      job.changes.listen((_) {
+      var reported = false;
+      job.changes.listen((_) async {
         progress.render();
-        if (job.isActive) return;
+        if (job.isActive || reported) return;
+        reported = true;
         progress.finish();
         if (job.status == TransferStatus.done) {
           if (job.text != null) {
@@ -455,7 +457,7 @@ Future<int> _receive(DeviceIdentity identity, TrustStore trust, _Args args) asyn
           } else {
             stdout.writeln(_green('✔ ${job.verifiedFiles} file(s) verified → ${dir.path}'));
           }
-          unawaited(_saveReceipt(job, args.options['receipts']));
+          await _saveReceipt(job, args.options['receipts']);
         } else {
           stdout.writeln(_red('✖ ${job.error ?? job.status.name}'));
         }
