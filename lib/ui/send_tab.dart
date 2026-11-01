@@ -1,23 +1,38 @@
+import 'dart:async';
+
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
 import 'package:wraith_core/models.dart';
 import 'package:wraith_core/util.dart';
+
+import '../app/scope.dart';
+import '../platform/desktop.dart';
 import '../state/app_controller.dart';
 import 'glass.dart';
 import 'radar.dart';
+import 'scan_page.dart';
 import 'theme.dart';
 
-class SendTab extends StatelessWidget {
+class SendTab extends StatefulWidget {
   const SendTab({super.key, required this.controller});
 
   final AppController controller;
 
   @override
+  State<SendTab> createState() => _SendTabState();
+}
+
+class _SendTabState extends State<SendTab> {
+  bool _dragging = false;
+
+  AppController get controller => widget.controller;
+
+  @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
+    final body = LayoutBuilder(builder: (context, constraints) {
       final wide = constraints.maxWidth >= 820;
-      final picker = _FilesCard(controller: controller);
+      final picker = _FilesCard(controller: controller, dragging: _dragging);
       final devices = _DevicesSection(controller: controller);
       if (wide) {
         return Padding(
@@ -43,40 +58,61 @@ class SendTab extends StatelessWidget {
         ),
       );
     });
+    if (!isDesktop) return body;
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _dragging = true),
+      onDragExited: (_) => setState(() => _dragging = false),
+      onDragDone: (detail) async {
+        setState(() => _dragging = false);
+        final messenger = ScaffoldMessenger.of(context);
+        final error = await controller.addPaths([for (final f in detail.files) f.path]);
+        if (error != null) messenger.showSnackBar(SnackBar(content: Text(error)));
+      },
+      child: body,
+    );
   }
 }
 
 class _FilesCard extends StatelessWidget {
-  const _FilesCard({required this.controller});
+  const _FilesCard({required this.controller, required this.dragging});
   final AppController controller;
+  final bool dragging;
 
   @override
   Widget build(BuildContext context) {
     final files = controller.selected;
-    if (files.isEmpty) {
+    final text = controller.selectedText;
+    if (files.isEmpty && text == null) {
       return Glass(
         glow: AppColors.cyan,
+        borderColor: dragging ? AppColors.cyan : null,
         onTap: controller.pickFiles,
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 30),
         child: Column(
           children: [
-            Container(
-              width: 78,
-              height: 78,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: kAccentGradient,
-                boxShadow: [BoxShadow(color: AppColors.cyan.withValues(alpha: 0.5), blurRadius: 36, spreadRadius: -6)],
+            AnimatedScale(
+              scale: dragging ? 1.12 : 1,
+              duration: const Duration(milliseconds: 200),
+              child: Container(
+                width: 78,
+                height: 78,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: kAccentGradient,
+                  boxShadow: [BoxShadow(color: AppColors.cyan.withValues(alpha: 0.5), blurRadius: 36, spreadRadius: -6)],
+                ),
+                child: Icon(dragging ? Icons.file_download_rounded : Icons.upload_rounded,
+                    size: 38, color: AppColors.ink),
               ),
-              child: const Icon(Icons.upload_rounded, size: 38, color: AppColors.ink),
             ),
             const SizedBox(height: 18),
-            const Text('Choose files to send', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+            Text(context.tr(dragging ? 'drop_now' : 'choose_title'),
+                textAlign: TextAlign.center, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
-            const Text(
-              'Any size · encrypted in transit · SHA-256 verified on arrival',
+            Text(
+              context.tr('choose_sub'),
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.muted, fontSize: 13),
+              style: const TextStyle(color: AppColors.muted, fontSize: 13),
             ),
             const SizedBox(height: 20),
             Wrap(
@@ -84,17 +120,21 @@ class _FilesCard extends StatelessWidget {
               runSpacing: 10,
               alignment: WrapAlignment.center,
               children: [
-                GlowButton(label: 'Files', icon: Icons.add_rounded, onPressed: controller.pickFiles),
-                GhostButton(label: 'Folder', icon: Icons.folder_rounded, onPressed: () => _pickFolder(context)),
-                GhostButton(label: 'Text', icon: Icons.notes_rounded, onPressed: () => _editText(context)),
+                GlowButton(label: context.tr('files'), icon: Icons.add_rounded, onPressed: controller.pickFiles),
+                GhostButton(
+                    label: context.tr('folder'), icon: Icons.folder_rounded, onPressed: () => _pickFolder(context)),
+                GhostButton(label: context.tr('text'), icon: Icons.notes_rounded, onPressed: () => _editText(context)),
               ],
             ),
+            if (isDesktop) ...[
+              const SizedBox(height: 14),
+              Text(context.tr('drop_hint'), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+            ],
           ],
         ),
       );
     }
 
-    final text = controller.selectedText;
     if (text != null) {
       return Glass(
         glow: AppColors.violet,
@@ -106,12 +146,12 @@ class _FilesCard extends StatelessWidget {
                 const IconBadge(icon: Icons.notes_rounded, color: AppColors.violet, size: 42),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text('Text ready · ${text.length} chars',
+                  child: Text(context.tr('text_ready', {'n': text.length}),
                       style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                 ),
                 TextButton(
                   onPressed: controller.clearSelected,
-                  child: const Text('Clear', style: TextStyle(color: AppColors.muted)),
+                  child: Text(context.tr('clear'), style: const TextStyle(color: AppColors.muted)),
                 ),
               ],
             ),
@@ -125,13 +165,13 @@ class _FilesCard extends StatelessWidget {
             const SizedBox(height: 14),
             Row(
               children: [
-                GhostButton(label: 'Edit', icon: Icons.edit_rounded, onPressed: () => _editText(context)),
+                GhostButton(label: context.tr('edit'), icon: Icons.edit_rounded, onPressed: () => _editText(context)),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Tap a device below to send',
+                    context.tr('tap_device'),
                     textAlign: TextAlign.end,
-                    style: TextStyle(color: AppColors.cyan, fontSize: 12.5, fontWeight: FontWeight.w600),
+                    style: const TextStyle(color: AppColors.cyan, fontSize: 12.5, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -143,6 +183,7 @@ class _FilesCard extends StatelessWidget {
 
     return Glass(
       glow: AppColors.violet,
+      borderColor: dragging ? AppColors.cyan : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -154,7 +195,10 @@ class _FilesCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${files.length} ${files.length == 1 ? 'file' : 'files'} ready',
+                    Text(
+                        files.length == 1
+                            ? context.tr('one_file_ready')
+                            : context.tr('n_files_ready', {'n': files.length}),
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                     Text(formatBytes(controller.selectedBytes),
                         style: const TextStyle(color: AppColors.muted, fontSize: 13)),
@@ -163,7 +207,7 @@ class _FilesCard extends StatelessWidget {
               ),
               TextButton(
                 onPressed: controller.clearSelected,
-                child: const Text('Clear', style: TextStyle(color: AppColors.muted)),
+                child: Text(context.tr('clear'), style: const TextStyle(color: AppColors.muted)),
               ),
             ],
           ),
@@ -174,21 +218,23 @@ class _FilesCard extends StatelessWidget {
               shrinkWrap: true,
               itemCount: files.length,
               separatorBuilder: (_, __) => Divider(height: 1, color: Colors.white.withValues(alpha: 0.06)),
-              itemBuilder: (context, i) => _FileRow(file: files[i], onRemove: () => controller.removeSelected(files[i])),
+              itemBuilder: (context, i) =>
+                  _FileRow(file: files[i], onRemove: () => controller.removeSelected(files[i])),
             ),
           ),
           const SizedBox(height: 14),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              GhostButton(label: 'Add', icon: Icons.add_rounded, onPressed: controller.pickFiles),
-              const SizedBox(width: 8),
-              GhostButton(label: 'Folder', icon: Icons.folder_rounded, onPressed: () => _pickFolder(context)),
-              const SizedBox(width: 12),
-              const Expanded(
+              GhostButton(label: context.tr('add'), icon: Icons.add_rounded, onPressed: controller.pickFiles),
+              GhostButton(label: context.tr('folder'), icon: Icons.folder_rounded, onPressed: () => _pickFolder(context)),
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 4),
                 child: Text(
-                  'Tap a device below to send',
-                  textAlign: TextAlign.end,
-                  style: TextStyle(color: AppColors.cyan, fontSize: 12.5, fontWeight: FontWeight.w600),
+                  context.tr('tap_device'),
+                  style: const TextStyle(color: AppColors.cyan, fontSize: 12.5, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -222,10 +268,9 @@ class _FilesCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Send text', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Text(context.tr('send_text_title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
-            const Text('Links, notes, passwords, code — encrypted end to end. Prefilled from your clipboard.',
-                style: TextStyle(color: AppColors.muted, fontSize: 13)),
+            Text(context.tr('send_text_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 13)),
             const SizedBox(height: 16),
             TextField(
               controller: field,
@@ -233,15 +278,16 @@ class _FilesCard extends StatelessWidget {
               minLines: 4,
               maxLines: 10,
               maxLength: 65536,
-              decoration: const InputDecoration(hintText: 'Type or paste…', counterText: ''),
+              decoration: InputDecoration(hintText: context.tr('type_or_paste'), counterText: ''),
             ),
             const SizedBox(height: 18),
             Row(
               children: [
-                Expanded(child: GhostButton(label: 'Cancel', onPressed: () => Navigator.pop(ctx), expand: true)),
+                Expanded(child: GhostButton(label: context.tr('cancel'), onPressed: () => Navigator.pop(ctx), expand: true)),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: GlowButton(label: 'Done', expand: true, onPressed: () => Navigator.pop(ctx, field.text)),
+                  child: GlowButton(
+                      label: context.tr('done'), expand: true, onPressed: () => Navigator.pop(ctx, field.text)),
                 ),
               ],
             ),
@@ -291,11 +337,22 @@ class _DevicesSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SectionTitle(
-          'Nearby devices',
-          trailing: TextButton.icon(
-            onPressed: () => _connectByIp(context),
-            icon: const Icon(Icons.lan_rounded, size: 17, color: AppColors.cyan),
-            label: const Text('By IP', style: TextStyle(color: AppColors.cyan)),
+          context.tr('nearby'),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (hasCamera)
+                TextButton.icon(
+                  onPressed: () => _scan(context),
+                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 17, color: AppColors.cyan),
+                  label: Text(context.tr('scan_qr'), style: const TextStyle(color: AppColors.cyan)),
+                ),
+              TextButton.icon(
+                onPressed: () => _sendToTarget(context),
+                icon: const Icon(Icons.link_rounded, size: 17, color: AppColors.cyan),
+                label: Text(context.tr('by_link'), style: const TextStyle(color: AppColors.cyan)),
+              ),
+            ],
           ),
         ),
         if (peers.isEmpty)
@@ -303,17 +360,17 @@ class _DevicesSection extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 18),
             child: Column(
               children: [
-                Radar(
+                const Radar(
                   size: 170,
-                  center: const Icon(Icons.wifi_tethering_rounded, color: AppColors.cyan, size: 30),
+                  center: Icon(Icons.wifi_tethering_rounded, color: AppColors.cyan, size: 30),
                 ),
                 const SizedBox(height: 14),
-                const Text('Scanning your network…', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                Text(context.tr('scanning'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 const SizedBox(height: 6),
-                const Text(
-                  'Open SUDOSEND on another device connected to the same Wi-Fi or hotspot.',
+                Text(
+                  context.tr('scanning_sub'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.muted, fontSize: 13),
+                  style: const TextStyle(color: AppColors.muted, fontSize: 13),
                 ),
               ],
             ),
@@ -334,15 +391,27 @@ class _DevicesSection extends StatelessWidget {
 
   void _send(BuildContext context, Peer peer) {
     if (!controller.hasSelection) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pick files, a folder or some text first, then tap a device.')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('pick_first'))));
       return;
     }
-    controller.sendTo(peer);
+    unawaited(controller.sendTo(peer));
   }
 
-  Future<void> _connectByIp(BuildContext context) async {
+  Future<void> _scan(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final link = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const ScanPage()));
+    if (link == null || !context.mounted) return;
+    if (!controller.hasSelection) {
+      // Keep the link: let the user pick what to send, then finish.
+      messenger.showSnackBar(SnackBar(content: Text(context.tr('pick_first'))));
+      await controller.pickFiles();
+      if (!controller.hasSelection) return;
+    }
+    final error = await controller.sendToTarget(link);
+    if (error != null) messenger.showSnackBar(SnackBar(content: Text(error)));
+  }
+
+  Future<void> _sendToTarget(BuildContext context) async {
     final text = TextEditingController();
     String? error;
     await showDialog<void>(
@@ -354,32 +423,40 @@ class _DevicesSection extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Send by IP address', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              Text(context.tr('target_title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
-              const Text(
-                'For networks that block discovery. The receiver shows its IP on the Receive tab.',
-                style: TextStyle(color: AppColors.muted, fontSize: 13),
-              ),
+              Text(context.tr('target_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 13)),
               const SizedBox(height: 16),
               TextField(
                 controller: text,
                 autofocus: true,
                 keyboardType: TextInputType.url,
+                textDirection: TextDirection.ltr,
                 style: kMono,
-                decoration: InputDecoration(hintText: '192.168.1.20', errorText: error),
+                decoration: InputDecoration(
+                  hintText: '192.168.1.20  ·  sudosend://pair?…',
+                  errorText: error,
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.content_paste_rounded, size: 18),
+                    onPressed: () async {
+                      final clip = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+                      if (clip != null) text.text = clip.trim();
+                    },
+                  ),
+                ),
               ),
               const SizedBox(height: 18),
               Row(
                 children: [
-                  Expanded(child: GhostButton(label: 'Cancel', onPressed: () => Navigator.pop(ctx), expand: true)),
+                  Expanded(child: GhostButton(label: context.tr('cancel'), onPressed: () => Navigator.pop(ctx), expand: true)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: GlowButton(
-                      label: 'Send',
+                      label: context.tr('send'),
                       icon: Icons.north_east_rounded,
                       expand: true,
                       onPressed: () async {
-                        final result = await controller.sendToAddress(text.text);
+                        final result = await controller.sendToTarget(text.text);
                         if (result == null) {
                           if (ctx.mounted) Navigator.pop(ctx);
                         } else {
@@ -419,26 +496,25 @@ class _PeerTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(peer.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                Text(peer.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
                 const SizedBox(height: 3),
                 Wrap(
                   spacing: 8,
                   runSpacing: 2,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text(peer.manual ? 'manual' : groupFingerprint(peer.id, groups: 2),
-                        style: kMono.copyWith(color: AppColors.muted, fontSize: 11.5)),
-                    Text(peer.address.address, style: const TextStyle(color: AppColors.muted, fontSize: 11.5)),
+                    Text(peer.manual ? context.tr('manual') : groupFingerprint(peer.id, groups: 2),
+                        textDirection: TextDirection.ltr, style: kMono.copyWith(color: AppColors.muted, fontSize: 11.5)),
+                    Text(peer.address.address,
+                        textDirection: TextDirection.ltr, style: const TextStyle(color: AppColors.muted, fontSize: 11.5)),
                     if (trusted)
-                      const Row(
+                      Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.verified_user_rounded, size: 14, color: AppColors.mint),
-                          SizedBox(width: 3),
-                          Text('Trusted',
-                              style: TextStyle(color: AppColors.mint, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                          const Icon(Icons.verified_user_rounded, size: 14, color: AppColors.mint),
+                          const SizedBox(width: 3),
+                          Text(context.tr('trusted'),
+                              style: const TextStyle(color: AppColors.mint, fontSize: 11.5, fontWeight: FontWeight.w700)),
                         ],
                       ),
                   ],

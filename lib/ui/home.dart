@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'package:wraith_core/transfer.dart';
 import 'package:wraith_core/util.dart';
+import '../app/scope.dart';
 import '../state/app_controller.dart';
 import 'background.dart';
 import 'glass.dart';
@@ -11,6 +12,7 @@ import 'incoming_dialog.dart';
 import 'radar.dart';
 import 'receive_tab.dart';
 import 'send_tab.dart';
+import 'settings_page.dart';
 import 'theme.dart';
 import 'transfers_tab.dart';
 
@@ -24,19 +26,20 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _NavItem {
-  const _NavItem(this.icon, this.label);
+  const _NavItem(this.icon, this.labelKey);
   final IconData icon;
-  final String label;
+  final String labelKey;
 }
 
 const _navItems = [
-  _NavItem(Icons.send_rounded, 'Send'),
-  _NavItem(Icons.wifi_tethering_rounded, 'Receive'),
-  _NavItem(Icons.swap_vert_rounded, 'Transfers'),
+  _NavItem(Icons.send_rounded, 'tab_send'),
+  _NavItem(Icons.wifi_tethering_rounded, 'tab_receive'),
+  _NavItem(Icons.swap_vert_rounded, 'tab_transfers'),
 ];
 
 class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<IncomingRequest>? _incomingSub;
+  StreamSubscription<String>? _messageSub;
   final List<IncomingRequest> _queue = [];
   bool _dialogOpen = false;
 
@@ -49,11 +52,16 @@ class _HomeScreenState extends State<HomeScreen> {
       _queue.add(r);
       _drainQueue();
     });
+    _messageSub = c.messages.listen((m) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+    });
   }
 
   @override
   void dispose() {
     _incomingSub?.cancel();
+    _messageSub?.cancel();
     super.dispose();
   }
 
@@ -152,7 +160,7 @@ class _Boot extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             if (error == null)
-              const Text('Booting Wraith…', style: TextStyle(color: AppColors.muted, letterSpacing: 1.2))
+              Text(context.tr('booting'), style: const TextStyle(color: AppColors.muted, letterSpacing: 1.2))
             else
               Glass(
                 borderColor: AppColors.danger.withValues(alpha: 0.4),
@@ -160,7 +168,7 @@ class _Boot extends StatelessWidget {
                   children: [
                     const Icon(Icons.error_outline_rounded, color: AppColors.danger, size: 32),
                     const SizedBox(height: 8),
-                    const Text('Could not start', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+                    Text(context.tr('cant_start'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
                     const SizedBox(height: 6),
                     Text(error!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted)),
                   ],
@@ -210,10 +218,10 @@ class _Header extends StatelessWidget {
                   ),
                 ),
                 if (!compact)
-                  const Text(
-                    'Wraith Protocol · end-to-end encrypted',
+                  Text(
+                    context.tr('tagline'),
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    style: const TextStyle(color: AppColors.muted, fontSize: 12),
                   ),
               ],
             ),
@@ -224,7 +232,7 @@ class _Header extends StatelessWidget {
               radius: 40,
               blur: 16,
               padding: const EdgeInsets.fromLTRB(10, 7, 14, 7),
-              onTap: () => _rename(context),
+              onTap: () => showRenameDialog(context, controller),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -247,12 +255,27 @@ class _Header extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(width: 8),
+          Glass(
+            radius: 40,
+            blur: 16,
+            padding: const EdgeInsets.all(10),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => SettingsPage(controller: controller)),
+            ),
+            child: Tooltip(
+              message: context.tr('settings'),
+              child: const Icon(Icons.tune_rounded, size: 20, color: AppColors.text),
+            ),
+          ),
         ],
       ),
     );
   }
+}
 
-  Future<void> _rename(BuildContext context) async {
+Future<void> showRenameDialog(BuildContext context, AppController controller) async {
+  {
     final text = TextEditingController(text: controller.identity.name);
     final result = await showDialog<String>(
       context: context,
@@ -262,9 +285,9 @@ class _Header extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Device name', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Text(context.tr('device_name'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
-            const Text('This is how other devices see you.', style: TextStyle(color: AppColors.muted)),
+            Text(context.tr('device_name_sub'), style: const TextStyle(color: AppColors.muted)),
             const SizedBox(height: 16),
             TextField(
               controller: text,
@@ -276,10 +299,10 @@ class _Header extends StatelessWidget {
             const SizedBox(height: 18),
             Row(
               children: [
-                Expanded(child: GhostButton(label: 'Cancel', onPressed: () => Navigator.pop(ctx), expand: true)),
+                Expanded(child: GhostButton(label: context.tr('cancel'), onPressed: () => Navigator.pop(ctx), expand: true)),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: GlowButton(label: 'Save', onPressed: () => Navigator.pop(ctx, text.text), expand: true),
+                  child: GlowButton(label: context.tr('save'), onPressed: () => Navigator.pop(ctx, text.text), expand: true),
                 ),
               ],
             ),
@@ -393,7 +416,7 @@ class _NavButton extends StatelessWidget {
       ],
     );
     final label = Text(
-      item.label,
+      context.tr(item.labelKey),
       style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: vertical ? 11.5 : 13),
     );
     return GestureDetector(

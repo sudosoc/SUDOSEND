@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../app/scope.dart';
 import 'theme.dart';
 
 /// Frosted-glass surface: backdrop blur + translucent gradient + hairline border.
@@ -59,19 +60,24 @@ class Glass extends StatelessWidget {
       );
     }
     final g = glow;
+    final reduced = context.reducedEffects;
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: r,
-        boxShadow: g == null
+        // Reduced effects: an opaque panel instead of a live blur.
+        color: reduced ? const Color(0xE6101631) : null,
+        boxShadow: g == null || reduced
             ? const []
             : [BoxShadow(color: g.withValues(alpha: 0.28), blurRadius: 40, spreadRadius: -10)],
       ),
       child: ClipRRect(
         borderRadius: r,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: surface,
-        ),
+        child: reduced
+            ? surface
+            : BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+                child: surface,
+              ),
       ),
     );
   }

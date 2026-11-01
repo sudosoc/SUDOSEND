@@ -26,10 +26,14 @@ const TextStyle kMono = TextStyle(
   fontFamilyFallback: ['JetBrains Mono', 'Consolas', 'DejaVu Sans Mono', 'Courier New'],
 );
 
-ThemeData buildTheme() {
+const String kArabicFont = 'IBMPlexSansArabic';
+
+ThemeData buildTheme({bool arabic = false}) {
   final base = ThemeData(
     brightness: Brightness.dark,
     useMaterial3: true,
+    fontFamily: arabic ? kArabicFont : null,
+    fontFamilyFallback: const [kArabicFont],
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.cyan,
       brightness: Brightness.dark,

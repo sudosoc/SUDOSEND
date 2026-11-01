@@ -69,6 +69,19 @@ if has ios; then
 fi
 
 # ── Launcher icons ───────────────────────────────────────────────────
-dart run flutter_launcher_icons
+if has android || has windows; then
+  dart run flutter_launcher_icons
+fi
+if has ios || has macos; then
+  cfg="$(mktemp -t icons.XXXXXX).yaml"
+  {
+    echo "flutter_launcher_icons:"
+    echo "  image_path: assets/icon.png"
+    echo "  android: false"
+    if has ios; then printf '  ios: true\n  remove_alpha_ios: true\n  background_color_ios: "#060816"\n'; else echo "  ios: false"; fi
+    if has macos; then printf '  macos:\n    generate: true\n    image_path: assets/icon.png\n'; fi
+  } > "$cfg"
+  dart run flutter_launcher_icons -f "$cfg"
+fi
 
 echo "bootstrap ($PLATFORMS): ok"

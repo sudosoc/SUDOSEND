@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'package:wraith_core/transfer.dart';
 import 'package:wraith_core/util.dart';
+
+import '../app/scope.dart';
 import 'glass.dart';
 import 'theme.dart';
 
@@ -21,11 +23,11 @@ Future<void> showIncomingDialog(BuildContext context, IncomingRequest request) a
     barrierColor: Colors.black.withValues(alpha: 0.6),
     builder: (_) => _IncomingDialog(
       request: request,
-      onDecide: (accept, trust) {
+      onDecide: (accept, trust, block) {
         if (!open) return;
         open = false;
         navigator.pop();
-        request.respond(accept, trust: trust);
+        request.respond(accept, trust: trust, block: block);
       },
     ),
   );
@@ -37,7 +39,7 @@ class _IncomingDialog extends StatefulWidget {
   const _IncomingDialog({required this.request, required this.onDecide});
 
   final IncomingRequest request;
-  final void Function(bool accept, bool trust) onDecide;
+  final void Function(bool accept, bool trust, bool block) onDecide;
 
   @override
   State<_IncomingDialog> createState() => _IncomingDialogState();
@@ -64,8 +66,8 @@ class _IncomingDialogState extends State<_IncomingDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(r.text != null ? 'INCOMING TEXT' : 'INCOMING TRANSFER',
-                        style: TextStyle(color: AppColors.muted, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 1.4)),
+                    Text(context.tr(r.text != null ? 'incoming_text' : 'incoming_transfer'),
+                        style: const TextStyle(color: AppColors.muted, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 1.4)),
                     const SizedBox(height: 2),
                     Text(r.peerName,
                         overflow: TextOverflow.ellipsis,
@@ -76,16 +78,17 @@ class _IncomingDialogState extends State<_IncomingDialog> {
             ],
           ),
           const SizedBox(height: 10),
-          Text(groupFingerprint(r.fingerprint), style: kMono.copyWith(color: AppColors.muted, fontSize: 11.5)),
+          Text('${groupFingerprint(r.fingerprint)} · ${r.peerAddress}',
+              textDirection: TextDirection.ltr, style: kMono.copyWith(color: AppColors.muted, fontSize: 11.5)),
           const SizedBox(height: 16),
           if (r.trusted)
-            const Row(
+            Row(
               children: [
-                Icon(Icons.verified_user_rounded, color: AppColors.mint, size: 20),
-                SizedBox(width: 8),
+                const Icon(Icons.verified_user_rounded, color: AppColors.mint, size: 20),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Text('Trusted device — identity proven by its key',
-                      style: TextStyle(color: AppColors.mint, fontWeight: FontWeight.w700)),
+                  child: Text(context.tr('trusted_proven'),
+                      style: const TextStyle(color: AppColors.mint, fontWeight: FontWeight.w700)),
                 ),
               ],
             )
@@ -101,12 +104,13 @@ class _IncomingDialogState extends State<_IncomingDialog> {
               child: Column(
                 children: [
                   Text(formatSas(r.sas),
+                      textDirection: TextDirection.ltr,
                       style: kMono.copyWith(fontSize: 38, fontWeight: FontWeight.w900, letterSpacing: 6)),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Accept only if the sender shows the same code.',
+                  Text(
+                    context.tr('sas_hint_receiver'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.amber, fontSize: 12.5, fontWeight: FontWeight.w600),
+                    style: const TextStyle(color: AppColors.amber, fontSize: 12.5, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -144,11 +148,11 @@ class _IncomingDialogState extends State<_IncomingDialog> {
           if (more > 0)
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text('+ $more more', style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+              child: Text(context.tr('n_more', {'n': more}), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
             ),
           if (r.files.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text('Total ${formatBytes(r.totalBytes)}',
+            Text(context.tr('total', {'size': formatBytes(r.totalBytes)}),
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
           ],
           if (!r.trusted) ...[
@@ -159,9 +163,8 @@ class _IncomingDialogState extends State<_IncomingDialog> {
               child: Row(
                 children: [
                   Checkbox(value: _trust, onChanged: (v) => setState(() => _trust = v ?? false)),
-                  const Expanded(
-                    child: Text('Trust this device (skip the code next time)',
-                        style: TextStyle(fontSize: 13)),
+                  Expanded(
+                    child: Text(context.tr('trust_this'), style: const TextStyle(fontSize: 13)),
                   ),
                 ],
               ),
@@ -172,22 +175,60 @@ class _IncomingDialogState extends State<_IncomingDialog> {
             children: [
               Expanded(
                 child: GhostButton(
-                  label: 'Decline',
+                  label: context.tr('decline'),
                   color: AppColors.danger,
                   expand: true,
-                  onPressed: () => widget.onDecide(false, false),
+                  onPressed: () => widget.onDecide(false, false, false),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: GlowButton(
-                  label: 'Accept',
+                  label: context.tr('accept'),
                   icon: Icons.download_rounded,
                   expand: true,
-                  onPressed: () => widget.onDecide(true, _trust),
+                  onPressed: () => widget.onDecide(true, _trust, false),
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 6),
+          Center(
+            child: TextButton.icon(
+              onPressed: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => GlassDialog(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(context.tr('block_confirm', {'name': r.peerName}), textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                                child: GhostButton(
+                                    label: context.tr('cancel'), expand: true, onPressed: () => Navigator.pop(ctx, false))),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: GhostButton(
+                                label: context.tr('block'),
+                                color: AppColors.danger,
+                                expand: true,
+                                onPressed: () => Navigator.pop(ctx, true),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+                if (confirmed == true) widget.onDecide(false, false, true);
+              },
+              icon: const Icon(Icons.block_rounded, size: 16, color: AppColors.muted),
+              label: Text(context.tr('block'), style: const TextStyle(color: AppColors.muted)),
+            ),
           ),
         ],
       ),

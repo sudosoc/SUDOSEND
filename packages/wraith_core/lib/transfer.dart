@@ -170,6 +170,12 @@ class TransferEngine {
 
   void revokePairingToken(String token) => _pairTokens.remove(token);
 
+  /// True while [token] is unused and unexpired.
+  bool isPairingTokenValid(String token) {
+    _prunePairTokens();
+    return _pairTokens.containsKey(token);
+  }
+
   void _prunePairTokens() {
     final now = DateTime.now();
     _pairTokens.removeWhere((_, expiry) => expiry.isBefore(now));

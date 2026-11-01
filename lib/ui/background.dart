@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../app/scope.dart';
 import 'theme.dart';
 
 /// Slowly drifting neon orbs over a faint cyber grid — the backdrop the
@@ -16,7 +17,18 @@ class AnimatedBackground extends StatefulWidget {
 class _AnimatedBackgroundState extends State<AnimatedBackground>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller =
-      AnimationController(vsync: this, duration: const Duration(seconds: 26))..repeat();
+      AnimationController(vsync: this, duration: const Duration(seconds: 26), value: 0.15);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reduced effects: a still backdrop (no per-frame repaints).
+    if (context.reducedEffects) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
 
   @override
   void dispose() {

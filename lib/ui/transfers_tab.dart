@@ -1,9 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
+import 'package:path/path.dart' as p;
 import 'package:wraith_core/models.dart';
 import 'package:wraith_core/util.dart';
+
+import '../app/scope.dart';
+import '../platform/desktop.dart';
 import '../state/app_controller.dart';
+import '../state/history.dart';
 import 'glass.dart';
 import 'theme.dart';
 
@@ -15,21 +21,22 @@ class TransfersTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final jobs = controller.jobs;
-    if (jobs.isEmpty) {
+    final earlier = controller.earlierHistory;
+    if (jobs.isEmpty && earlier.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Glass(
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 30),
-            child: const Column(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                IconBadge(icon: Icons.swap_vert_rounded, color: AppColors.violet, size: 58),
-                SizedBox(height: 14),
-                Text('No transfers yet', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-                SizedBox(height: 6),
-                Text('Everything you send or receive shows up here.',
-                    textAlign: TextAlign.center, style: TextStyle(color: AppColors.muted)),
+                const IconBadge(icon: Icons.swap_vert_rounded, color: AppColors.violet, size: 58),
+                const SizedBox(height: 14),
+                Text(context.tr('no_transfers'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+                const SizedBox(height: 6),
+                Text(context.tr('no_transfers_sub'),
+                    textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted)),
               ],
             ),
           ),
@@ -37,34 +44,53 @@ class TransfersTab extends StatelessWidget {
       );
     }
     final hasFinished = jobs.any((j) => !j.isActive);
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      itemCount: jobs.length + 1,
-      itemBuilder: (context, i) {
-        if (i == 0) {
-          return SectionTitle(
-            'Activity',
-            trailing: hasFinished
-                ? TextButton(
-                    onPressed: controller.clearFinished,
-                    child: const Text('Clear finished', style: TextStyle(color: AppColors.muted)),
-                  )
-                : null,
-          );
-        }
-        final job = jobs[i - 1];
-        return Padding(
+    final items = <Widget>[
+      if (jobs.isNotEmpty)
+        SectionTitle(
+          context.tr('activity'),
+          trailing: hasFinished
+              ? TextButton(
+                  onPressed: controller.clearFinished,
+                  child: Text(context.tr('clear_finished'), style: const TextStyle(color: AppColors.muted)),
+                )
+              : null,
+        ),
+      for (final job in jobs)
+        Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: StreamBuilder<void>(stream: job.changes, builder: (context, _) => _JobCard(job: job)),
-        );
-      },
-    );
+          child: StreamBuilder<void>(
+            stream: job.changes,
+            builder: (context, _) => _JobCard(job: job, controller: controller),
+          ),
+        ),
+      if (earlier.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        SectionTitle(
+          context.tr('earlier'),
+          trailing: TextButton(
+            onPressed: controller.clearHistory,
+            child: Text(context.tr('clear_history'), style: const TextStyle(color: AppColors.muted)),
+          ),
+        ),
+        for (final entry in earlier)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _HistoryTile(entry: entry, controller: controller),
+          ),
+      ],
+    ];
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 24), children: items);
   }
 }
 
+String _summary(BuildContext context, int files, int bytes) => files == 1
+    ? context.tr('one_file_size', {'size': formatBytes(bytes)})
+    : context.tr('n_files_size', {'n': files, 'size': formatBytes(bytes)});
+
 class _JobCard extends StatelessWidget {
-  const _JobCard({required this.job});
+  const _JobCard({required this.job, required this.controller});
   final TransferJob job;
+  final AppController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -84,9 +110,7 @@ class _JobCard extends StatelessWidget {
           Row(
             children: [
               IconBadge(
-                icon: job.isText
-                    ? Icons.notes_rounded
-                    : (outgoing ? Icons.north_east_rounded : Icons.south_west_rounded),
+                icon: job.isText ? Icons.notes_rounded : (outgoing ? Icons.north_east_rounded : Icons.south_west_rounded),
                 color: accent,
                 size: 42,
               ),
@@ -96,21 +120,21 @@ class _JobCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${outgoing ? 'To' : 'From'} ${job.peerName}',
+                      context.tr(outgoing ? 'to_name' : 'from_name', {'name': job.peerName}),
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                     ),
                     Text(
                       job.isText
-                          ? 'Text message · ${job.text!.length} chars'
-                          : '${job.files.length} ${job.files.length == 1 ? 'file' : 'files'} · ${formatBytes(job.totalBytes)}'
-                              '${job.resumedBytes > 0 ? ' · resumed' : ''}',
+                          ? context.tr('text_message', {'n': job.text!.length})
+                          : '${_summary(context, job.files.length, job.totalBytes)}'
+                              '${job.resumedBytes > 0 ? ' · ${context.tr('resumed')}' : ''}',
                       style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
                     ),
                   ],
                 ),
               ),
-              _StatusChip(status: job.status, outgoing: outgoing),
+              StatusChip(status: job.status, outgoing: outgoing),
             ],
           ),
           if (showSas) ...[
@@ -129,6 +153,7 @@ class _JobCard extends StatelessWidget {
                 Text(
                   '${formatBytes(job.doneBytes)} / ${formatBytes(job.totalBytes)}'
                   '${job.status == TransferStatus.transferring ? ' · ${formatSpeed(job.speed)}' : ''}',
+                  textDirection: TextDirection.ltr,
                   style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
                 ),
               ],
@@ -146,15 +171,17 @@ class _JobCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    outgoing
-                        ? 'Delivered · SHA-256 verified by receiver'
-                        : 'SHA-256 verified · saved to ${job.savedPaths.isEmpty ? '—' : _dirOf(job.savedPaths.first)}',
+                    context.tr(outgoing ? 'delivered' : 'verified_saved'),
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: AppColors.mint, fontSize: 12.5, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
             ),
+            if (!outgoing && job.savedPaths.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _SavedFiles(paths: job.savedPaths, controller: controller),
+            ],
           ],
           if (job.error != null) ...[
             const SizedBox(height: 12),
@@ -163,20 +190,18 @@ class _JobCard extends StatelessWidget {
               children: [
                 const Icon(Icons.warning_amber_rounded, size: 17, color: AppColors.danger),
                 const SizedBox(width: 6),
-                Expanded(
-                  child: Text(job.error!, style: const TextStyle(color: AppColors.danger, fontSize: 12.5)),
-                ),
+                Expanded(child: Text(job.error!, style: const TextStyle(color: AppColors.danger, fontSize: 12.5))),
               ],
             ),
           ],
           if (job.isActive) ...[
             const SizedBox(height: 12),
             Align(
-              alignment: Alignment.centerRight,
+              alignment: AlignmentDirectional.centerEnd,
               child: TextButton.icon(
                 onPressed: job.cancelRequested ? null : job.cancel,
                 icon: const Icon(Icons.close_rounded, size: 17, color: AppColors.danger),
-                label: Text(job.cancelRequested ? 'Cancelling…' : 'Cancel',
+                label: Text(context.tr(job.cancelRequested ? 'cancelling' : 'cancel'),
                     style: const TextStyle(color: AppColors.danger)),
               ),
             ),
@@ -185,11 +210,113 @@ class _JobCard extends StatelessWidget {
       ),
     );
   }
+}
 
-  static String _dirOf(String path) {
-    final sep = path.contains('\\') ? '\\' : '/';
-    final i = path.lastIndexOf(sep);
-    return i > 0 ? path.substring(0, i) : path;
+/// Tappable list of received files with Open / Show in folder.
+class _SavedFiles extends StatelessWidget {
+  const _SavedFiles({required this.paths, required this.controller});
+  final List<String> paths;
+  final AppController controller;
+
+  Future<void> _open(BuildContext context, String path) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final message = context.tr('cant_open');
+    if (!await controller.openFile(path)) messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = paths.take(5).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final path in shown)
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => _open(context, path),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
+              child: Row(
+                children: [
+                  Icon(fileIcon(path), size: 18, color: AppColors.muted),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(p.basename(path), overflow: TextOverflow.ellipsis)),
+                  const Icon(Icons.open_in_new_rounded, size: 16, color: AppColors.cyan),
+                ],
+              ),
+            ),
+          ),
+        if (paths.length > shown.length)
+          Text(context.tr('n_more', {'n': paths.length - shown.length}),
+              style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+        if (isDesktop) ...[
+          const SizedBox(height: 8),
+          GhostButton(
+            label: context.tr('show_folder'),
+            icon: Icons.folder_open_rounded,
+            color: AppColors.cyan,
+            onPressed: () => controller.reveal(paths.first),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _HistoryTile extends StatelessWidget {
+  const _HistoryTile({required this.entry, required this.controller});
+  final HistoryEntry entry;
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final outgoing = entry.direction == TransferDirection.outgoing;
+    final existing = entry.savedPaths.where((s) => File(s).existsSync()).toList();
+    final when = MaterialLocalizations.of(context);
+    final date = '${when.formatShortDate(entry.at)} · ${when.formatTimeOfDay(TimeOfDay.fromDateTime(entry.at))}';
+    return Glass(
+      padding: const EdgeInsets.all(14),
+      onTap: existing.isEmpty
+          ? null
+          : () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final message = context.tr('cant_open');
+              final ok = existing.length == 1 || !isDesktop
+                  ? await controller.openFile(existing.first)
+                  : await controller.reveal(existing.first);
+              if (!ok) messenger.showSnackBar(SnackBar(content: Text(message)));
+            },
+      child: Row(
+        children: [
+          IconBadge(
+            icon: entry.isText ? Icons.notes_rounded : (outgoing ? Icons.north_east_rounded : Icons.south_west_rounded),
+            color: outgoing ? AppColors.cyan : AppColors.mint,
+            size: 38,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(context.tr(outgoing ? 'to_name' : 'from_name', {'name': entry.peerName}),
+                    overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                Text(
+                  entry.isText
+                      ? context.tr('text_message_short')
+                      : (entry.fileCount == 1 && entry.firstName != null
+                          ? '${p.basename(entry.firstName!)} · ${formatBytes(entry.totalBytes)}'
+                          : _summary(context, entry.fileCount, entry.totalBytes)),
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+                Text(date, style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+              ],
+            ),
+          ),
+          StatusChip(status: entry.status, outgoing: outgoing),
+        ],
+      ),
+    );
   }
 }
 
@@ -209,23 +336,25 @@ class _SasPanel extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.shield_rounded, size: 16, color: AppColors.amber),
-              SizedBox(width: 6),
-              Text('VERIFICATION CODE',
-                  style: TextStyle(color: AppColors.amber, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 1.4)),
+              const Icon(Icons.shield_rounded, size: 16, color: AppColors.amber),
+              const SizedBox(width: 6),
+              Text(context.tr('verification_code'),
+                  style: const TextStyle(
+                      color: AppColors.amber, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 1.4)),
             ],
           ),
           const SizedBox(height: 8),
           Text(formatSas(sas),
+              textDirection: TextDirection.ltr,
               style: kMono.copyWith(fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: 6)),
           const SizedBox(height: 6),
-          const Text(
-            'The receiver must see this exact code before accepting.',
+          Text(
+            context.tr('sas_hint_sender'),
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.muted, fontSize: 12.5),
+            style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
           ),
         ],
       ),
@@ -238,13 +367,13 @@ class _TrustedNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       children: [
-        Icon(Icons.verified_user_rounded, size: 18, color: AppColors.mint),
-        SizedBox(width: 8),
+        const Icon(Icons.verified_user_rounded, size: 18, color: AppColors.mint),
+        const SizedBox(width: 8),
         Expanded(
-          child: Text('Trusted device · waiting for the receiver to accept…',
-              style: TextStyle(color: AppColors.mint, fontSize: 13, fontWeight: FontWeight.w600)),
+          child: Text(context.tr('trusted_waiting'),
+              style: const TextStyle(color: AppColors.mint, fontSize: 13, fontWeight: FontWeight.w600)),
         ),
       ],
     );
@@ -265,7 +394,7 @@ class _ProgressBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Align(
-        alignment: Alignment.centerLeft,
+        alignment: AlignmentDirectional.centerStart,
         child: TweenAnimationBuilder<double>(
           tween: Tween(end: value),
           duration: const Duration(milliseconds: 220),
@@ -275,7 +404,9 @@ class _ProgressBar extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
                 gradient: LinearGradient(colors: [color, AppColors.violet]),
-                boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 12, spreadRadius: -2)],
+                boxShadow: context.reducedEffects
+                    ? const []
+                    : [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 12, spreadRadius: -2)],
               ),
             ),
           ),
@@ -285,22 +416,22 @@ class _ProgressBar extends StatelessWidget {
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status, required this.outgoing});
+class StatusChip extends StatelessWidget {
+  const StatusChip({super.key, required this.status, required this.outgoing});
   final TransferStatus status;
   final bool outgoing;
 
   @override
   Widget build(BuildContext context) {
-    final (label, color) = switch (status) {
-      TransferStatus.connecting => ('Connecting', AppColors.muted),
-      TransferStatus.awaitingApproval => ('Waiting', AppColors.amber),
-      TransferStatus.transferring => (outgoing ? 'Sending' : 'Receiving', AppColors.cyan),
-      TransferStatus.verifying => ('Verifying', AppColors.violet),
-      TransferStatus.done => ('Done', AppColors.mint),
-      TransferStatus.declined => ('Declined', AppColors.danger),
-      TransferStatus.failed => ('Failed', AppColors.danger),
-      TransferStatus.cancelled => ('Cancelled', AppColors.muted),
+    final (key, color) = switch (status) {
+      TransferStatus.connecting => ('st_connecting', AppColors.muted),
+      TransferStatus.awaitingApproval => ('st_waiting', AppColors.amber),
+      TransferStatus.transferring => (outgoing ? 'st_sending' : 'st_receiving', AppColors.cyan),
+      TransferStatus.verifying => ('st_verifying', AppColors.violet),
+      TransferStatus.done => ('st_done', AppColors.mint),
+      TransferStatus.declined => ('st_declined', AppColors.danger),
+      TransferStatus.failed => ('st_failed', AppColors.danger),
+      TransferStatus.cancelled => ('st_cancelled', AppColors.muted),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -309,7 +440,7 @@ class _StatusChip extends StatelessWidget {
         color: color.withValues(alpha: 0.12),
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
-      child: Text(label, style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w800)),
+      child: Text(context.tr(key), style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w800)),
     );
   }
 }
@@ -339,14 +470,14 @@ class _TextPanel extends StatelessWidget {
           if (showCopy) ...[
             const SizedBox(height: 10),
             Align(
-              alignment: Alignment.centerRight,
+              alignment: AlignmentDirectional.centerEnd,
               child: GhostButton(
-                label: 'Copy',
+                label: context.tr('copy'),
                 icon: Icons.copy_rounded,
                 color: AppColors.cyan,
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: text));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('copied'))));
                 },
               ),
             ),
