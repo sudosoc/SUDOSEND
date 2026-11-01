@@ -52,6 +52,12 @@
 - 📋 **Universal clipboard** — copy on one device, paste on your others (Pushbullet charges for this)
 - 🌐 **Share with any browser** — send to *and receive from* a device that doesn't have the app,
   even an iPhone: it scans a QR and gets a download/upload page (Send Anywhere / Feem-style)
+- 🔎 **Files tab** — search by name, extension, device, date, size and type; timeline by day; in-app preview of photos, videos, PDFs, text and code
+- ♻️ **Duplicate detection** with SHA-256, even when the name differs
+- 🖥️ **Device profiles** — nicknames, groups, connection & transfer history, permission profiles (both / receive only / send only), expiring trust
+- 📜 **Audit log** (CSV / JSON Lines for your SIEM) and **statistics dashboard** with CSV / JSON / PDF reports
+- 🛡️ **Secure file handling** — warns about programs, scripts, macros and disguised files; Mark-of-the-Web on Windows, quarantine on macOS
+- 💽 **Storage guard** — warns before the disk fills and refuses transfers that would not fit
 - 🗂️ **Smart file organization** — received files file themselves into `SUDOSEND/<device>/<type>/<date>/`
 - 🧹 **Photo privacy** — GPS location (or all metadata) is stripped from photos before sending, no quality loss
 - 🔐 **Per-device permissions** — decide what each trusted device may do (auto-accept, ring, clipboard, sync…)

@@ -128,11 +128,22 @@ class TransferJob {
   int verifiedFiles = 0;
   final List<String> savedPaths = [];
 
+  /// SHA-256 (hex) of every saved file, by path — verified on arrival.
+  final Map<String, String> savedHashes = {};
+
+  /// Fastest rate seen over a short window, bytes/s.
+  double peakSpeed = 0;
+
+  /// Time spent actually moving data (excludes waiting for approval).
+  int transferMs = 0;
+
   /// Signed proof of delivery (set when the transfer completes).
   DeliveryReceipt? receipt;
   bool cancelRequested = false;
   DateTime? finishedAt;
   int _lastNotifyMs = -1000;
+  int _windowMs = 0;
+  int _windowBytes = 0;
 
   final StreamController<void> _changes = StreamController<void>.broadcast();
 
@@ -163,6 +174,14 @@ class TransferJob {
   void addProgress(int bytes, Stopwatch clock) {
     doneBytes += bytes;
     final now = clock.elapsedMilliseconds;
+    transferMs = now;
+    // Peak speed over windows of at least 300 ms (shorter ones are noise).
+    if (now - _windowMs >= 300) {
+      final inst = (doneBytes - _windowBytes) / ((now - _windowMs) / 1000);
+      if (_windowMs > 0 && inst > peakSpeed) peakSpeed = inst;
+      _windowMs = now;
+      _windowBytes = doneBytes;
+    }
     if (now - _lastNotifyMs >= progressIntervalMs || doneBytes >= totalBytes) {
       final fresh = doneBytes - resumedBytes;
       speed = now > 0 ? fresh / (now / 1000) : 0;

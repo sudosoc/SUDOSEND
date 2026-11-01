@@ -18,6 +18,12 @@ class DevicePrefs {
     this.sync = true,
     this.speedTest = true,
     this.keepMetadata = false,
+    this.nickname,
+    this.group,
+    this.direction = 'both',
+    this.trustExpires,
+    this.byType,
+    this.byDate,
   });
 
   /// Folder name for this device's files (null = its device name).
@@ -34,6 +40,26 @@ class DevicePrefs {
   /// Send photos to this device with their metadata (e.g. your own backup).
   bool keepMetadata;
 
+  /// Name shown for this device inside SUDOSEND (its own name stays as is).
+  String? nickname;
+
+  /// Device group, e.g. Personal or Work.
+  String? group;
+
+  /// both | receiveOnly (it may send to me, I never send to it) |
+  /// sendOnly (I may send to it, it may not send to me).
+  String direction;
+
+  /// When trust in this device ends by itself (null = never).
+  DateTime? trustExpires;
+
+  /// Archiving rules for this device (null = follow the general setting).
+  bool? byType;
+  bool? byDate;
+
+  bool get mayReceiveFrom => direction != 'sendOnly';
+  bool get maySendTo => direction != 'receiveOnly';
+
   Map<String, Object?> toJson() => {
         if (folder != null) 'folder': folder,
         if (autoAccept != null) 'autoAccept': autoAccept,
@@ -43,6 +69,12 @@ class DevicePrefs {
         'sync': sync,
         'speedTest': speedTest,
         'keepMetadata': keepMetadata,
+        if (nickname != null) 'nickname': nickname,
+        if (group != null) 'group': group,
+        if (direction != 'both') 'direction': direction,
+        if (trustExpires != null) 'trustExpires': trustExpires!.millisecondsSinceEpoch,
+        if (byType != null) 'byType': byType,
+        if (byDate != null) 'byDate': byDate,
       };
 
   static DevicePrefs fromJson(Object? raw) {
@@ -58,6 +90,13 @@ class DevicePrefs {
       sync: b('sync', true),
       speedTest: b('speedTest', true),
       keepMetadata: b('keepMetadata', false),
+      nickname: raw['nickname'] is String && (raw['nickname'] as String).trim().isNotEmpty ? raw['nickname'] as String : null,
+      group: raw['group'] is String ? raw['group'] as String : null,
+      direction: const {'both', 'receiveOnly', 'sendOnly'}.contains(raw['direction']) ? raw['direction'] as String : 'both',
+      trustExpires:
+          raw['trustExpires'] is int ? DateTime.fromMillisecondsSinceEpoch(raw['trustExpires'] as int) : null,
+      byType: raw['byType'] is bool ? raw['byType'] as bool : null,
+      byDate: raw['byDate'] is bool ? raw['byDate'] as bool : null,
     );
   }
 }
@@ -172,6 +211,21 @@ class SettingsController extends ChangeNotifier {
   /// Photo metadata before sending: off | location | all.
   String metadata = 'location';
 
+  /// A received file identical to one you already have: keep | remove.
+  String duplicates = 'keep';
+
+  /// Decline transfers that would not fit on this device.
+  bool storageGuard = true;
+
+  /// Notification types.
+  bool notifyDone = true;
+  bool notifyFailed = true;
+  bool notifyDuplicates = true;
+  bool notifyStorage = true;
+
+  /// Device groups (names), e.g. Personal, Work.
+  List<String> deviceGroups = ['Personal', 'Work'];
+
   /// Per-device permissions, keyed by fingerprint.
   Map<String, DevicePrefs> devicePrefs = {};
 
@@ -228,6 +282,15 @@ class SettingsController extends ChangeNotifier {
         organizeByDevice = (m['organizeByDevice'] as bool?) ?? organizeByDevice;
         organizeByType = (m['organizeByType'] as bool?) ?? organizeByType;
         organizeByDate = (m['organizeByDate'] as bool?) ?? organizeByDate;
+        final dup = m['duplicates'];
+        if (dup == 'keep' || dup == 'remove') duplicates = dup as String;
+        storageGuard = (m['storageGuard'] as bool?) ?? storageGuard;
+        notifyDone = (m['notifyDone'] as bool?) ?? notifyDone;
+        notifyFailed = (m['notifyFailed'] as bool?) ?? notifyFailed;
+        notifyDuplicates = (m['notifyDuplicates'] as bool?) ?? notifyDuplicates;
+        notifyStorage = (m['notifyStorage'] as bool?) ?? notifyStorage;
+        final groups = m['deviceGroups'];
+        if (groups is List) deviceGroups = groups.whereType<String>().toList();
         final md = m['metadata'];
         if (md == 'off' || md == 'location' || md == 'all') metadata = md as String;
         final prefs = m['devicePrefs'];
@@ -281,6 +344,13 @@ class SettingsController extends ChangeNotifier {
         'organizeByType': organizeByType,
         'organizeByDate': organizeByDate,
         'metadata': metadata,
+        'duplicates': duplicates,
+        'storageGuard': storageGuard,
+        'notifyDone': notifyDone,
+        'notifyFailed': notifyFailed,
+        'notifyDuplicates': notifyDuplicates,
+        'notifyStorage': notifyStorage,
+        'deviceGroups': deviceGroups,
         'devicePrefs': {for (final e in devicePrefs.entries) e.key: e.value.toJson()},
         'wifiDirect': wifiDirect,
         'autoUpdateCheck': autoUpdateCheck,

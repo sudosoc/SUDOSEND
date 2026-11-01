@@ -809,6 +809,7 @@ class TransferEngine {
           received.add(ReceiptFile(files[index].name, files[index].size, hexOf(digest)));
           activeJob.update(() {
             activeJob.savedPaths.add(dest.path);
+            activeJob.savedHashes[dest.path] = hexOf(digest);
             activeJob.verifiedFiles++;
           });
         } else if (msg.type == Frame.done) {

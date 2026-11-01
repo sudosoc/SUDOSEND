@@ -12,8 +12,11 @@ import '../platform/desktop.dart';
 import '../state/app_controller.dart';
 import '../state/updater.dart' show kReleaseRepo;
 import 'about_pages.dart';
+import 'audit_page.dart';
 import 'background.dart';
+import 'dashboard_page.dart';
 import 'device_page.dart';
+import 'devices_page.dart';
 import 'glass.dart';
 import 'home.dart' show showRenameDialog;
 import 'receive_tab.dart' show InfoRow;
@@ -27,14 +30,20 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cats = <(IconData, Color, String, String, List<Widget> Function(BuildContext))>[
-      (Icons.devices_rounded, AppColors.cyan, 's_device', 'cat_device_sub', _device),
-      (Icons.download_rounded, AppColors.amber, 's_receiving', 'cat_receiving_sub', _receiving),
-      (Icons.extension_rounded, AppColors.violet, 's_features', 's_features_sub', _features),
-      (Icons.shield_rounded, AppColors.mint, 's_privacy', 'cat_privacy_sub', _privacy),
-      (Icons.data_usage_rounded, AppColors.pink, 's_usage', 'cat_usage_sub', _usage),
-      (Icons.palette_rounded, AppColors.amber, 's_appearance', 'cat_appearance_sub', _appearance),
-      (Icons.info_rounded, AppColors.cyan, 's_about', 'cat_about_sub', _about),
+    // Each entry opens either a settings section or a full page.
+    Widget Function() section(List<Widget> Function(BuildContext) b, String title) =>
+        () => _SettingsScaffold(controller: controller, title: context.tr(title), children: b);
+    final cats = <(IconData, Color, String, String, Widget Function())>[
+      (Icons.smartphone_rounded, AppColors.cyan, 's_device', 'cat_device_sub', section(_device, 's_device')),
+      (Icons.devices_other_rounded, AppColors.violet, 'devices_title', 'cat_devices_sub', () => DevicesPage(controller: controller)),
+      (Icons.download_rounded, AppColors.amber, 's_receiving', 'cat_receiving_sub', section(_receiving, 's_receiving')),
+      (Icons.extension_rounded, AppColors.violet, 's_features', 's_features_sub', section(_features, 's_features')),
+      (Icons.shield_rounded, AppColors.mint, 's_privacy', 'cat_privacy_sub', section(_privacy, 's_privacy')),
+      (Icons.insights_rounded, AppColors.pink, 'dash_title', 'cat_dash_sub', () => DashboardPage(controller: controller)),
+      (Icons.policy_rounded, AppColors.amber, 'audit_title', 'cat_audit_sub', () => AuditPage(controller: controller)),
+      (Icons.data_usage_rounded, AppColors.pink, 's_usage', 'cat_usage_sub', section(_usage, 's_usage')),
+      (Icons.palette_rounded, AppColors.amber, 's_appearance', 'cat_appearance_sub', section(_appearance, 's_appearance')),
+      (Icons.info_rounded, AppColors.cyan, 's_about', 'cat_about_sub', section(_about, 's_about')),
     ];
     return _SettingsScaffold(
       controller: controller,
@@ -45,9 +54,7 @@ class SettingsPage extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 10),
             child: Glass(
               padding: const EdgeInsets.all(14),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) => _SettingsScaffold(controller: controller, title: context.tr(c.$3), children: c.$5),
-              )),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => c.$5())),
               child: Row(
                 children: [
                   IconBadge(icon: c.$1, color: c.$2, size: 42),
@@ -249,6 +256,62 @@ class SettingsPage extends StatelessWidget {
               info: 'i_notifications',
               value: s.notifications,
               onChanged: controller.setNotifications,
+            ),
+            if (s.notifications)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 50),
+                child: Column(
+                  children: [
+                    _SubSwitch(
+                      label: context.tr('nt_done'),
+                      value: s.notifyDone,
+                      onChanged: (v) => s.update((x) => x.notifyDone = v),
+                    ),
+                    _SubSwitch(
+                      label: context.tr('nt_failed'),
+                      value: s.notifyFailed,
+                      onChanged: (v) => s.update((x) => x.notifyFailed = v),
+                    ),
+                    _SubSwitch(
+                      label: context.tr('nt_duplicates'),
+                      value: s.notifyDuplicates,
+                      onChanged: (v) => s.update((x) => x.notifyDuplicates = v),
+                    ),
+                    _SubSwitch(
+                      label: context.tr('nt_storage'),
+                      value: s.notifyStorage,
+                      onChanged: (v) => s.update((x) => x.notifyStorage = v),
+                    ),
+                  ],
+                ),
+              ),
+            _divider,
+            _Header(
+              icon: Icons.copy_all_rounded,
+              color: AppColors.amber,
+              title: context.tr('dup_setting'),
+              subtitle: context.tr('dup_setting_sub'),
+              info: 'i_duplicates',
+            ),
+            const SizedBox(height: 8),
+            SegmentedButton<String>(
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(value: 'keep', label: Text(context.tr('dup_keep'))),
+                ButtonSegment(value: 'remove', label: Text(context.tr('dup_remove'))),
+              ],
+              selected: {s.duplicates},
+              onSelectionChanged: (v) => s.update((x) => x.duplicates = v.first),
+            ),
+            _divider,
+            _Switch(
+              icon: Icons.sd_storage_rounded,
+              color: AppColors.mint,
+              title: context.tr('sg_title'),
+              subtitle: context.tr('sg_sub'),
+              info: 'i_storage',
+              value: s.storageGuard,
+              onChanged: (v) => s.update((x) => x.storageGuard = v),
             ),
             _divider,
             _Header(

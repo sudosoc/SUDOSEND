@@ -13,6 +13,7 @@ import 'package:wraith_core/models.dart';
 import 'package:wraith_core/organize.dart';
 import 'package:wraith_core/pairing.dart';
 import 'package:wraith_core/receipt.dart';
+import 'package:wraith_core/risk.dart';
 import 'package:wraith_core/sync.dart';
 import 'package:wraith_core/web_share.dart';
 import 'package:wraith_core/transfer.dart';
@@ -716,6 +717,18 @@ void main() {
     expect(File(at(['Pictures', '2026-11-02', 'photo.jpg'])).readAsStringSync(), 'jpg');
     expect(File(at(['Other Files', '2026-11-02', 'thing.weird'])).readAsStringSync(), '??');
     expect(File(at(['Folders', '2026-11-02', 'Project', 'docs', 'a.txt'])).readAsStringSync(), 'in a folder');
+  });
+
+  test('risky files: double extensions, disguised programs, scripts', () {
+    expect(assessRisk('holiday.jpg').level, RiskLevel.none);
+    expect(assessRisk('invoice.pdf.exe').reason, 'double-extension');
+    expect(assessRisk('setup.exe').level, RiskLevel.caution);
+    expect(assessRisk('run.ps1').reason, 'script');
+    expect(assessRisk('budget.xlsm').reason, 'macro');
+    expect(assessRisk('photo‮gpj.exe').level, RiskLevel.danger);
+    expect(assessRisk('cv.pdf', [0x4D, 0x5A, 0x90, 0x00]).reason, 'disguised');
+    expect(assessRisk('notes.txt', '#!/bin/sh'.codeUnits).reason, 'disguised-script');
+    expect(assessRisk('cv.pdf', '%PDF-1.7'.codeUnits).level, RiskLevel.none);
   });
 
   group('metadata scrubbing', () {

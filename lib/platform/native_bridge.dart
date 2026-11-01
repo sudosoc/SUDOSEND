@@ -183,6 +183,13 @@ class NativeBridge {
   /// "ok" | "permission" | "error" — see Bridge.installApk.
   Future<String> installApk(String path) async => (await _invoke<String>('installApk', {'path': path})) ?? 'error';
 
+  /// (free, total) bytes of the volume holding [path].
+  Future<(int, int)?> diskSpace(String path) async {
+    final r = await _invoke<List<Object?>>('diskSpace', {'path': path});
+    if (r == null || r.length < 2) return null;
+    return ((r[0] as num).toInt(), (r[1] as num).toInt());
+  }
+
   /// Starts a local-only hotspot. Returns (ssid, password); throws a
   /// user-readable message on failure.
   Future<({String ssid, String password})> startHotspot() async {

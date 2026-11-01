@@ -143,6 +143,12 @@ object Bridge {
                         Ringer.stop(app)
                         result.success(true)
                     }
+                    "diskSpace" -> {
+                        val path = call.argument<String>("path") ?: app.filesDir.path
+                        val dir = File(path).let { if (it.exists()) it else app.filesDir }
+                        val st = android.os.StatFs(dir.path)
+                        result.success(listOf(st.availableBytes, st.totalBytes))
+                    }
                     "p2pAttach" -> {
                         val ok = WifiDirect.attach(app)
                         if (ok) WifiDirect.advertise(app, call.argument<String>("name") ?: "", call.argument<String>("fp") ?: "")

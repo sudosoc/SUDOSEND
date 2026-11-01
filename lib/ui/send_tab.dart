@@ -10,6 +10,7 @@ import '../app/scope.dart';
 import '../platform/desktop.dart';
 import '../state/app_controller.dart';
 import 'device_actions.dart';
+import 'devices_page.dart' show groupLabel;
 import 'glass.dart';
 import 'radar.dart';
 import 'scan_page.dart';
@@ -24,6 +25,23 @@ class SendTab extends StatefulWidget {
 
   @override
   State<SendTab> createState() => _SendTabState();
+}
+
+/// Tile keys of the visible devices, so a drop can be matched to a device.
+final Map<String, GlobalKey> _peerKeys = {};
+
+/// Device under the pointer while dragging files (highlighted).
+final ValueNotifier<String?> _dropPeer = ValueNotifier<String?>(null);
+
+Peer? _peerAt(AppController c, Offset global) {
+  for (final p in c.peers) {
+    final box = _peerKeys[p.id]?.currentContext?.findRenderObject();
+    if (box is RenderBox && box.attached) {
+      final rect = box.localToGlobal(Offset.zero) & box.size;
+      if (rect.contains(global)) return p;
+    }
+  }
+  return null;
 }
 
 class _SendTabState extends State<SendTab> {
@@ -64,11 +82,26 @@ class _SendTabState extends State<SendTab> {
     if (!isDesktop) return body;
     return DropTarget(
       onDragEntered: (_) => setState(() => _dragging = true),
-      onDragExited: (_) => setState(() => _dragging = false),
+      onDragExited: (_) {
+        _dropPeer.value = null;
+        setState(() => _dragging = false);
+      },
+      onDragUpdated: (d) => _dropPeer.value = _peerAt(controller, d.globalPosition)?.id,
       onDragDone: (detail) async {
+        _dropPeer.value = null;
         setState(() => _dragging = false);
         final messenger = ScaffoldMessenger.of(context);
-        final error = await controller.addPaths([for (final f in detail.files) f.path]);
+        final paths = [for (final f in detail.files) f.path];
+        // Dropped onto a device: send straight to it. Elsewhere: add to the selection.
+        final target = _peerAt(controller, detail.globalPosition);
+        final String? error;
+        if (target != null) {
+          final sending = context.tr('drop_sending', {'name': controller.displayName(target.id, target.name)});
+          messenger.showSnackBar(SnackBar(content: Text(sending)));
+          error = await controller.sendPathsTo(target, paths);
+        } else {
+          error = await controller.addPaths(paths);
+        }
         if (error != null) messenger.showSnackBar(SnackBar(content: Text(error)));
       },
       child: body,
@@ -407,6 +440,35 @@ class _DevicesSectionState extends State<_DevicesSection> {
             ],
           ),
         ),
+        if (!_selecting)
+          Builder(builder: (context) {
+            final groups = [
+              for (final g in controller.settings.deviceGroups)
+                if (controller.peersInGroup(g).isNotEmpty) (g, controller.peersInGroup(g).length),
+            ];
+            if (groups.isEmpty) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final (g, n) in groups)
+                    ActionChip(
+                      avatar: const Icon(Icons.groups_rounded, size: 17, color: AppColors.violet),
+                      label: Text(context.tr('group_send', {'group': groupLabel(context, g), 'n': n})),
+                      onPressed: () {
+                        if (!controller.hasSelection) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('pick_first'))));
+                          return;
+                        }
+                        unawaited(controller.sendToGroup(g));
+                      },
+                    ),
+                ],
+              ),
+            );
+          }),
         if (controller.p2pLink != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
@@ -471,6 +533,9 @@ class _DevicesSectionState extends State<_DevicesSection> {
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _PeerTile(
+                key: _peerKeys.putIfAbsent(peer.id, GlobalKey.new),
+                name: controller.displayName(peer.id, peer.name),
+                group: controller.settings.devicePrefs[peer.id]?.group,
                 peer: peer,
                 trusted: controller.trust.isTrusted(peer.id),
                 onMore: controller.trust.isTrusted(peer.id) ? () => showDeviceActions(context, controller, peer) : null,
@@ -627,7 +692,20 @@ class _DevicesSectionState extends State<_DevicesSection> {
 }
 
 class _PeerTile extends StatelessWidget {
-  const _PeerTile({required this.peer, required this.trusted, required this.onTap, this.selected, this.onMore});
+  const _PeerTile({
+    super.key,
+    required this.name,
+    this.group,
+    required this.peer,
+    required this.trusted,
+    required this.onTap,
+    this.selected,
+    this.onMore,
+  });
+
+  /// Nickname, or the device's own name.
+  final String name;
+  final String? group;
 
   /// Trusted devices: ring, speed test, message, folder sync.
   final VoidCallback? onMore;
@@ -642,10 +720,15 @@ class _PeerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = platformColor(peer.platform);
-    return Glass(
-      onTap: onTap,
-      padding: const EdgeInsets.all(14),
-      borderColor: selected == true ? AppColors.cyan : null,
+    return ValueListenableBuilder<String?>(
+      valueListenable: _dropPeer,
+      builder: (context, hover, child) => Glass(
+        onTap: onTap,
+        padding: const EdgeInsets.all(14),
+        borderColor: selected == true || hover == peer.id ? AppColors.cyan : null,
+        glow: hover == peer.id ? AppColors.cyan : null,
+        child: child!,
+      ),
       child: Row(
         children: [
           IconBadge(icon: platformIcon(peer.platform), color: color),
@@ -654,7 +737,7 @@ class _PeerTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(peer.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
                 const SizedBox(height: 3),
                 Wrap(
                   spacing: 8,
@@ -675,6 +758,9 @@ class _PeerTile extends StatelessWidget {
                               style: const TextStyle(color: AppColors.mint, fontSize: 11.5, fontWeight: FontWeight.w700)),
                         ],
                       ),
+                    if (group != null)
+                      Text(groupLabel(context, group!),
+                          style: const TextStyle(color: AppColors.violet, fontSize: 11.5, fontWeight: FontWeight.w700)),
                   ],
                 ),
               ],

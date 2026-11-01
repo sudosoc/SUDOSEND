@@ -10,12 +10,14 @@ import 'package:flutter/widgets.dart' show AppLifecycleListener, AppLifecycleSta
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:wraith_core/discovery.dart';
+import 'package:wraith_core/disk.dart';
 import 'package:wraith_core/identity.dart';
 import 'package:wraith_core/metadata.dart';
 import 'package:wraith_core/models.dart';
 import 'package:wraith_core/organize.dart';
 import 'package:wraith_core/pairing.dart';
 import 'package:wraith_core/receipt.dart';
+import 'package:wraith_core/risk.dart';
 import 'package:wraith_core/sync.dart';
 import 'package:wraith_core/transfer.dart';
 import 'package:wraith_core/util.dart';
@@ -27,8 +29,11 @@ import '../app/scope.dart' show kAppVersion;
 import '../app/strings.dart';
 import '../platform/desktop.dart';
 import '../platform/native_bridge.dart';
+import 'audit.dart';
 import 'chat.dart';
+import 'devices.dart';
 import 'history.dart';
+import 'library.dart';
 import 'outbox.dart';
 import 'previews.dart';
 import 'settings.dart';
@@ -45,6 +50,9 @@ class AppController extends ChangeNotifier {
   late TrustStore trust;
   late HistoryStore history;
   late ChatStore chat;
+  late LibraryStore library;
+  late DeviceRegistry devices;
+  late AuditLog audit;
   late Discovery _discovery;
   late Directory _support;
   late TransferEngine _engine;
@@ -110,6 +118,9 @@ class AppController extends ChangeNotifier {
       trust = await TrustStore.load(support);
       history = await HistoryStore.load(support);
       chat = await ChatStore.load(support);
+      library = await LibraryStore.load(support);
+      devices = await DeviceRegistry.load(support);
+      audit = await AuditLog.load(support);
       outbox = await OutboxStore.load(support);
       saveDir = await _resolveSaveDir();
 
@@ -123,6 +134,7 @@ class AppController extends ChangeNotifier {
         autoAccept: (r) {
           if (!r.trusted) return false;
           final d = settings.prefsFor(r.fingerprint);
+          if (!d.mayReceiveFrom || !_fits(r)) return false;
           if (r.ring) return settings.allowRing && d.ring;
           if (r.clipboard) return settings.clipboardSync && d.clipboard;
           if (r.speedTest) return settings.allowSpeedTest && d.speedTest;
@@ -134,6 +146,7 @@ class AppController extends ChangeNotifier {
         onJob: _addJob,
         onRejected: (address, reason) {
           rejectedConnections++;
+          audit.add(AuditKind.connectionRejected, detail: '$address · $reason');
           notifyListeners();
         },
       );
@@ -165,6 +178,9 @@ class AppController extends ChangeNotifier {
       }));
       settings.addListener(_applySettings);
       _outboxTimer = Timer.periodic(const Duration(seconds: 30), (_) => unawaited(_flushOutbox()));
+      _deviceTimer = Timer.periodic(const Duration(seconds: 30), (_) => _housekeeping());
+      _rememberTrustedAddresses();
+      unawaited(refreshStorage());
       _subs.add(_native.ringStopped.listen((_) => _rings.add('')));
       _subs.add(_native.p2pEvents.listen(_onP2p));
       if (isDesktop) unawaited(SingleInstance.listen((args) => addPaths(args)));
@@ -203,9 +219,24 @@ class AppController extends ChangeNotifier {
   // ─────────────────────────── Incoming ───────────────────────────
 
   void _onIncoming(IncomingRequest r) {
+    final label = displayName(r.fingerprint, r.peerName);
+    if (r.trusted && !settings.prefsFor(r.fingerprint).mayReceiveFrom) {
+      r.respond(false);
+      audit.add(AuditKind.permissionDenied, device: label, detail: 'send-only device tried to send');
+      return;
+    }
+    if (!_fits(r)) {
+      r.respond(false);
+      final need = formatBytes(r.totalBytes);
+      audit.add(AuditKind.storageLow, device: label, detail: 'declined $need: not enough space');
+      _messages.add(t('storage_declined', {'name': label, 'size': need}));
+      _notifyStorage(force: true);
+      return;
+    }
     // Clipboard pushes never prompt: accepted silently from trusted devices
     // when sync is on (see autoAccept), declined otherwise.
     if (r.clipboard || r.ring || r.speedTest) {
+      if (r.trusted) audit.add(AuditKind.permissionDenied, device: label, detail: r.ring ? 'ring' : r.clipboard ? 'clipboard' : 'speed test');
       r.respond(false);
       return;
     }
@@ -231,9 +262,13 @@ class AppController extends ChangeNotifier {
         unawaited(desktopNotify(title, body));
       }
     }
-    unawaited(r.decision.then((_) {
+    unawaited(r.decision.then((d) {
       _pendingRequests.remove(r.id);
       unawaited(_native.cancelNotification(r.id));
+      audit.add(d.accept ? AuditKind.requestAccepted : AuditKind.requestDeclined,
+          device: label, detail: '${r.files.length} file(s), ${formatBytes(r.totalBytes)} from ${r.peerAddress}');
+      if (d.trust) audit.add(AuditKind.deviceTrusted, device: label, detail: r.fingerprint);
+      if (d.block) audit.add(AuditKind.deviceBlocked, device: label, detail: r.fingerprint);
     }));
   }
 
@@ -304,6 +339,15 @@ class AppController extends ChangeNotifier {
 
   void _onJobFinished(TransferJob job) {
     unawaited(_record(job));
+    final who = displayName(job.peerFingerprint ?? '', job.peerName);
+    if (job.status == TransferStatus.done) {
+      audit.add(AuditKind.transferDone,
+          device: who,
+          detail: '${job.direction.name} ${job.files.length} file(s), ${formatBytes(job.totalBytes)}');
+      if (job.direction == TransferDirection.incoming && job.savedPaths.isNotEmpty) unawaited(_afterReceive(job));
+    } else if (job.status == TransferStatus.failed) {
+      audit.add(AuditKind.transferFailed, device: who, detail: job.error);
+    }
     if (job.status == TransferStatus.done &&
         job.isText &&
         job.direction == TransferDirection.incoming &&
@@ -313,6 +357,8 @@ class AppController extends ChangeNotifier {
     }
     notifyListeners();
     if (!settings.notifications || job.status == TransferStatus.cancelled) return;
+    if (job.status == TransferStatus.done && !settings.notifyDone) return;
+    if (job.status != TransferStatus.done && !settings.notifyFailed) return;
     final incoming = job.direction == TransferDirection.incoming;
     final String title;
     switch (job.status) {
@@ -357,8 +403,10 @@ class AppController extends ChangeNotifier {
   }
 
   /// Lets the user save a file (receipt, history export). Returns the path or null.
-  Future<String?> exportText(String fileName, String content) async {
-    final bytes = Uint8List.fromList(utf8.encode(content));
+  Future<String?> exportText(String fileName, String content) =>
+      exportBytes(fileName, Uint8List.fromList(utf8.encode(content)));
+
+  Future<String?> exportBytes(String fileName, Uint8List bytes) async {
     final path = await FilePicker.platform.saveFile(fileName: fileName, bytes: bytes);
     if (path == null) return null;
     if (isDesktop) {
@@ -546,6 +594,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> sendTo(Peer peer, {String? pairToken}) async {
     if (!hasSelection) return;
+    if (!_maySendTo(peer)) return;
     final files = List<FileEntry>.of(selected);
     final text = selectedText;
     selected.clear();
@@ -558,7 +607,8 @@ class AppController extends ChangeNotifier {
   }
 
   /// Sends the current selection to several devices in parallel.
-  Future<void> sendToMany(List<Peer> peers) async {
+  Future<void> sendToMany(List<Peer> targets) async {
+    final peers = targets.where(_maySendTo).toList();
     if (!hasSelection || peers.isEmpty) return;
     final files = List<FileEntry>.of(selected);
     final text = selectedText;
@@ -760,6 +810,7 @@ class AppController extends ChangeNotifier {
   void _onWebEvent(WebShareEvent e) {
     webEvents.insert(0, e);
     if (webEvents.length > 200) webEvents.removeLast();
+    if (e.kind == 'upload' && e.path != null) unawaited(_indexUpload(e.path!, e.name));
     if (e.kind == 'upload') {
       unawaited(history.add(HistoryEntry(
         id: 'web-${e.at.microsecondsSinceEpoch}',
@@ -969,6 +1020,7 @@ class AppController extends ChangeNotifier {
   }
 
   void _onPeersChanged() {
+    _trackDevices();
     notifyListeners();
     unawaited(_flushOutbox());
     // A sync partner just showed up: sync right away instead of waiting.
@@ -1123,18 +1175,330 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  // ─────────────────────────── Devices: profiles, names, groups ───────────────────────────
+
+  Timer? _deviceTimer;
+
+  /// The name to show for a device: its nickname here, else its own name.
+  String displayName(String fingerprint, String fallback) =>
+      (fingerprint.isEmpty ? null : settings.devicePrefs[fingerprint]?.nickname) ?? fallback;
+
+  String _nameOf(String fp) =>
+      displayName(fp, devices[fp]?.name ?? trust.all.where((d) => d.fingerprint == fp).firstOrNull?.name ?? fp.substring(0, 8));
+
+  bool isOnline(String fp) => peers.any((p) => p.id == fp);
+
+  DateTime _lastDeviceSave = DateTime.fromMillisecondsSinceEpoch(0);
+
+  void _trackDevices() {
+    if (!ready) return;
+    var fresh = false;
+    for (final p in peers) {
+      if (p.manual) continue;
+      fresh |= devices.seen(p.id, name: p.name, platform: p.platform, address: p.address.address, port: p.port);
+    }
+    final now = DateTime.now();
+    if (fresh || now.difference(_lastDeviceSave) > const Duration(minutes: 1)) {
+      _lastDeviceSave = now;
+      unawaited(devices.save());
+    }
+    if (fresh) _rememberTrustedAddresses();
+  }
+
+  /// Auto-reconnect: also announce straight to the last address of every
+  /// trusted device, so they are found even where broadcast is blocked.
+  void _rememberTrustedAddresses() {
+    if (!ready) return;
+    final known = <String>{
+      for (final d in trust.all)
+        if (devices[d.fingerprint]?.lastAddress case final a? when !a.startsWith('192.168.49.')) a,
+    };
+    _discovery.extraTargets
+      ..removeWhere((a) => !a.startsWith('192.168.49.') && !known.contains(a))
+      ..addAll(known.take(64));
+  }
+
+  /// Every 30 s: extend sessions of visible devices, expire trust, check storage.
+  void _housekeeping() {
+    _trackDevices();
+    _expireTrust();
+    unawaited(refreshStorage());
+  }
+
+  void _expireTrust() {
+    final now = DateTime.now();
+    for (final e in settings.devicePrefs.entries.toList()) {
+      final until = e.value.trustExpires;
+      if (until == null || now.isBefore(until)) continue;
+      final name = _nameOf(e.key);
+      unawaited(updateDevicePrefs(e.key, (d) => d.trustExpires = null));
+      if (trust.isTrusted(e.key)) {
+        unawaited(trust.remove(e.key));
+        audit.add(AuditKind.trustExpired, device: name, detail: e.key);
+        _messages.add(t('trust_expired', {'name': name}));
+      }
+    }
+  }
+
+  /// Trust a device until [until] (null = no expiry).
+  Future<void> setTrustExpiry(String fingerprint, Duration? length) =>
+      updateDevicePrefs(fingerprint, (d) => d.trustExpires = length == null ? null : DateTime.now().add(length));
+
+  Future<void> block(String fingerprint, String name) async {
+    await trust.block(fingerprint, name);
+    audit.add(AuditKind.deviceBlocked, device: _nameOf(fingerprint), detail: fingerprint);
+    notifyListeners();
+  }
+
+  Future<void> trustDevice(String fingerprint, String name) async {
+    await trust.add(fingerprint, name);
+    audit.add(AuditKind.deviceTrusted, device: _nameOf(fingerprint), detail: fingerprint);
+    _rememberTrustedAddresses();
+    notifyListeners();
+  }
+
+  bool _maySendTo(Peer peer) {
+    if (!trust.isTrusted(peer.id) || settings.prefsFor(peer.id).maySendTo) return true;
+    _messages.add(t('dir_no_send', {'name': displayName(peer.id, peer.name)}));
+    audit.add(AuditKind.permissionDenied, device: displayName(peer.id, peer.name), detail: 'receive-only device: send blocked');
+    return false;
+  }
+
+  /// Online devices in [group].
+  List<Peer> peersInGroup(String group) =>
+      peers.where((p) => settings.devicePrefs[p.id]?.group == group).toList();
+
+  Future<void> sendToGroup(String group) => sendToMany(peersInGroup(group));
+
+  /// Drag & drop onto a device: send those files to it right away, leaving
+  /// whatever was already selected untouched.
+  Future<String?> sendPathsTo(Peer peer, List<String> paths) async {
+    final keepFiles = List<FileEntry>.of(selected);
+    final keepText = selectedText;
+    selected.clear();
+    selectedText = null;
+    final error = await addPaths(paths);
+    if (selected.isNotEmpty) await sendTo(peer);
+    selected
+      ..clear()
+      ..addAll(keepFiles);
+    selectedText = keepText;
+    notifyListeners();
+    return error;
+  }
+
+  // ─────────────────────────── Received files: library, duplicates, safety ───────────────────────────
+
+  int duplicatesFound = 0;
+
+  Future<void> _afterReceive(TransferJob job) async {
+    final who = displayName(job.peerFingerprint ?? '', job.peerName);
+    var removed = 0;
+    for (final path in List.of(job.savedPaths)) {
+      final hash = job.savedHashes[path];
+      if (hash == null) continue;
+      await _markFromNetwork(path);
+      final risk = await _riskOf(path);
+      if (risk.level != RiskLevel.none) {
+        audit.add(AuditKind.riskyFile, device: who, detail: '${p.basename(path)} · ${risk.reason}');
+      }
+      int size;
+      try {
+        size = await File(path).length();
+      } catch (_) {
+        continue;
+      }
+      final item = LibraryItem(
+        path: path,
+        name: p.basename(path),
+        size: size,
+        sha256: hash,
+        receivedAt: DateTime.now(),
+        device: who,
+        fingerprint: job.peerFingerprint,
+      );
+      final twin = library.add(item);
+      if (twin != null) {
+        duplicatesFound++;
+        audit.add(AuditKind.duplicateFound, device: who, detail: '${item.name} = ${twin.path}');
+        if (settings.duplicates == 'remove') {
+          try {
+            await File(path).delete();
+            library.remove(path);
+            removed++;
+          } catch (_) {}
+        }
+        if (settings.notifyDuplicates && settings.notifications) {
+          final msg = settings.duplicates == 'remove'
+              ? t('dup_removed', {'name': item.name, 'other': p.basename(twin.path)})
+              : t('dup_found', {'name': item.name, 'other': p.basename(twin.path)});
+          if (foreground) {
+            _messages.add(msg);
+          } else if (Platform.isAndroid) {
+            unawaited(_native.notify('dup-${item.sha256.substring(0, 8)}', t('dup_title'), msg));
+          } else {
+            unawaited(desktopNotify(t('dup_title'), msg));
+          }
+        }
+      }
+    }
+    if (removed > 0) job.savedPaths.removeWhere((x) => !File(x).existsSync());
+    await library.save();
+    await refreshStorage();
+    notifyListeners();
+  }
+
+  Future<void> _indexUpload(String path, String name) async {
+    try {
+      await _markFromNetwork(path);
+      final hash = await compute(hashFile, path);
+      final twin = library.add(LibraryItem(
+        path: path,
+        name: name,
+        size: await File(path).length(),
+        sha256: hash,
+        receivedAt: DateTime.now(),
+        device: 'Browser',
+      ));
+      if (twin != null) {
+        duplicatesFound++;
+        audit.add(AuditKind.duplicateFound, device: 'Browser', detail: '$name = ${twin.path}');
+      }
+      await library.save();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Secure file handling: tag received files as coming from another
+  /// computer, so Windows SmartScreen / macOS Gatekeeper warn before running
+  /// them. (SUDOSEND itself never opens or runs a received file.)
+  Future<void> _markFromNetwork(String path) async {
+    try {
+      if (Platform.isWindows) {
+        await File('$path:Zone.Identifier').writeAsString('[ZoneTransfer]\r\nZoneId=3\r\n');
+      } else if (Platform.isMacOS) {
+        final stamp = (DateTime.now().millisecondsSinceEpoch ~/ 1000).toRadixString(16);
+        await Process.run('xattr', ['-w', 'com.apple.quarantine', '0081;$stamp;SUDOSEND;', path]);
+      }
+    } catch (_) {}
+  }
+
+  Future<FileRisk> _riskOf(String path) async {
+    List<int>? head;
+    try {
+      final raf = await File(path).open();
+      head = await raf.read(16);
+      await raf.close();
+    } catch (_) {}
+    return assessRisk(p.basename(path), head);
+  }
+
+  /// Checks a file before opening it from SUDOSEND.
+  Future<FileRisk> riskOf(String path) => _riskOf(path);
+
+  Future<void> deleteLibraryItem(LibraryItem item) async {
+    try {
+      final f = File(item.path);
+      if (await f.exists()) await f.delete();
+    } catch (_) {}
+    library.remove(item.path);
+    audit.add(AuditKind.fileDeleted, device: item.device, detail: item.path);
+    await library.save();
+    await refreshStorage();
+    notifyListeners();
+  }
+
+  /// Indexes files already in the inbox (for duplicate checks on old files).
+  Future<int> scanLibrary({void Function(int done, int total)? onProgress}) async {
+    final dir = saveDir;
+    if (dir == null) return 0;
+    library.prune();
+    final n = await library.scan(dir, onProgress: onProgress);
+    notifyListeners();
+    return n;
+  }
+
+  // ─────────────────────────── Storage ───────────────────────────
+
+  /// (free, total) bytes on the inbox volume, when the platform tells us.
+  (int, int)? disk;
+  DateTime _lastStorageNotice = DateTime.fromMillisecondsSinceEpoch(0);
+
+  bool get storageLow {
+    final d = disk;
+    if (d == null) return false;
+    return d.$1 < 1024 * 1024 * 1024 || (d.$2 > 0 && d.$1 / d.$2 < 0.05);
+  }
+
+  Future<void> refreshStorage() async {
+    final dir = saveDir;
+    if (dir == null) return;
+    (int, int)? found;
+    if (Platform.isAndroid) {
+      found = await _native.diskSpace(dir.path);
+    } else {
+      found = await diskSpace(dir.path);
+    }
+    final wasLow = storageLow;
+    disk = found;
+    if (storageLow && !wasLow) _notifyStorage();
+    notifyListeners();
+  }
+
+  /// Would this request fit (keeping 200 MB spare)? True when unknown.
+  bool _fits(IncomingRequest r) {
+    final d = disk;
+    if (!settings.storageGuard || d == null || r.files.isEmpty) return true;
+    return r.totalBytes <= d.$1 - 200 * 1024 * 1024;
+  }
+
+  void _notifyStorage({bool force = false}) {
+    if (!settings.notifyStorage || !settings.notifications) return;
+    final now = DateTime.now();
+    if (!force && now.difference(_lastStorageNotice) < const Duration(hours: 6)) return;
+    _lastStorageNotice = now;
+    final free = disk == null ? '?' : formatBytes(disk!.$1);
+    final title = t('storage_low_title');
+    final body = t('storage_low_body', {'free': free});
+    audit.add(AuditKind.storageLow, detail: 'free $free');
+    if (foreground) {
+      _messages.add('$title · $body');
+    } else if (Platform.isAndroid) {
+      unawaited(_native.notify('storage', title, body));
+    } else {
+      unawaited(desktopNotify(title, body));
+    }
+  }
+
+  /// Bytes used per device and per category, from the library.
+  Map<String, int> usageByDevice() {
+    final m = <String, int>{};
+    for (final i in library.items) {
+      m[i.device] = (m[i.device] ?? 0) + i.size;
+    }
+    return m;
+  }
+
+  Map<FileCategory, int> usageByCategory() {
+    final m = <FileCategory, int>{};
+    for (final i in library.items) {
+      m[i.category] = (m[i.category] ?? 0) + i.size;
+    }
+    return m;
+  }
+
   // ─────────────────────────── Smart organization ───────────────────────────
 
   /// Where a received file goes, relative to the inbox.
   List<String> _placeFile(String peerName, String fingerprint, List<String> segments) {
     if (!settings.organize) return segments;
+    final d = fingerprint.isEmpty ? null : settings.devicePrefs[fingerprint];
     final rules = OrganizeRules(
       byDevice: settings.organizeByDevice,
-      byType: settings.organizeByType,
-      byDate: settings.organizeByDate,
+      byType: d?.byType ?? settings.organizeByType,
+      byDate: d?.byDate ?? settings.organizeByDate,
     );
-    final folder = fingerprint.isEmpty ? null : settings.devicePrefs[fingerprint]?.folder;
-    return rules.place(folder ?? peerName, segments, DateTime.now());
+    return rules.place(d?.folder ?? d?.nickname ?? peerName, segments, DateTime.now());
   }
 
   /// Example path for the settings screen.
@@ -1548,11 +1912,13 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> untrust(String fingerprint) async {
+    audit.add(AuditKind.deviceUntrusted, device: _nameOf(fingerprint), detail: fingerprint);
     await trust.remove(fingerprint);
     notifyListeners();
   }
 
   Future<void> unblock(String fingerprint) async {
+    audit.add(AuditKind.deviceUnblocked, device: _nameOf(fingerprint), detail: fingerprint);
     await trust.unblock(fingerprint);
     notifyListeners();
   }
@@ -1616,6 +1982,7 @@ class AppController extends ChangeNotifier {
   @override
   void dispose() {
     _outboxTimer?.cancel();
+    _deviceTimer?.cancel();
     _syncTimer?.cancel();
     _hotTimer?.cancel();
     _ringer.stop();

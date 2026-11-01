@@ -10,6 +10,7 @@ import 'background.dart';
 import 'chat_page.dart';
 import 'glass.dart';
 import 'incoming_dialog.dart';
+import 'library_page.dart';
 import 'radar.dart';
 import 'receive_tab.dart';
 import 'send_tab.dart';
@@ -27,24 +28,32 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _NavItem {
-  const _NavItem(this.icon, this.labelKey);
+  const _NavItem(this.id, this.icon, this.labelKey);
+
+  /// The tab index this item opens (AppController.tab).
+  final int id;
   final IconData icon;
   final String labelKey;
 }
 
 const _navItems = [
-  _NavItem(Icons.send_rounded, 'tab_send'),
-  _NavItem(Icons.wifi_tethering_rounded, 'tab_receive'),
-  _NavItem(Icons.swap_vert_rounded, 'tab_transfers'),
-  _NavItem(Icons.forum_rounded, 'tab_messages'),
+  _NavItem(0, Icons.send_rounded, 'tab_send'),
+  _NavItem(1, Icons.wifi_tethering_rounded, 'tab_receive'),
+  _NavItem(4, Icons.folder_copy_rounded, 'tab_files'),
+  _NavItem(2, Icons.swap_vert_rounded, 'tab_transfers'),
+  _NavItem(3, Icons.forum_rounded, 'tab_messages'),
 ];
 
 /// Tabs on screen: Messages only while that feature is on.
-List<_NavItem> _visibleNav(AppController c) => c.settings.chat ? _navItems : _navItems.sublist(0, 3);
+List<_NavItem> _visibleNav(AppController c) => [
+      for (final i in _navItems)
+        if (i.id != 3 || c.settings.chat) i,
+    ];
 
-int _badgeFor(AppController c, int i) => switch (i) {
+int _badgeFor(AppController c, int id) => switch (id) {
       2 => c.activeJobs,
       3 => c.chat.unread,
+      4 => c.storageLow ? 1 : 0,
       _ => 0,
     };
 
@@ -163,7 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: KeyedSubtree(key: ValueKey(c.tab), child: _tabBody()),
                           ),
                         ),
-                        if (!wide) _BottomNav(controller: c, iconsOnly: constraints.maxWidth < 420),
+                        if (!wide) _BottomNav(controller: c, iconsOnly: constraints.maxWidth < 620),
                       ],
                     );
                     if (!wide) return content;
@@ -187,6 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
         0 => SendTab(controller: c),
         1 => ReceiveTab(controller: c),
         3 when c.settings.chat => MessagesTab(controller: c),
+        4 => LibraryTab(controller: c),
         _ => TransfersTab(controller: c),
       };
 }
@@ -392,14 +402,14 @@ class _BottomNav extends StatelessWidget {
         padding: const EdgeInsets.all(6),
         child: Row(
           children: [
-            for (var i = 0; i < items.length; i++)
+            for (final item in items)
               Expanded(
                 child: _NavButton(
-                  item: items[i],
-                  selected: controller.tab == i,
-                  badge: _badgeFor(controller, i),
+                  item: item,
+                  selected: controller.tab == item.id,
+                  badge: _badgeFor(controller, item.id),
                   showLabel: labels,
-                  onTap: () => controller.setTab(i),
+                  onTap: () => controller.setTab(item.id),
                 ),
               ),
           ],
@@ -425,15 +435,15 @@ class _SideNav extends StatelessWidget {
           width: 84,
           child: Column(
             children: [
-              for (var i = 0; i < _visibleNav(controller).length; i++)
+              for (final item in _visibleNav(controller))
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _NavButton(
-                    item: _navItems[i],
-                    selected: controller.tab == i,
-                    badge: _badgeFor(controller, i),
+                    item: item,
+                    selected: controller.tab == item.id,
+                    badge: _badgeFor(controller, item.id),
                     vertical: true,
-                    onTap: () => controller.setTab(i),
+                    onTap: () => controller.setTab(item.id),
                   ),
                 ),
             ],

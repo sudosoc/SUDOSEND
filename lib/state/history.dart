@@ -21,6 +21,9 @@ class HistoryEntry {
     this.firstName,
     this.savedPaths = const [],
     this.receiptPath,
+    this.fingerprint,
+    this.transferMs = 0,
+    this.peakSpeed = 0,
   });
 
   factory HistoryEntry.fromJob(TransferJob job, {String? receiptPath}) => HistoryEntry(
@@ -37,6 +40,9 @@ class HistoryEntry {
         firstName: job.files.isEmpty ? null : job.files.first.name,
         savedPaths: List.of(job.savedPaths.take(50)),
         receiptPath: receiptPath,
+        fingerprint: job.peerFingerprint,
+        transferMs: job.transferMs,
+        peakSpeed: job.peakSpeed,
       );
 
   factory HistoryEntry.fromJson(Map<String, dynamic> m) => HistoryEntry(
@@ -53,6 +59,9 @@ class HistoryEntry {
         firstName: m['first'] as String?,
         savedPaths: [for (final s in (m['saved'] as List<dynamic>? ?? const [])) s as String],
         receiptPath: m['receipt'] as String?,
+        fingerprint: m['fp'] as String?,
+        transferMs: (m['ms'] as num?)?.toInt() ?? 0,
+        peakSpeed: (m['peak'] as num?)?.toDouble() ?? 0,
       );
 
   final String id;
@@ -71,6 +80,16 @@ class HistoryEntry {
   /// Signed delivery receipt stored in the app's data folder.
   final String? receiptPath;
 
+  /// Other device's fingerprint (null for older entries and browser uploads).
+  final String? fingerprint;
+
+  /// Time spent moving data, and the fastest short-window rate (bytes/s).
+  final int transferMs;
+  final double peakSpeed;
+
+  /// Average rate while data was moving, bytes/s (0 if unknown).
+  double get avgSpeed => transferMs <= 0 ? 0 : totalBytes * 1000 / transferMs;
+
   Map<String, Object?> toJson() => {
         'id': id,
         'dir': direction.name,
@@ -85,13 +104,16 @@ class HistoryEntry {
         'first': firstName,
         'saved': savedPaths,
         'receipt': receiptPath,
+        if (fingerprint != null) 'fp': fingerprint,
+        if (transferMs > 0) 'ms': transferMs,
+        if (peakSpeed > 0) 'peak': peakSpeed.round(),
       };
 }
 
 class HistoryStore {
   HistoryStore._(this._file, this.entries);
 
-  static const int limit = 300;
+  static const int limit = 5000;
   final File _file;
 
   /// Newest first.
