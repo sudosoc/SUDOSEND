@@ -13,8 +13,6 @@ sedi() { sed -i.bak "$1" "$2" && rm -f "$2.bak"; }
 
 flutter create --org com.sudosoc --project-name sudosend --platforms "$PLATFORMS" . >/dev/null
 flutter pub get
-FLUTTER_ROOT="$(dirname "$(dirname "$(command -v flutter)")")"
-[ -d "$FLUTTER_ROOT/packages/flutter_tools" ] || FLUTTER_ROOT="$(dirname "$(dirname "$(readlink -f "$(command -v flutter)")")")"
 
 # ── Window titles: "sudosend" → "SUDOSEND" ───────────────────────────
 [ -f linux/runner/my_application.cc ] && sedi 's/"sudosend"/"SUDOSEND"/g' linux/runner/my_application.cc
@@ -48,10 +46,8 @@ if has macos; then
   done
   plist_set macos/Runner/Info.plist NSLocalNetworkUsageDescription string "SUDOSEND finds and talks to your devices on the local network."
   plist_set macos/Runner/Info.plist NSCameraUsageDescription string "Scan a SUDOSEND pairing QR code."
-  if [ ! -f macos/Podfile ]; then
-    cp "$FLUTTER_ROOT/packages/flutter_tools/templates/cocoapods/Podfile-macos" macos/Podfile
-  fi
-  sedi "s/^#* *platform :osx, '[0-9.]*'/platform :osx, '10.15'/" macos/Podfile
+  # Flutter generates and integrates the Podfile itself on the first build;
+  # CocoaPods then follows the deployment target set here.
   sedi 's/MACOSX_DEPLOYMENT_TARGET = 10\.[0-9]*;/MACOSX_DEPLOYMENT_TARGET = 10.15;/g' macos/Runner.xcodeproj/project.pbxproj
   sedi 's/^PRODUCT_NAME = .*/PRODUCT_NAME = SUDOSEND/' macos/Runner/Configs/AppInfo.xcconfig
 fi
@@ -61,10 +57,6 @@ if has ios; then
   plist_set ios/Runner/Info.plist UIFileSharingEnabled bool true
   plist_set ios/Runner/Info.plist LSSupportsOpeningDocumentsInPlace bool true
   plist_set ios/Runner/Info.plist CFBundleDisplayName string SUDOSEND
-  if [ ! -f ios/Podfile ]; then
-    cp "$FLUTTER_ROOT/packages/flutter_tools/templates/cocoapods/Podfile-ios" ios/Podfile
-  fi
-  sedi "s/^#* *platform :ios, '[0-9.]*'/platform :ios, '15.5'/" ios/Podfile
   sedi 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*;/IPHONEOS_DEPLOYMENT_TARGET = 15.5;/g' ios/Runner.xcodeproj/project.pbxproj
 fi
 

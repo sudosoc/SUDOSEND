@@ -208,6 +208,11 @@ jobs:
           channel: stable
           cache: true
       - run: PLATFORMS=macos ./tool/ci_run.sh ./tool/bootstrap.sh
+      - name: Generate Podfile
+        run: |
+          flutter build macos --config-only --release || true
+          grep -n "platform :osx" macos/Podfile || true
+          (cd macos && pod install --repo-update)
       - run: ./tool/ci_run.sh flutter build macos --release
       - run: ./tool/ci_run.sh ./tool/build_cli.sh sudosend-cli-macos-arm64
       - name: Package
@@ -233,6 +238,12 @@ jobs:
           channel: stable
           cache: true
       - run: PLATFORMS=ios ./tool/ci_run.sh ./tool/bootstrap.sh
+      - name: Generate Podfile and pin iOS 15.5 (mobile_scanner requirement)
+        run: |
+          flutter build ios --config-only --release --no-codesign || true
+          sed -i '' "s/^#* *platform :ios, '[0-9.]*'/platform :ios, '15.5'/" ios/Podfile
+          grep -n "platform :ios" ios/Podfile
+          (cd ios && pod install --repo-update)
       - run: ./tool/ci_run.sh flutter build ios --release --no-codesign
       - name: Package unsigned IPA
         run: |
