@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +11,7 @@ import 'package:wraith_core/chacha_poly.dart';
 import 'package:wraith_core/models.dart';
 import 'package:wraith_core/pairing.dart';
 import 'package:wraith_core/receipt.dart';
+import 'package:wraith_core/sync.dart';
 import 'package:wraith_core/web_share.dart';
 import 'package:wraith_core/transfer.dart';
 import 'package:wraith_core/util.dart';
@@ -544,6 +546,131 @@ void main() {
     requests.single.respond(true);
     expect((await first).status, TransferStatus.done);
   });
+
+  test('smart compression: text shrinks on the wire, media is left alone, data is exact', () async {
+    final t = await _pair();
+    final text = List<int>.generate(3 * 1024 * 1024 + 11, (i) => 'SUDOSEND log line $i\n'.codeUnitAt(i % 20));
+    final rng = Random(7);
+    final noise = List<int>.generate(1024 * 1024, (_) => rng.nextInt(256));
+    final a = File(p.join(t.tmp.path, 'server.log'))..writeAsBytesSync(text);
+    final b = File(p.join(t.tmp.path, 'noise.bin'))..writeAsBytesSync(noise);
+    final c = File(p.join(t.tmp.path, 'photo.jpg'))..writeAsBytesSync(text.sublist(0, 200000));
+    final job = await t.sender.send(t.peer, [
+      FileEntry(name: 'server.log', size: text.length, path: a.path),
+      FileEntry(name: 'noise.bin', size: noise.length, path: b.path),
+      FileEntry(name: 'photo.jpg', size: 200000, path: c.path),
+    ]);
+    expect(job.status, TransferStatus.done, reason: job.error);
+    expect(job.compressedSaved, greaterThan(text.length ~/ 2));
+    expect(File(p.join(t.inbox.path, 'server.log')).readAsBytesSync(), text);
+    expect(File(p.join(t.inbox.path, 'noise.bin')).readAsBytesSync(), noise);
+    expect(File(p.join(t.inbox.path, 'photo.jpg')).readAsBytesSync(), text.sublist(0, 200000));
+  });
+
+  test('compression can be switched off', () async {
+    final t = await _pair();
+    TransferEngine.compression = false;
+    addTearDown(() => TransferEngine.compression = true);
+    final f = File(p.join(t.tmp.path, 'zeros.bin'))..writeAsBytesSync(List<int>.filled(500000, 0));
+    final job = await t.sender.send(t.peer, [FileEntry(name: 'zeros.bin', size: 500000, path: f.path)]);
+    expect(job.status, TransferStatus.done);
+    expect(job.compressedSaved, 0);
+  });
+
+  test('decompression bombs are refused', () {
+    final bomb = Uint8List.fromList(ZLibEncoder(raw: true).convert(List<int>.filled(10 * 1024 * 1024, 0)));
+    expect(() => inflateBounded(bomb, 1024 * 1024), throwsA(isA<WraithException>()));
+    final ok = Uint8List.fromList(ZLibEncoder(raw: true).convert(List<int>.filled(1000, 5)));
+    expect(inflateBounded(ok, 1000), List<int>.filled(1000, 5));
+    expect(worthCompressing('a.MP4'), isFalse);
+    expect(worthCompressing('notes.txt'), isTrue);
+    expect(worthCompressing('Makefile'), isTrue);
+  });
+
+  test('speed test works between trusted devices only', () async {
+    final t = await _pair(autoAccept: (r) => r.speedTest && r.trusted);
+    await expectLater(t.sender.speedTest(t.peer, duration: const Duration(milliseconds: 300)),
+        throwsA(isA<WraithException>()));
+    await t.bobTrust.add(t.alice.fingerprint, t.alice.name);
+    final rate = await t.sender.speedTest(t.peer, duration: const Duration(milliseconds: 600));
+    expect(rate, greaterThan(1024 * 1024)); // loopback: far above 1 MB/s
+    expect(t.inbox.listSync(), isEmpty, reason: 'speed test writes nothing');
+  });
+
+  test('chat messages and previews reach the receiver', () async {
+    IncomingRequest? seen;
+    final t = await _pair(onIncoming: (r) {
+      seen = r;
+      r.respond(true);
+    });
+    final job = await t.sender.send(t.peer, const [], text: 'أهلا 👋', chat: true);
+    expect(job.status, TransferStatus.done);
+    expect(seen!.chat, isTrue);
+
+    final f = File(p.join(t.tmp.path, 'pic.png'))..writeAsBytesSync(List<int>.filled(10, 1));
+    final thumb = Uint8List.fromList(List<int>.generate(300, (i) => i & 0xFF));
+    await t.sender.send(t.peer, [FileEntry(name: 'pic.png', size: 10, path: f.path)], previews: {0: thumb, 5: thumb});
+    expect(seen!.chat, isFalse);
+    expect(seen!.previews.keys, [0], reason: 'out-of-range previews are dropped');
+    expect(seen!.previews[0], thumb);
+  });
+
+  test('manifest planning: newer or missing files are pushed', () {
+    const local = [ManifestEntry('a', 1, 10000), ManifestEntry('b', 1, 10000), ManifestEntry('c', 1, 10000)];
+    const remote = [ManifestEntry('a', 1, 9000), ManifestEntry('b', 1, 5000)];
+    expect(planPush(local, remote).map((e) => e.path), ['b', 'c']);
+    final round = decodeManifest(encodeManifest(local));
+    expect(round.map((e) => '${e.path}${e.size}${e.mtime}'), local.map((e) => '${e.path}${e.size}${e.mtime}'));
+  });
+
+  test('folder sync: invite, manifest, overwrite with archive, mtime kept', () async {
+    var prompted = 0;
+    final t = await _pair(onIncoming: (r) {
+      prompted++;
+      r.respond(r.syncInvite != null);
+    });
+    final bobFolder = await Directory(p.join(t.tmp.path, 'bob-sync')).create();
+    final aliceFolder = await Directory(p.join(t.tmp.path, 'alice-sync')).create();
+    t.receiver.syncFolder = (id, fp) => id == 'S1' && fp == t.alice.fingerprint ? bobFolder : null;
+
+    // Untrusted: sync offers and manifests are refused.
+    await expectLater(t.sender.fetchManifest(t.peer, 'S1'), throwsA(isA<WraithException>()));
+    expect(await t.sender.sendSyncInvite(t.peer, 'S1', 'Projects'), isTrue);
+    expect(prompted, 1);
+    await t.bobTrust.add(t.alice.fingerprint, t.alice.name);
+
+    File(p.join(bobFolder.path, 'notes.txt')).writeAsStringSync('old');
+    final when = DateTime.now().add(const Duration(minutes: 5));
+    final src = File(p.join(aliceFolder.path, 'notes.txt'))..writeAsStringSync('new version');
+    await src.setLastModified(when);
+    File(p.join(aliceFolder.path, 'sub', 'x.txt'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync('x');
+
+    final remote = await t.sender.fetchManifest(t.peer, 'S1');
+    expect(remote.map((e) => e.path), ['notes.txt']);
+    final local = await buildManifest(aliceFolder);
+    final push = planPush(local, remote);
+    expect(push.map((e) => e.path).toSet(), {'notes.txt', 'sub/x.txt'});
+    final job = await t.sender.send(
+      t.peer,
+      [for (final e in push) FileEntry(name: e.path, size: e.size, path: p.join(aliceFolder.path, e.path), mtime: e.mtime)],
+      syncId: 'S1',
+    );
+    expect(job.status, TransferStatus.done, reason: job.error);
+    expect(prompted, 1, reason: 'sync pushes never prompt');
+    final updated = File(p.join(bobFolder.path, 'notes.txt'));
+    expect(updated.readAsStringSync(), 'new version');
+    expect((updated.lastModifiedSync().millisecondsSinceEpoch - when.millisecondsSinceEpoch).abs(), lessThan(2000));
+    expect(File(p.join(bobFolder.path, 'sub', 'x.txt')).readAsStringSync(), 'x');
+    final archived = Directory(p.join(bobFolder.path, kSyncArchive)).listSync(recursive: true).whereType<File>();
+    expect(archived.single.readAsStringSync(), 'old');
+
+    // Now both sides agree: nothing left to push either way.
+    final after = await t.sender.fetchManifest(t.peer, 'S1');
+    expect(planPush(await buildManifest(aliceFolder), after), isEmpty);
+    expect(planPush(after, await buildManifest(aliceFolder)), isEmpty);
+  });
 }
 
 class _Pair {
@@ -563,6 +690,7 @@ class _Pair {
 Future<_Pair> _pair({
   void Function(IncomingRequest r)? onIncoming,
   ConnectionLimits limits = const ConnectionLimits(),
+  bool Function(IncomingRequest r)? autoAccept,
 }) async {
   final tmp = await Directory.systemTemp.createTemp('sudosend_test_');
   addTearDown(() => tmp.delete(recursive: true));
@@ -575,6 +703,7 @@ Future<_Pair> _pair({
     identity: bob,
     trust: bobTrust,
     limits: limits,
+    autoAccept: autoAccept,
     saveDir: () async => inbox,
     onIncoming: onIncoming ?? (r) => r.respond(true),
     onJob: (_) {},

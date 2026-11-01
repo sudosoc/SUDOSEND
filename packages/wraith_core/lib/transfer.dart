@@ -11,6 +11,7 @@ import 'identity.dart';
 import 'models.dart';
 import 'pairing.dart';
 import 'receipt.dart';
+import 'sync.dart';
 import 'util.dart';
 import 'wraith.dart';
 
@@ -39,6 +40,11 @@ class IncomingRequest {
     this.paired = false,
     this.clipboard = false,
     this.ring = false,
+    this.chat = false,
+    this.speedTest = false,
+    this.syncInvite,
+    this.syncId,
+    this.previews = const {},
   })  : id = '${DateTime.now().microsecondsSinceEpoch}-${_seq++}',
         totalBytes = files.fold<int>(0, (a, f) => a + f.size);
 
@@ -63,6 +69,21 @@ class IncomingRequest {
 
   /// "Find my device": make this device ring (no files, trusted senders only).
   final bool ring;
+
+  /// A chat message.
+  final bool chat;
+
+  /// A speed test (random data, discarded).
+  final bool speedTest;
+
+  /// Invitation to sync a folder: (id, folder name).
+  final ({String id, String name})? syncInvite;
+
+  /// Files for an existing sync pair.
+  final String? syncId;
+
+  /// Image previews by file index (PNG/JPEG bytes, already size-checked).
+  final Map<int, Uint8List> previews;
 
   final Completer<IncomingDecision> _completer = Completer<IncomingDecision>();
   Future<IncomingDecision> get decision => _completer.future;
@@ -136,6 +157,13 @@ class TransferEngine {
 
   /// Upload speed cap in bytes per second for outgoing files (0 = unlimited).
   static int maxBytesPerSecond = 0;
+
+  /// Smart compression of compressible files (needs receiver support).
+  static bool compression = true;
+
+  /// Resolves a folder-sync pair to its local folder, or null if this device
+  /// has no such pair with that fingerprint.
+  Directory? Function(String syncId, String fingerprint)? syncFolder;
 
   ServerSocket? _server;
   int port = kTransferPort;
@@ -267,7 +295,13 @@ class TransferEngine {
   /// [pairToken] comes from a scanned QR code / pairing link.
   /// Completes when the transfer has finished, successfully or not.
   Future<TransferJob> send(Peer peer, List<FileEntry> files,
-      {String? text, String? pairToken, bool clipboard = false, bool ring = false}) async {
+      {String? text,
+      String? pairToken,
+      bool clipboard = false,
+      bool ring = false,
+      bool chat = false,
+      Map<int, Uint8List>? previews,
+      String? syncId}) async {
     if (text != null && text.length > kMaxTextLength) {
       throw const WraithException('Text is too long (64 KB max)');
     }
@@ -280,7 +314,9 @@ class TransferEngine {
       status: TransferStatus.connecting,
     )
       ..clipboard = clipboard && text != null
-      ..ring = ring && files.isEmpty && text == null;
+      ..ring = ring && files.isEmpty && text == null
+      ..chat = chat && text != null
+      ..syncId = syncId;
     onJob(job);
 
     Socket? socket;
@@ -315,7 +351,13 @@ class TransferEngine {
       });
 
       await channel.sendJson(Frame.offer, {
-        'files': [for (final f in files) {'name': f.name, 'size': f.size}],
+        'files': [
+          for (final f in files) {'name': f.name, 'size': f.size, if (f.mtime != null) 'mtime': f.mtime},
+        ],
+        if (job.chat) 'chat': true,
+        if (syncId != null) 'sync': syncId,
+        if (previews != null && previews.isNotEmpty)
+          'previews': {for (final e in previews.entries.take(8)) '${e.key}': base64Encode(e.value)},
         if (text != null) 'text': text,
         if (pairToken != null) 'pair': pairToken,
         if (clipboard && text != null) 'clip': true,
@@ -332,6 +374,8 @@ class TransferEngine {
       }
       final acceptBody = reply.body.isEmpty ? const <String, dynamic>{} : reply.json();
       final resume = acceptBody['resume'];
+      final caps = acceptBody['caps'];
+      final canCompress = compression && caps is List && caps.contains('z');
 
       job.update(() => job.status = TransferStatus.transferring);
       final clock = Stopwatch()..start();
@@ -365,6 +409,8 @@ class TransferEngine {
 
         await channel.sendJson(Frame.fileStart, {'i': i, 'name': f.name, 'size': f.size, 'offset': offset});
         var remaining = f.size - offset;
+        var tryCompress = canCompress && worthCompressing(f.name);
+        var misses = 0;
         while (remaining > 0) {
           if (job.cancelRequested) {
             await channel.send(Frame.cancel);
@@ -373,7 +419,22 @@ class TransferEngine {
           final chunk = await raf.read(min(kChunkSize, remaining));
           if (chunk.isEmpty) throw WraithException('"${f.name}" changed while sending');
           hasher.add(chunk);
-          await channel.send(Frame.data, chunk, false);
+          Uint8List? packed;
+          if (tryCompress) {
+            final z = _deflate.convert(chunk);
+            if (z.length < chunk.length * 0.9) {
+              packed = z is Uint8List ? z : Uint8List.fromList(z);
+              misses = 0;
+            } else if (++misses >= 3) {
+              tryCompress = false; // incompressible content: stop trying
+            }
+          }
+          if (packed != null) {
+            job.compressedSaved += chunk.length - packed.length;
+            await channel.send(Frame.dataZ, packed, false);
+          } else {
+            await channel.send(Frame.data, chunk, false);
+          }
           remaining -= chunk.length;
           job.addProgress(chunk.length, clock);
           final cap = maxBytesPerSecond;
@@ -453,7 +514,17 @@ class TransferEngine {
       }
       final text = rawText as String?;
       final ring = offer['ring'] == true && rawFiles.isEmpty && text == null;
-      if (rawFiles.isEmpty && text == null && !ring) throw const WraithException('Empty offer');
+      final speedTest = offer['speedtest'] == true && rawFiles.isEmpty && text == null;
+      final manifestFor = rawFiles.isEmpty ? offer['syncManifest'] : null;
+      final rawInvite = rawFiles.isEmpty ? offer['syncInvite'] : null;
+      ({String id, String name})? invite;
+      if (rawInvite is Map && rawInvite['id'] is String && rawInvite['name'] is String) {
+        invite = (id: rawInvite['id'] as String, name: sanitizeFileName(rawInvite['name'] as String));
+      }
+      final syncId = rawFiles.isNotEmpty && offer['sync'] is String ? offer['sync'] as String : null;
+      if (rawFiles.isEmpty && text == null && !ring && !speedTest && manifestFor is! String && invite == null) {
+        throw const WraithException('Empty offer');
+      }
 
       final files = <FileEntry>[];
       final segments = <List<String>>[];
@@ -464,7 +535,20 @@ class TransferEngine {
         if (name is! String || size is! int || size < 0) throw const WraithException('Invalid offer');
         final segs = sanitizeRelativePath(name);
         segments.add(segs);
-        files.add(FileEntry(name: segs.join('/'), size: size));
+        final mtime = f['mtime'];
+        files.add(FileEntry(name: segs.join('/'), size: size, mtime: mtime is int ? mtime : null));
+      }
+      final previews = <int, Uint8List>{};
+      final rawPreviews = offer['previews'];
+      if (rawPreviews is Map) {
+        for (final e in rawPreviews.entries.take(8)) {
+          final i = int.tryParse('${e.key}');
+          final v = e.value;
+          if (i == null || i < 0 || i >= files.length || v is! String || v.length > 140000) continue;
+          try {
+            previews[i] = base64Decode(v);
+          } catch (_) {}
+        }
       }
 
       // Read the offer before declining a blocked device, so the reply is not
@@ -473,6 +557,25 @@ class TransferEngine {
         onRejected?.call(ip, 'blocked');
         await channel.send(Frame.decline);
         return;
+      }
+
+      // Folder-sync manifest request: answer with this side's file list.
+      if (manifestFor is String) {
+        final folder = trust.isTrusted(hs.peerFingerprint) ? syncFolder?.call(manifestFor, hs.peerFingerprint) : null;
+        if (folder == null) {
+          await channel.send(Frame.decline);
+        } else {
+          await channel.sendJson(Frame.accept, {'manifest': encodeManifest(await buildManifest(folder))});
+        }
+        return;
+      }
+      Directory? syncRoot;
+      if (syncId != null) {
+        syncRoot = trust.isTrusted(hs.peerFingerprint) ? syncFolder?.call(syncId, hs.peerFingerprint) : null;
+        if (syncRoot == null) {
+          await channel.send(Frame.decline);
+          return;
+        }
       }
 
       final paired = _consumePairingToken(rawPair is String ? rawPair : null);
@@ -492,10 +595,17 @@ class TransferEngine {
         paired: paired,
         clipboard: offer['clip'] == true && text != null && rawFiles.isEmpty,
         ring: ring,
+        chat: offer['chat'] == true && text != null && rawFiles.isEmpty,
+        speedTest: speedTest,
+        syncInvite: invite,
+        syncId: syncId,
+        previews: previews,
       );
 
-      if (paired || (autoAccept?.call(request) ?? false)) {
+      if (paired || syncRoot != null || (autoAccept?.call(request) ?? false)) {
         request.respond(true);
+      } else if (speedTest) {
+        request.respond(false); // speed tests never prompt
       } else {
         // One open prompt per address and a small global cap, so nobody can
         // bury the user under dialogs.
@@ -530,9 +640,33 @@ class TransferEngine {
       }
       if (decision.trust && !trusted) await trust.add(hs.peerFingerprint, hs.peerName);
 
+      // A sync invitation only needs the answer.
+      if (invite != null) {
+        await channel.send(Frame.accept);
+        return;
+      }
+
+      // Speed test: count incoming bytes, discard them, report the rate.
+      if (speedTest) {
+        await channel.sendJson(Frame.accept, {});
+        final clock = Stopwatch()..start();
+        var bytes = 0;
+        while (true) {
+          final msg = await channel.receive(timeout: _idleTimeout);
+          if (msg.type == Frame.data) {
+            bytes += msg.body.length;
+          } else if (msg.type == Frame.done) {
+            await channel.sendJson(Frame.result, {'ok': true, 'bytes': bytes, 'ms': clock.elapsedMilliseconds});
+            return;
+          } else {
+            throw const WraithException('Protocol violation (speed test)');
+          }
+        }
+      }
+
       // Work out where every file goes and whether a partial copy from an
       // earlier, interrupted attempt by the same device can be resumed.
-      final root = await (saveDirFor?.call(hs.peerName, hs.peerFingerprint) ?? saveDir());
+      final root = syncRoot ?? await (saveDirFor?.call(hs.peerName, hs.peerFingerprint) ?? saveDir());
       await root.create(recursive: true);
       final targets = <_Target>[];
       final resume = <String, int>{};
@@ -570,7 +704,12 @@ class TransferEngine {
         ..ring = request.ring;
       job = activeJob;
       onJob(activeJob);
-      await channel.sendJson(Frame.accept, {'resume': resume});
+      activeJob.syncId = syncId;
+      activeJob.chat = request.chat;
+      await channel.sendJson(Frame.accept, {
+        'resume': resume,
+        'caps': ['z'],
+      });
 
       final clock = Stopwatch()..start();
       var index = -1;
@@ -609,17 +748,20 @@ class TransferEngine {
           } else {
             raf = await target.part.open(mode: FileMode.write);
           }
-        } else if (msg.type == Frame.data) {
+        } else if (msg.type == Frame.data || msg.type == Frame.dataZ) {
           final out = raf;
           final h = hasher;
           if (out == null || h == null) throw const WraithException('Protocol violation (data outside file)');
-          written += msg.body.length;
+          final body = msg.type == Frame.dataZ
+              ? inflateBounded(msg.body, min(kChunkSize, files[index].size - written))
+              : msg.body;
+          written += body.length;
           if (written > files[index].size) {
             throw const WraithException('Sender exceeded the announced file size');
           }
-          await out.writeFrom(msg.body);
-          h.add(msg.body);
-          activeJob.addProgress(msg.body.length, clock);
+          await out.writeFrom(body);
+          h.add(body);
+          activeJob.addProgress(body.length, clock);
         } else if (msg.type == Frame.fileEnd) {
           final out = raf;
           final h = hasher;
@@ -636,8 +778,22 @@ class TransferEngine {
           if (!constantTimeEquals(digest, expected)) {
             throw WraithException('SHA-256 mismatch on "${files[index].name}" — file discarded');
           }
-          final dest = await uniqueFile(targets[index].dir, targets[index].baseName);
-          await part.rename(dest.path);
+          final File dest;
+          if (syncRoot != null) {
+            // Folder sync: replace in place, keeping the old version in the archive.
+            dest = File(p.join(targets[index].dir.path, targets[index].baseName));
+            await archiveExisting(syncRoot, dest);
+            await part.rename(dest.path);
+            final mtime = files[index].mtime;
+            if (mtime != null) {
+              try {
+                await dest.setLastModified(DateTime.fromMillisecondsSinceEpoch(mtime));
+              } catch (_) {}
+            }
+          } else {
+            dest = await uniqueFile(targets[index].dir, targets[index].baseName);
+            await part.rename(dest.path);
+          }
           partFile = null;
           hasher = null;
           received.add(ReceiptFile(files[index].name, files[index].size, hexOf(digest)));
@@ -707,4 +863,124 @@ class TransferEngine {
       }
     }
   }
+
+  // ─────────────────────────── Special sessions ───────────────────────────
+
+  Future<(Socket, Handshake)> _openSecure(Peer peer) async {
+    final socket = await _connect(peer);
+    socket.setOption(SocketOption.tcpNoDelay, true);
+    try {
+      final hs = await wraithHandshake(socket: socket, reader: FrameReader(socket), me: identity, initiator: true);
+      if (!peer.manual && hs.peerFingerprint != peer.id) {
+        throw const WraithException('Fingerprint mismatch — possible spoofing');
+      }
+      if (trust.isBlocked(hs.peerFingerprint)) throw const WraithException('This device is on your block list');
+      return (socket, hs);
+    } catch (_) {
+      socket.destroy();
+      rethrow;
+    }
+  }
+
+  /// Measures real SUDOSEND throughput to [peer] (encryption included) by
+  /// streaming random data for [duration]. Returns bytes/second as measured
+  /// by the receiver. The receiver only accepts from trusted devices.
+  Future<double> speedTest(Peer peer, {Duration duration = const Duration(seconds: 6)}) async {
+    final (_, hs) = await _openSecure(peer);
+    final channel = hs.channel;
+    try {
+      await channel.sendJson(Frame.offer, {'files': [], 'speedtest': true});
+      final reply = await channel.receive(timeout: const Duration(seconds: 15));
+      if (reply.type != Frame.accept) {
+        throw const WraithException('Speed test declined — it works between trusted devices only');
+      }
+      final rng = Random();
+      final block = Uint8List.fromList(List<int>.generate(kChunkSize, (_) => rng.nextInt(256)));
+      final clock = Stopwatch()..start();
+      while (clock.elapsed < duration) {
+        await channel.send(Frame.data, block, false);
+      }
+      await channel.send(Frame.done);
+      final result = (await channel.expect(Frame.result, timeout: const Duration(seconds: 30))).json();
+      final bytes = result['bytes'] as int;
+      final ms = max(1, result['ms'] as int);
+      return bytes * 1000 / ms;
+    } finally {
+      await channel.close();
+    }
+  }
+
+  /// Asks [peer] for the manifest of sync pair [syncId].
+  Future<List<ManifestEntry>> fetchManifest(Peer peer, String syncId) async {
+    final (_, hs) = await _openSecure(peer);
+    final channel = hs.channel;
+    try {
+      await channel.sendJson(Frame.offer, {'files': [], 'syncManifest': syncId});
+      final reply = await channel.receive(timeout: const Duration(seconds: 60));
+      if (reply.type != Frame.accept) throw const WraithException('The other device has no such sync folder');
+      return decodeManifest(reply.json()['manifest'] as String);
+    } finally {
+      await channel.close();
+    }
+  }
+
+  /// Invites [peer] to sync a folder. Returns true if the user there accepted.
+  Future<bool> sendSyncInvite(Peer peer, String syncId, String name) async {
+    final (_, hs) = await _openSecure(peer);
+    final channel = hs.channel;
+    try {
+      await channel.sendJson(Frame.offer, {
+        'files': [],
+        'syncInvite': {'id': syncId, 'name': name},
+      });
+      final reply = await channel.receive(timeout: _approvalTimeout + const Duration(seconds: 10));
+      return reply.type == Frame.accept;
+    } finally {
+      await channel.close();
+    }
+  }
+}
+
+final ZLibEncoder _deflate = ZLibEncoder(raw: true, level: 1);
+
+const Set<String> _incompressible = {
+  'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'avif', //
+  'mp4', 'mkv', 'mov', 'avi', 'webm', 'm4v', 'mp3', 'm4a', 'aac', 'ogg', 'opus', 'flac',
+  'zip', 'gz', 'tgz', 'xz', 'bz2', '7z', 'rar', 'zst', 'lz4', 'apk', 'aab', 'ipa', 'jar',
+  'docx', 'xlsx', 'pptx', 'odt', 'epub', 'pdf', 'iso', 'dmg', 'deb', 'rpm',
+};
+
+/// Cheap first filter for smart compression (the real test is per chunk).
+bool worthCompressing(String name) {
+  final dot = name.lastIndexOf('.');
+  return dot < 0 || !_incompressible.contains(name.substring(dot + 1).toLowerCase());
+}
+
+/// Inflates raw-deflate [data], refusing to produce more than [maxOut]
+/// bytes (protection against decompression bombs).
+Uint8List inflateBounded(Uint8List data, int maxOut) {
+  final sink = _BoundedSink(maxOut);
+  final conv = ZLibDecoder(raw: true).startChunkedConversion(sink);
+  for (var o = 0; o < data.length; o += 8192) {
+    conv.add(Uint8List.sublistView(data, o, min(o + 8192, data.length)));
+  }
+  conv.close();
+  return sink.takeBytes();
+}
+
+class _BoundedSink implements Sink<List<int>> {
+  _BoundedSink(this.max);
+  final int max;
+  final BytesBuilder _b = BytesBuilder(copy: false);
+
+  @override
+  void add(List<int> data) {
+    if (_b.length + data.length > max) throw const WraithException('Compressed data expands too much');
+    _b.add(data);
+  }
+
+  @override
+  void close() {}
+
+  Uint8List takeBytes() => _b.takeBytes();
 }

@@ -20,7 +20,7 @@ import 'package:wraith_core/vault_windows.dart';
 import 'package:wraith_core/web_share.dart';
 import 'package:wraith_core/wraith.dart';
 
-const _version = '0.6.0';
+const _version = '0.7.0';
 
 const _usage = '''
 SUDOSEND $_version — secure local file sharing (Wraith Protocol)
@@ -38,6 +38,8 @@ Usage:
                --upload also lets visitors send files to you; --pin protects
                the link; --max stops after N downloads; --minutes sets expiry
   sudosend ring --to <device>      make a trusted device ring (find my phone)
+  sudosend speedtest --to <device> [--seconds 6]
+               measure real encrypted throughput to a trusted device
 
 Speed:
   --limit 5M     cap upload speed (bytes/s, K/M suffix) for send
@@ -86,7 +88,7 @@ class _Args {
     }
   }
 
-  static const _valued = {'to', 'dir', 'text', 'wait', 'name', 'receipts', 'pin', 'max', 'minutes', 'limit'};
+  static const _valued = {'to', 'dir', 'text', 'wait', 'name', 'receipts', 'pin', 'max', 'minutes', 'limit', 'seconds'};
   final List<String> positional = [];
   final Map<String, String> options = {};
   final Set<String> flags = {};
@@ -168,6 +170,8 @@ Future<int> _run(_Args args) async {
       return _web(identity, rest, args);
     case 'ring':
       return _ring(identity, trust, args);
+    case 'speedtest':
+      return _speedtest(identity, trust, args);
     case 'receive':
       return _receive(identity, trust, args);
     default:
@@ -434,6 +438,36 @@ Future<int> _ring(DeviceIdentity identity, TrustStore trust, _Args args) async {
   return 1;
 }
 
+Future<int> _speedtest(DeviceIdentity identity, TrustStore trust, _Args args) async {
+  final target = args.options['to'];
+  if (target == null) {
+    stderr.writeln(_red('usage: sudosend speedtest --to <device> [--seconds 6]'));
+    return 2;
+  }
+  final peer = await _resolve(identity, target);
+  if (peer == null) {
+    stderr.writeln(_red('device "$target" not found'));
+    return 3;
+  }
+  final seconds = int.tryParse(args.options['seconds'] ?? '') ?? 6;
+  final engine = TransferEngine(
+    identity: identity,
+    trust: trust,
+    saveDir: () async => _defaultInbox(),
+    onIncoming: (r) => r.respond(false),
+    onJob: (_) {},
+  );
+  stdout.writeln('⚡ measuring ${_cyan(peer.name)} for ${seconds}s…');
+  try {
+    final rate = await engine.speedTest(peer, duration: Duration(seconds: seconds.clamp(1, 60)));
+    stdout.writeln(_green('✔ ${formatBytes(rate.round())}/s  (${(rate * 8 / 1e6).toStringAsFixed(0)} Mbit/s)'));
+    return 0;
+  } on WraithException catch (e) {
+    stderr.writeln(_red('✖ ${e.message}'));
+    return 1;
+  }
+}
+
 int? _parseRate(String? v) {
   if (v == null) return null;
   final m = RegExp(r'^(\d+(?:\.\d+)?)\s*([kKmMgG]?)').firstMatch(v.trim());
@@ -510,7 +544,10 @@ Future<int> _receive(DeviceIdentity identity, TrustStore trust, _Args args) asyn
       stdout.writeln();
       stdout.writeln('${_cyan('⇣ ${request.peerName}')} (${request.peerPlatform})  '
           '${_dim(groupFingerprint(request.fingerprint, groups: 4))}');
-      if (request.text != null) {
+      if (request.syncInvite != null) {
+        stdout.writeln('  folder sync invite: ${request.syncInvite!.name}');
+        stdout.writeln(_dim('  (folder sync is set up in the SUDOSEND app)'));
+      } else if (request.text != null) {
         stdout.writeln('  text, ${request.text!.length} chars');
       } else {
         for (final f in request.files.take(8)) {

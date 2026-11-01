@@ -37,6 +37,10 @@ class Frame {
   static const int result = 9;
   static const int cancel = 10;
   static const int error = 11;
+
+  /// DATA whose body is raw-deflate compressed (only after the receiver
+  /// advertised the "z" capability in ACCEPT).
+  static const int dataZ = 12;
 }
 
 // ───────────────────────────── Framing ─────────────────────────────

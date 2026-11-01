@@ -50,10 +50,13 @@ class Peer {
 /// A file to send or being received. [name] is a relative path using '/'
 /// separators ("photo.jpg" or "Project/src/main.c" for folder transfers).
 class FileEntry {
-  const FileEntry({required this.name, required this.size, this.path});
+  const FileEntry({required this.name, required this.size, this.path, this.mtime});
   final String name;
   final int size;
   final String? path;
+
+  /// Modification time (ms since epoch) — preserved by folder sync.
+  final int? mtime;
 }
 
 enum TransferDirection { outgoing, incoming }
@@ -91,6 +94,15 @@ class TransferJob {
 
   /// A "find my device" ring request (no files).
   bool ring = false;
+
+  /// A chat message (text, handled by the Messages screen).
+  bool chat = false;
+
+  /// Folder-sync transfer: the sync pair id.
+  String? syncId;
+
+  /// Bytes that travelled compressed (smart compression), for stats.
+  int compressedSaved = 0;
 
   final String id;
   final TransferDirection direction;
