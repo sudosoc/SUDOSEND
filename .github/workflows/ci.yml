@@ -197,11 +197,59 @@ jobs:
           name: sudosend-windows
           path: dist/*
 
+  macos:
+    name: macOS app + CLI
+    needs: check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: PLATFORMS=macos ./tool/ci_run.sh ./tool/bootstrap.sh
+      - run: ./tool/ci_run.sh flutter build macos --release
+      - run: ./tool/ci_run.sh ./tool/build_cli.sh sudosend-cli-macos-arm64
+      - name: Package
+        run: |
+          mkdir -p dist
+          app="$(ls -d build/macos/Build/Products/Release/*.app | head -n1)"
+          ditto -c -k --keepParent "$app" dist/sudosend-macos.zip
+          cp sudosend-cli-macos-arm64 dist/
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sudosend-macos
+          path: dist/*
+
+  ios:
+    name: iOS (unsigned IPA)
+    needs: check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: PLATFORMS=ios ./tool/ci_run.sh ./tool/bootstrap.sh
+      - run: ./tool/ci_run.sh flutter build ios --release --no-codesign
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p dist Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry dist/sudosend-ios-unsigned.ipa Payload
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sudosend-ios
+          path: dist/*
+
   release:
     name: GitHub Release
     # Tag pushes, or any push to main whose pubspec version has no release yet.
     if: github.event_name == 'push'
-    needs: [android, linux, linux-arm64, windows]
+    needs: [android, linux, linux-arm64, windows, macos, ios]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -245,6 +293,8 @@ jobs:
             | Kali / Debian / Ubuntu / Raspberry Pi OS — PC (x86_64) | `sudosend_*_amd64.deb` |
             | Kali / Debian / Ubuntu / Raspberry Pi OS — Raspberry Pi / ARM64 | `sudosend_*_arm64.deb` |
             | Any other Linux | `sudosend-linux-x64.tar.gz` or `sudosend-linux-arm64.tar.gz` → `./install.sh` |
+            | macOS 11+ (Apple Silicon & Intel) | `sudosend-macos.zip` |
+            | iPhone / iPad (sideload) | `sudosend-ios-unsigned.ipa` |
             | CLI only | `sudosend-cli-*` |
 
             Not sure about your CPU on Linux? Run `uname -m`: `x86_64` → x64/amd64, `aarch64` → arm64.

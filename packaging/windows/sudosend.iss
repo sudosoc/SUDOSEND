@@ -34,6 +34,7 @@ CloseApplications=yes
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 Name: "firewall"; Description: "Allow SUDOSEND through Windows Firewall on private networks (recommended)"; GroupDescription: "Network:"
+Name: "sendto"; Description: "Add SUDOSEND to the right-click ""Send to"" menu"; GroupDescription: "Shell:"
 Name: "addpath"; Description: "Add the 'sudosend' command-line tool to PATH"; GroupDescription: "Command line:"
 
 [Files]
@@ -43,6 +44,7 @@ Source: "{#CliExe}"; DestDir: "{app}\cli"; DestName: "sudosend.exe"; Flags: igno
 [Icons]
 Name: "{autoprograms}\SUDOSEND"; Filename: "{app}\sudosend.exe"
 Name: "{autodesktop}\SUDOSEND"; Filename: "{app}\sudosend.exe"; Tasks: desktopicon
+Name: "{usersendto}\SUDOSEND"; Filename: "{app}\sudosend.exe"; Tasks: sendto
 
 [Run]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""SUDOSEND"""; Flags: runhidden; Tasks: firewall

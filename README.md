@@ -4,13 +4,14 @@
 
 <p align="center">
   <b>Secure. Local. Instant.</b><br>
-  Encrypted file sharing between Android, Windows and Linux on the same network.<br>
+  Encrypted file sharing between Android, Windows, Linux, macOS and iPhone on the same network.<br>
   No cloud · no accounts · no internet.
 </p>
 
 <p align="center">
   <a href="https://github.com/sudosoc/SUDOSEND/actions/workflows/ci.yml"><img src="https://github.com/sudosoc/SUDOSEND/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/sudosoc/SUDOSEND/releases/latest"><img src="https://img.shields.io/github/v/release/sudosoc/SUDOSEND?label=release" alt="release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"></a>
 </p>
 
 ---
@@ -24,6 +25,8 @@
   - [Windows](#windows)
   - [Linux — Kali, Debian, Ubuntu, Raspberry Pi OS](#linux--kali-debian-ubuntu-raspberry-pi-os)
   - [Linux — any other distro](#linux--any-other-distro)
+  - [macOS](#macos)
+  - [iPhone / iPad](#iphone--ipad)
   - [One-line install (Linux)](#one-line-install-linux)
 - [First transfer](#first-transfer)
 - [Command line](#command-line)
@@ -36,16 +39,29 @@
 
 ## Features
 
-- **Zero-config discovery** over multicast + broadcast, with *Send by IP* as a fallback
-- **Files, whole folders, and text/clipboard**, folder structure preserved
-- **Resume**: a dropped transfer continues where it stopped, re-verified end to end
+**Sharing**
+- Files of any size, **whole folders** (structure kept), and **text / clipboard**
+- **Share sheet** on Android: *Share → SUDOSEND* from any app
+- **Drag & drop** and right-click **Send to** on desktop
+- **Resume**: a dropped transfer continues where it stopped
+- **Background transfers** on Android: keeps going with the screen off or the app closed, with progress in a notification; optional *receive in the background*
+- **Notifications** with Accept / Decline right from the notification
+- **History** of every transfer, with *Open* and *Show in folder*
+
+**Security**
 - **End-to-end encryption**: X25519 + ChaCha20-Poly1305, fresh keys per transfer
-- **MITM-proof first contact**: 6-digit verification code backed by a hash commitment
-- **Trusted devices**: verify once, skip the code next time, revoke anytime
-- **SHA-256 verification** of every file before it is kept
-- **Hardened receiver**: path-traversal-safe names, size limits, explicit consent
-- **Glassmorphism UI**: frosted glass, animated neon backdrop, live radar
-- **CLI** for Linux and Windows, fully interoperable with the app
+- **QR pairing**: scan once → both devices trust each other, no code to compare
+- **MITM-proof first contact** otherwise: 6-digit code backed by a hash commitment
+- **Trusted / blocked devices**, **auto-accept** for trusted ones
+- **Flood protection**: connection rate limits per IP, one prompt per device, block list
+- **Private key in the OS key store** (Android Keystore, Windows DPAPI)
+- **Stealth mode**: stop announcing yourself; reachable only by QR or IP
+- **SHA-256 verification** of every file; path-traversal-safe receiver
+
+**App**
+- **Arabic and English**, full right-to-left layout
+- **Glassmorphism UI** with a *reduce effects* switch for older phones and Raspberry Pi
+- **CLI** for Linux, Windows and macOS — prints a pairing QR right in the terminal
 
 ---
 
@@ -63,6 +79,8 @@ All files are on the **[Releases page](https://github.com/sudosoc/SUDOSEND/relea
 | Kali / Debian / Ubuntu / Mint on a **PC or laptop** | `sudosend_<version>_amd64.deb` | `sudo apt install ./sudosend_*_amd64.deb` |
 | Kali / Raspberry Pi OS / Ubuntu on a **Raspberry Pi** or other ARM board | `sudosend_<version>_arm64.deb` | `sudo apt install ./sudosend_*_arm64.deb` |
 | Fedora / Arch / openSUSE / other Linux | `sudosend-linux-x64.tar.gz` or `sudosend-linux-arm64.tar.gz` | `./install.sh` |
+| Mac (Apple Silicon or Intel) | `sudosend-macos.zip` | unzip, drag to Applications |
+| iPhone / iPad | `sudosend-ios-unsigned.ipa` | sideload (see below) |
 
 > **Linux: x64 or arm64?** Run `uname -m`.
 > `x86_64` → **x64 / amd64**. `aarch64` → **arm64** (every Raspberry Pi 3/4/5 running a 64-bit OS).
@@ -127,6 +145,24 @@ Add `--yes` to answer every question with yes. Open a new terminal afterwards so
 
 > Just want to try it without installing? `./sudosend` inside the extracted folder works too.
 
+### macOS
+
+1. Download `sudosend-macos.zip`, unzip it and drag **SUDOSEND** into *Applications*.
+2. The app is not notarized yet: the first time, **right-click → Open → Open**
+   (or run `xattr -dr com.apple.quarantine /Applications/SUDOSEND.app`).
+3. Allow *local network* access when macOS asks — otherwise devices can't find each other.
+
+### iPhone / iPad
+
+There is no App Store build yet (that needs a paid Apple developer account). You can sideload the
+unsigned IPA with a free Apple ID using [AltStore](https://altstore.io) or
+[Sideloadly](https://sideloadly.io): load `sudosend-ios-unsigned.ipa`, sign in, install.
+Free-account installs must be refreshed every 7 days.
+
+On iPhone, Apple blocks network discovery for unapproved apps, so **use QR pairing or *IP / link***:
+scan the QR on the other device's Receive tab. Received files are in the **Files** app →
+*On My iPhone → SUDOSEND*.
+
 ### One-line install (Linux)
 
 Detects your CPU and distro, downloads the right file and installs it:
@@ -148,7 +184,11 @@ curl -fsSL https://raw.githubusercontent.com/sudosoc/SUDOSEND/main/get.sh | bash
    Tick **Trust this device** to skip the code next time.
 5. Done. Every file is SHA-256 verified before it is saved.
 
-If a device doesn't appear, use **By IP** on the Send tab. The receiver's IP is shown on its **Receive** tab.
+**Faster: QR pairing.** On the receiver open **Receive**; on the phone tap **Scan QR** (Send tab).
+Both devices now trust each other — no code, no prompt, now and next time.
+
+If a device doesn't appear, use **IP / link** on the Send tab and type the IP shown on the receiver's
+**Receive** tab (or paste its pairing link).
 
 ---
 
@@ -160,8 +200,10 @@ Installed together with the app (`.deb`, `install.sh`, or the Windows installer 
 sudosend                                    # no arguments → opens the app
 sudosend receive                            # wait for files, asks before accepting
 sudosend receive --yes --trust --once       # unattended, exit after one transfer
+sudosend receive --qr                       # print a pairing QR in the terminal
 sudosend send report.pdf photos/ --to laptop      # device name (prefix) …
 sudosend send --text "https://…" --to 192.168.1.20  # … or IP address
+sudosend send file.iso --to 'sudosend://pair?…'     # … or a pairing link
 sudosend devices                            # list devices on the network
 sudosend id --name Seif-Pi                  # show/rename this device
 sudosend --help
@@ -183,6 +225,10 @@ Standalone binaries (`sudosend-cli-*`) are on the Releases page for servers with
 | *Pick files* does nothing on Linux | Install zenity: `sudo apt install zenity` |
 | Window is blank or very slow on a Raspberry Pi | Use a 64-bit OS with the desktop (X11/Wayland) running. On very old boards, the CLI is lighter: `sudosend receive`. |
 | *Fingerprint mismatch* error | Something on the network answered pretending to be that device. The transfer was blocked on purpose. |
+| Android stops mid-transfer | Allow notifications for SUDOSEND (the transfer runs as a foreground service), and on Xiaomi/Huawei/Samsung set battery usage to *Unrestricted*. |
+| Android: "App not installed" when updating | The new APK is signed with a different key than the installed one (only happens once, when moving to release-signed builds). Uninstall, then install. |
+| Laggy UI on a Raspberry Pi or old phone | Settings → **Reduce effects**. |
+| Updated the app and devices ask for the code again | The device key couldn't be unlocked (e.g. OS key store reset) and was recreated — pair again. |
 
 ---
 
@@ -194,6 +240,7 @@ Standalone binaries (`sudosend-cli-*`) are on the Releases page for servers with
 | `install.sh` | `sudosend --uninstall` |
 | Windows installer | *Settings → Apps → SUDOSEND → Uninstall* |
 | Android | long-press the icon → *Uninstall* |
+| macOS | drag SUDOSEND from Applications to the Trash |
 
 Received files in `Downloads/SUDOSEND` are never deleted.
 
@@ -222,19 +269,43 @@ CI (`.github/workflows/ci.yml`) runs analysis, tests and a CLI-to-CLI end-to-end
 Android, Windows (installer + portable), Linux x64 and Linux ARM64 (tarball + .deb), and smoke-tests every
 Linux installer. Bumping `version:` in `pubspec.yaml` publishes a new release automatically.
 
+### Release signing (Android)
+
+CI re-signs the APK with a permanent key when these repository secrets exist:
+`ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS`
+(*Settings → Secrets and variables → Actions*). Without them the APK is debug-signed and a
+warning is shown in the run.
+
+### Performance
+
+Every CI run benchmarks the core on x64 and ARM64 (see the run's annotations): the optimised
+ChaCha20-Poly1305 does ~100–110 MB/s per core on a 2-vCPU cloud runner (4–5× package:cryptography's
+pure-Dart cipher), spread over a pool of worker isolates; SHA-256 of large files runs on its own
+isolate. Real transfers are usually limited by Wi-Fi, not the CPU.
+
 ### Layout
 
 ```
-lib/                    Flutter app (glass UI, state)
+lib/
+  app/                  strings (EN/AR), scope
+  state/                AppController, settings, history
+  platform/             Android bridge, desktop helpers (open, notify, single instance)
+  ui/                   glass widgets, tabs, settings, QR scanner
+android/…/kotlin/       cached engine, foreground service, notifications, share, Keystore
 packages/wraith_core/   pure-Dart protocol core, shared by the app and the CLI
-  lib/wraith.dart         framing, handshake, secure channel
+  lib/wraith.dart         framing, handshake, pipelined secure channel
+  lib/chacha_poly.dart    optimised RFC 8439 ChaCha20-Poly1305
+  lib/aead.dart           AEAD engines (inline / isolate pool)
+  lib/pairing.dart        QR pairing links
   lib/discovery.dart      UDP announce / probe / listen
   lib/transfer.dart       sender + receiver state machines (resume, folders, text)
-  lib/identity.dart       Ed25519 identity + trust store
+  lib/identity.dart       Ed25519 identity, key vaults, trusted/blocked devices
+  lib/vault_windows.dart  DPAPI seed vault
   bin/sudosend.dart       command-line client
 packaging/              Linux install.sh, Windows Inno Setup script
 tool/                   bootstrap, packaging, CI helpers
-test/                   loopback E2E: transfer, resume, tamper, folders, text, spoofing
+test/                   RFC 8439 vectors, loopback E2E: transfer, resume, tamper, folders,
+                        text, spoofing, QR pairing, block list, flood limits, translations
 ```
 
 ---
@@ -247,7 +318,12 @@ ChaCha20-Poly1305 with counter nonces, and SHA-256 on every file.
 
 ## Roadmap
 
-- **v0.3**: QR pairing, Android share-sheet target, persistent transfer history
-- **v0.4**: hotspot mode, multiple receivers, native (Rust) crypto core
+- Send to several devices at once
+- Wi-Fi Direct / hotspot mode when there is no router
+- Signed & notarized builds (Windows code signing, Apple notarization, App Store / Play Store)
+
+## License
+
+[MIT](LICENSE) © SUDOSOC. Bundled font: IBM Plex Sans Arabic (SIL OFL 1.1).
 
 <p align="center">Made by <b>SUDOSOC</b></p>

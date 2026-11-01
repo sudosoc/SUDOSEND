@@ -18,7 +18,7 @@ import 'package:wraith_core/util.dart';
 import 'package:wraith_core/vault_windows.dart';
 import 'package:wraith_core/wraith.dart';
 
-const _version = '0.3.0';
+const _version = '0.3.1';
 
 const _usage = '''
 SUDOSEND $_version — secure local file sharing (Wraith Protocol)
