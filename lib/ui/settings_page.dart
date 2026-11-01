@@ -339,6 +339,18 @@ class SettingsPage extends StatelessWidget {
                       style: const TextStyle(color: AppColors.violet)),
                 ),
               ),
+            if (Platform.isAndroid) ...[
+              _divider,
+              _Switch(
+                icon: Icons.wifi_tethering_rounded,
+                color: AppColors.cyan,
+                title: context.tr('f_wifi_direct'),
+                subtitle: context.tr('f_wifi_direct_sub'),
+                info: 'i_wifi_direct',
+                value: s.wifiDirect,
+                onChanged: (v) => s.update((x) => x.wifiDirect = v),
+              ),
+            ],
             _divider,
             _Switch(
               icon: Icons.speed_rounded,

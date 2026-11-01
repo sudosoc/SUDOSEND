@@ -202,6 +202,15 @@ protocol violation closes the connection and deletes the partial file.
     sender's mtime so the next comparison sees them as equal.
   - Each side pushes what the other lacks or has older (> 2 s difference). Deletions are never sent.
 
+## 14. Wi-Fi Direct (Android)
+
+Wi-Fi Direct only replaces the router: it creates a private IPv4 link (group owner
+192.168.49.1, clients 192.168.49.x), and every layer above — discovery, handshake, SAS, frames —
+is unchanged. The client also announces by unicast to the group owner in case broadcast is not
+forwarded on the P2P interface. Phones advertise a DNS-SD record `_sudosend._tcp` with `n`
+(device name) and `fp` (first 8 hex of the fingerprint) so scanners can label SUDOSEND phones;
+the record is unauthenticated and used for display only.
+
 ## Known limitations
 
 - Discovery metadata (device name, fingerprint) is visible on the LAN — use stealth mode to stop announcing.

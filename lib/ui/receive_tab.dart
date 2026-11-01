@@ -13,6 +13,7 @@ import 'glass.dart';
 import 'radar.dart';
 import 'theme.dart';
 import 'web_share_page.dart';
+import 'wifi_direct_page.dart';
 
 class ReceiveTab extends StatefulWidget {
   const ReceiveTab({super.key, required this.controller});
@@ -101,6 +102,7 @@ class _ReceiveTabState extends State<ReceiveTab> {
       final info = _InfoCard(controller: controller);
       final noApp = _NoAppCard(controller: controller);
       final showNoApp = controller.settings.webShare || controller.webShare != null || Platform.isAndroid;
+      final p2p = controller.wifiDirectAvailable ? _P2pCard(controller: controller) : null;
       if (wide) {
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -109,7 +111,14 @@ class _ReceiveTabState extends State<ReceiveTab> {
             children: [
               Expanded(child: Column(children: [header, const SizedBox(height: 22), info])),
               const SizedBox(width: 18),
-              SizedBox(width: 340, child: Column(children: [qr, if (showNoApp) ...[const SizedBox(height: 16), noApp]])),
+              SizedBox(
+                width: 340,
+                child: Column(children: [
+                  qr,
+                  if (p2p != null) ...[const SizedBox(height: 16), p2p],
+                  if (showNoApp) ...[const SizedBox(height: 16), noApp],
+                ]),
+              ),
             ],
           ),
         );
@@ -120,6 +129,10 @@ class _ReceiveTabState extends State<ReceiveTab> {
           header,
           const SizedBox(height: 22),
           qr,
+          if (p2p != null) ...[
+            const SizedBox(height: 16),
+            p2p,
+          ],
           if (showNoApp) ...[
             const SizedBox(height: 16),
             noApp,
@@ -206,6 +219,40 @@ class _PairingCard extends StatelessWidget {
 }
 
 /// Browser receive + hotspot: for when the other side has no app or there is no Wi-Fi.
+/// Phone-to-phone Wi-Fi Direct entry point (Android).
+class _P2pCard extends StatelessWidget {
+  const _P2pCard({required this.controller});
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final link = controller.p2pLink;
+    return Glass(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => WifiDirectPage(controller: controller))),
+      borderColor: link != null ? AppColors.mint.withValues(alpha: 0.5) : null,
+      child: Row(
+        children: [
+          IconBadge(icon: Icons.wifi_tethering_rounded, color: link != null ? AppColors.mint : AppColors.cyan, size: 40),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(context.tr('p2p_title'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                Text(
+                  link != null ? context.tr('p2p_connected_to', {'name': link.peerName ?? '?'}) : context.tr('p2p_card_sub'),
+                  style: TextStyle(color: link != null ? AppColors.mint : AppColors.muted, fontSize: 12.5),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+        ],
+      ),
+    );
+  }
+}
+
 class _NoAppCard extends StatelessWidget {
   const _NoAppCard({required this.controller});
   final AppController controller;

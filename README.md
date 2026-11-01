@@ -53,6 +53,7 @@
 - 🌐 **Share with any browser** — send to *and receive from* a device that doesn't have the app,
   even an iPhone: it scans a QR and gets a download/upload page (Send Anywhere / Feem-style)
 - 📶 **No Wi-Fi? Make one** — Android creates a private hotspot; the other phone joins by scanning a QR
+- 📡 **Wi-Fi Direct** — two Android phones link directly, no router and no hotspot, and both keep their Wi-Fi and mobile data
 - 🔒 **Protected, self-destructing links** — PIN, expiry (10 min – 2 h), one-download links (WeTransfer Pro / Send Anywhere Plus)
 - 📬 **Outbox** — send to a trusted device that's switched off; it's delivered the moment it comes online,
   and dropped connections **retry and resume automatically**
@@ -279,6 +280,7 @@ Standalone binaries (`sudosend-cli-*`) are on the Releases page for servers with
 | Folder sync doesn't start | Both devices must trust each other and be online; check *Settings → Features → Folder sync*. Not available on iOS. |
 | Speed test is refused | The other device must trust you and have *Allow speed tests* on. |
 | Watch (Wear OS) doesn't see devices | Watches usually reach the network through the phone's Bluetooth link, where LAN discovery doesn't work. Turn on the watch's own Wi-Fi (same network), or use **By IP**. |
+| Wi-Fi Direct finds nothing | Wi-Fi ON on both phones (no network needed), SUDOSEND open on both, *Nearby devices* allowed; on Android 12 and older also turn Location ON. The other phone must accept the system *Invitation to connect*. |
 | Hotspot won't start (Android) | Turn off the normal hotspot/tethering, turn on Location (Android ≤ 12), allow *Nearby devices*. |
 | Updated the app and devices ask for the code again | The device key couldn't be unlocked (e.g. OS key store reset) and was recreated — pair again. |
 
@@ -389,6 +391,7 @@ test/                   RFC 8439 vectors, loopback E2E: transfer, resume, tamper
 | Universal clipboard | ✅ free | — | ✅ | — |
 | Send to / receive from a plain browser | ✅ | ✅ send only | — | — |
 | Built-in hotspot when there is no Wi-Fi | ✅ Android | — | — | ✅ |
+| Wi-Fi Direct phone-to-phone | ✅ Android | — | — | ✅ |
 | PIN-protected, self-destructing share links | ✅ free | — | — | — |
 | Deliver to an offline device later (outbox) | ✅ | — | — | — |
 | Find my device (ring) | ✅ free | — | ✅ | — |

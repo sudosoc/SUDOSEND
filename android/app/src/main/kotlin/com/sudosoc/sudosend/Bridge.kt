@@ -143,6 +143,18 @@ object Bridge {
                         Ringer.stop(app)
                         result.success(true)
                     }
+                    "p2pAttach" -> {
+                        val ok = WifiDirect.attach(app)
+                        if (ok) WifiDirect.advertise(app, call.argument<String>("name") ?: "", call.argument<String>("fp") ?: "")
+                        result.success(ok)
+                    }
+                    "p2pScan" -> WifiDirect.startScan(app, result)
+                    "p2pStopScan" -> {
+                        WifiDirect.stopScan()
+                        result.success(true)
+                    }
+                    "p2pConnect" -> WifiDirect.connect(call.argument<String>("address") ?: "", result)
+                    "p2pDisconnect" -> WifiDirect.disconnect(result)
                     "stopHotspot" -> {
                         Hotspot.stop()
                         result.success(true)
@@ -159,7 +171,7 @@ object Bridge {
         val permission = when (name) {
             "notifications" -> if (Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null
             "storage" -> if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) Manifest.permission.WRITE_EXTERNAL_STORAGE else null
-            "hotspot" -> if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES else Manifest.permission.ACCESS_FINE_LOCATION
+            "hotspot", "wifidirect" -> if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES else Manifest.permission.ACCESS_FINE_LOCATION
             else -> null
         }
         if (permission == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {

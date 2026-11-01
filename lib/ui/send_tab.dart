@@ -15,6 +15,7 @@ import 'radar.dart';
 import 'scan_page.dart';
 import 'theme.dart';
 import 'web_share_page.dart';
+import 'wifi_direct_page.dart';
 
 class SendTab extends StatefulWidget {
   const SendTab({super.key, required this.controller});
@@ -406,6 +407,34 @@ class _DevicesSectionState extends State<_DevicesSection> {
             ],
           ),
         ),
+        if (controller.p2pLink != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Glass(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              borderColor: AppColors.mint.withValues(alpha: 0.45),
+              onTap: () => Navigator.of(context)
+                  .push(MaterialPageRoute<void>(builder: (_) => WifiDirectPage(controller: controller))),
+              child: Row(
+                children: [
+                  const Icon(Icons.link_rounded, color: AppColors.mint, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      context.tr('p2p_connected_to', {'name': controller.p2pLink!.peerName ?? '?'}),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: AppColors.mint, fontWeight: FontWeight.w700, fontSize: 13),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: context.tr('p2p_disconnect'),
+                    onPressed: controller.p2pDisconnect,
+                    icon: const Icon(Icons.link_off_rounded, size: 20, color: AppColors.muted),
+                  ),
+                ],
+              ),
+            ),
+          ),
         if (peers.isEmpty)
           Glass(
             padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 18),
@@ -423,6 +452,16 @@ class _DevicesSectionState extends State<_DevicesSection> {
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: AppColors.muted, fontSize: 13),
                 ),
+                if (controller.wifiDirectAvailable) ...[
+                  const SizedBox(height: 14),
+                  GhostButton(
+                    label: context.tr('p2p_try'),
+                    icon: Icons.wifi_tethering_rounded,
+                    color: AppColors.cyan,
+                    onPressed: () => Navigator.of(context)
+                        .push(MaterialPageRoute<void>(builder: (_) => WifiDirectPage(controller: controller))),
+                  ),
+                ],
               ],
             ),
           )

@@ -31,6 +31,8 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.type.watch" android:required="false" />
+    <!-- Phone-to-phone Wi-Fi Direct (optional) -->
+    <uses-feature android:name="android.hardware.wifi.direct" android:required="false" />
     <!-- Saving into Download/SUDOSEND on Android 9 and below -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"

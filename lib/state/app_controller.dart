@@ -162,6 +162,7 @@ class AppController extends ChangeNotifier {
       settings.addListener(_applySettings);
       _outboxTimer = Timer.periodic(const Duration(seconds: 30), (_) => unawaited(_flushOutbox()));
       _subs.add(_native.ringStopped.listen((_) => _rings.add('')));
+      _subs.add(_native.p2pEvents.listen(_onP2p));
       if (isDesktop) unawaited(SingleInstance.listen((args) => addPaths(args)));
 
       if (Platform.isAndroid && !settings.effectsChosen && await _native.isLowRam()) {
@@ -173,6 +174,7 @@ class AppController extends ChangeNotifier {
 
       if (identity.regenerated) _messages.add(t('identity_regenerated'));
       if (Platform.isAndroid) {
+        if (settings.wifiDirect) unawaited(_native.p2pAttach(identity.name, identity.fingerprint));
         if (settings.notifications) await _native.requestPermission('notifications');
         await _importShare();
         _updateService();
@@ -650,6 +652,7 @@ class AppController extends ChangeNotifier {
       _syncTimer = null;
     }
     if (!settings.webShare && webShare != null) unawaited(stopWebShare());
+    if (!settings.wifiDirect && p2pScanning) unawaited(stopP2pScan());
     final wantHot = settings.hotFolders && isDesktop;
     if (wantHot && _hotTimer == null) {
       _hotTimer = Timer.periodic(const Duration(seconds: 4), (_) => unawaited(_scanHotFolders()));
@@ -803,6 +806,115 @@ class AppController extends ChangeNotifier {
       }));
     }
     return null;
+  }
+
+  // ─────────────────────────── Wi-Fi Direct (Android) ───────────────────────────
+
+  bool get wifiDirectAvailable => Platform.isAndroid && settings.wifiDirect;
+  bool p2pEnabled = true;
+  bool p2pScanning = false;
+  List<P2pPeer> p2pPeers = const [];
+  P2pLink? p2pLink;
+
+  /// Address of the phone we sent an invitation to, while waiting for it.
+  String? p2pInviting;
+  String? p2pError;
+  Timer? _p2pInviteTimer;
+
+  void _onP2p(P2pEvent e) {
+    switch (e) {
+      case P2pState(:final enabled):
+        p2pEnabled = enabled;
+      case P2pPeers(:final peers):
+        p2pPeers = [...peers]
+          ..sort((a, b) {
+            if (a.runsSudosend != b.runsSudosend) return a.runsSudosend ? -1 : 1;
+            return a.status.compareTo(b.status);
+          });
+        final invited = p2pPeers.where((p) => p.address == p2pInviting).firstOrNull;
+        if (invited != null && invited.status == 2) {
+          p2pInviting = null;
+          p2pError = 'declined';
+        }
+      case P2pConnection(:final link):
+        final before = p2pLink;
+        p2pLink = link;
+        p2pInviting = null;
+        _p2pInviteTimer?.cancel();
+        if (link != null && before == null) {
+          // Over Wi-Fi Direct the group owner is always 192.168.49.1; announce
+          // to it directly in case the phone does not forward broadcasts.
+          final owner = link.ownerAddress;
+          if (!link.owner && owner != null) _discovery.extraTargets.add(owner);
+          _messages.add(t('p2p_connected', {'name': link.peerName ?? '?'}));
+          _rescanSoon();
+        } else if (link == null && before != null) {
+          _discovery.extraTargets.removeWhere((a) => a.startsWith('192.168.49.'));
+          _messages.add(t('p2p_disconnected'));
+          _rescanSoon();
+        }
+      case P2pError(:final reason):
+        p2pError = reason;
+    }
+    notifyListeners();
+  }
+
+  /// Interfaces take a moment to get addresses; look again a few times.
+  void _rescanSoon() {
+    for (final delay in const [1, 3, 6, 12]) {
+      unawaited(Future<void>.delayed(Duration(seconds: delay), () async {
+        if (!ready) return;
+        await _refreshAddresses();
+        await _discovery.rescan();
+        notifyListeners();
+      }));
+    }
+  }
+
+  /// Starts looking for nearby phones. Returns an error message or null.
+  Future<String?> startP2pScan() async {
+    if (!wifiDirectAvailable) return t('p2p_unsupported');
+    if (!await _native.requestPermission('wifidirect')) return t('p2p_permission');
+    // Advertise now that the permission is there (it may not have been at startup).
+    await _native.p2pAttach(identity.name, identity.fingerprint);
+    p2pError = null;
+    p2pScanning = true;
+    notifyListeners();
+    await _native.p2pScan();
+    return null;
+  }
+
+  Future<void> stopP2pScan() async {
+    if (!p2pScanning) return;
+    p2pScanning = false;
+    await _native.p2pStopScan();
+    notifyListeners();
+  }
+
+  /// Invites [peer] to a Wi-Fi Direct link. Returns an error message or null.
+  Future<String?> p2pConnect(P2pPeer peer) async {
+    p2pError = null;
+    p2pInviting = peer.address;
+    notifyListeners();
+    final error = await _native.p2pConnect(peer.address);
+    if (error != null) {
+      p2pInviting = null;
+      notifyListeners();
+      return t('p2p_failed', {'reason': t('p2p_reason_$error')});
+    }
+    _p2pInviteTimer?.cancel();
+    _p2pInviteTimer = Timer(const Duration(seconds: 45), () {
+      if (p2pInviting == peer.address && p2pLink == null) {
+        p2pInviting = null;
+        p2pError = 'timeout';
+        notifyListeners();
+      }
+    });
+    return null;
+  }
+
+  Future<void> p2pDisconnect() async {
+    await _native.p2pDisconnect();
   }
 
   Future<void> stopHotspot() async {
@@ -1424,6 +1536,8 @@ class AppController extends ChangeNotifier {
     _clipTimer?.cancel();
     unawaited(webShare?.stop());
     if (hotspot != null) unawaited(_native.stopHotspot());
+    _p2pInviteTimer?.cancel();
+    if (p2pLink != null) unawaited(_native.p2pDisconnect());
     if (ready) {
       unawaited(_discovery.stop());
       unawaited(_engine.stop());

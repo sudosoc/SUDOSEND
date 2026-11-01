@@ -11,6 +11,55 @@ class SharedPayload {
   final String? text;
 }
 
+/// A phone seen over Wi-Fi Direct.
+class P2pPeer {
+  const P2pPeer({required this.name, required this.address, required this.status, this.sudosendName});
+  final String name;
+  final String address; // Wi-Fi Direct MAC, used to connect
+  /// 0 connected, 1 invited, 2 failed, 3 available, 4 unavailable.
+  final int status;
+
+  /// Set when the phone advertises SUDOSEND (its SUDOSEND device name).
+  final String? sudosendName;
+
+  bool get runsSudosend => sudosendName != null;
+  String get label => sudosendName ?? name;
+}
+
+/// The current Wi-Fi Direct link.
+class P2pLink {
+  const P2pLink({required this.owner, this.ownerAddress, this.peerName});
+  final bool owner;
+  final String? ownerAddress; // always 192.168.49.1 in practice
+  final String? peerName;
+}
+
+sealed class P2pEvent {
+  const P2pEvent();
+}
+
+class P2pState extends P2pEvent {
+  const P2pState(this.enabled);
+  final bool enabled;
+}
+
+class P2pPeers extends P2pEvent {
+  const P2pPeers(this.peers);
+  final List<P2pPeer> peers;
+}
+
+class P2pConnection extends P2pEvent {
+  const P2pConnection(this.link);
+
+  /// null = not connected.
+  final P2pLink? link;
+}
+
+class P2pError extends P2pEvent {
+  const P2pError(this.reason);
+  final String reason; // permission | busy | unsupported | error
+}
+
 class NotificationAction {
   const NotificationAction(this.id, this.action);
   final String id;
@@ -34,6 +83,9 @@ class NativeBridge {
   final StreamController<NotificationAction> _actions = StreamController<NotificationAction>.broadcast();
   final StreamController<void> _hotspotStopped = StreamController<void>.broadcast();
   final StreamController<void> _ringStopped = StreamController<void>.broadcast();
+  final StreamController<P2pEvent> _p2p = StreamController<P2pEvent>.broadcast();
+
+  Stream<P2pEvent> get p2pEvents => _p2p.stream;
 
   Stream<void> get ringStopped => _ringStopped.stream;
 
@@ -53,9 +105,41 @@ class NativeBridge {
         _ringStopped.add(null);
       case 'onHotspotStopped':
         _hotspotStopped.add(null);
+      case 'onP2p':
+        final e = _parseP2p(Map<Object?, Object?>.from(call.arguments as Map));
+        if (e != null) _p2p.add(e);
       case 'onNotificationAction':
         final m = Map<String, dynamic>.from(call.arguments as Map);
         _actions.add(NotificationAction(m['id'] as String, m['action'] as String));
+    }
+    return null;
+  }
+
+  static P2pEvent? _parseP2p(Map<Object?, Object?> m) {
+    switch (m['type']) {
+      case 'state':
+        return P2pState(m['enabled'] == true);
+      case 'error':
+        return P2pError('${m['reason']}');
+      case 'connection':
+        if (m['connected'] != true) return const P2pConnection(null);
+        return P2pConnection(P2pLink(
+          owner: m['owner'] == true,
+          ownerAddress: m['ownerAddress'] as String?,
+          peerName: m['peerName'] as String?,
+        ));
+      case 'peers':
+        final list = <P2pPeer>[];
+        for (final raw in (m['peers'] as List<Object?>? ?? const [])) {
+          final p = Map<Object?, Object?>.from(raw as Map);
+          list.add(P2pPeer(
+            name: (p['name'] as String?) ?? '',
+            address: (p['address'] as String?) ?? '',
+            status: (p['status'] as num?)?.toInt() ?? 4,
+            sudosendName: p['sudosend'] as String?,
+          ));
+        }
+        return P2pPeers(list);
     }
     return null;
   }
@@ -114,6 +198,24 @@ class NativeBridge {
   }
 
   Future<void> stopHotspot() => _invoke<bool>('stopHotspot');
+
+  /// Listens for Wi-Fi Direct changes and advertises this phone as SUDOSEND.
+  Future<bool> p2pAttach(String name, String fingerprint) async =>
+      (await _invoke<bool>('p2pAttach', {'name': name, 'fp': fingerprint})) ?? false;
+  Future<void> p2pScan() => _invoke<bool>('p2pScan');
+  Future<void> p2pStopScan() => _invoke<bool>('p2pStopScan');
+  Future<void> p2pDisconnect() => _invoke<bool>('p2pDisconnect');
+
+  /// Sends a Wi-Fi Direct invitation. Returns null on success or a reason.
+  Future<String?> p2pConnect(String address) async {
+    if (!available) return 'unsupported';
+    try {
+      await _channel.invokeMethod<bool>('p2pConnect', {'address': address});
+      return null;
+    } on PlatformException catch (e) {
+      return e.message ?? e.code;
+    }
+  }
 
   Future<void> ring(String name, {required String title, required String stop}) =>
       _invoke<bool>('ring', {'name': name, 'title': title, 'stop': stop});

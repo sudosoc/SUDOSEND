@@ -98,8 +98,12 @@ class Discovery {
     _socket = null;
   }
 
+  /// Extra unicast addresses to announce to, e.g. the Wi-Fi Direct group
+  /// owner (192.168.49.1), where broadcast is not always forwarded.
+  final Set<String> extraTargets = {};
+
   Future<void> _refreshTargets() async {
-    final targets = <String>{'255.255.255.255', group.address};
+    final targets = <String>{'255.255.255.255', group.address, ...extraTargets};
     try {
       final interfaces = await NetworkInterface.list(
         type: InternetAddressType.IPv4,
