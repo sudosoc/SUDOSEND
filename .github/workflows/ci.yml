@@ -122,7 +122,18 @@ jobs:
         with:
           path: ~/.android/debug.keystore
           key: android-debug-keystore-v1
+      # Gradle + Kotlin + R8 for four ABIs can exhaust the runner's memory
+      # (the runner is then killed with exit 143): cap the heaps and add swap.
+      - name: Limit build memory
+        run: |
+          sudo fallocate -l 6G /swapfile2 && sudo chmod 600 /swapfile2 && sudo mkswap /swapfile2 && sudo swapon /swapfile2 || true
+          touch android/gradle.properties
+          sed -i '/^org.gradle.jvmargs/d;/^kotlin.daemon.jvmargs/d' android/gradle.properties
+          printf '%s\n' 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError' 'kotlin.daemon.jvmargs=-Xmx2g' >> android/gradle.properties
+          cat android/gradle.properties
       - run: ./tool/ci_run.sh flutter build apk --release --split-per-abi
+      - name: Free the first build's daemons
+        run: (cd android && ./gradlew --stop) || true
       - run: ./tool/ci_run.sh flutter build apk --release
       - name: Collect APKs
         run: |
