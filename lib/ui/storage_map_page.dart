@@ -10,7 +10,6 @@ import 'package:wraith_core/util.dart';
 import '../app/scope.dart';
 import '../state/app_controller.dart';
 import 'background.dart';
-import 'glass.dart';
 import 'library_page.dart' show categoryColor, categoryLabel;
 import 'sync_page.dart' show SubPageHeader;
 import 'theme.dart';
