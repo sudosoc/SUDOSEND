@@ -20,6 +20,7 @@ import 'devices_page.dart';
 import 'glass.dart';
 import 'home.dart' show showRenameDialog;
 import 'receive_tab.dart' show InfoRow;
+import 'recovery_page.dart';
 import 'sync_page.dart';
 import 'theme.dart';
 
@@ -41,6 +42,7 @@ class SettingsPage extends StatelessWidget {
       (Icons.shield_rounded, AppColors.mint, 's_privacy', 'cat_privacy_sub', section(_privacy, 's_privacy')),
       (Icons.insights_rounded, AppColors.pink, 'dash_title', 'cat_dash_sub', () => DashboardPage(controller: controller)),
       (Icons.policy_rounded, AppColors.amber, 'audit_title', 'cat_audit_sub', () => AuditPage(controller: controller)),
+      (Icons.healing_rounded, AppColors.mint, 'rec_title', 'cat_rec_sub', () => RecoveryPage(controller: controller)),
       (Icons.data_usage_rounded, AppColors.pink, 's_usage', 'cat_usage_sub', section(_usage, 's_usage')),
       (Icons.palette_rounded, AppColors.amber, 's_appearance', 'cat_appearance_sub', section(_appearance, 's_appearance')),
       (Icons.info_rounded, AppColors.cyan, 's_about', 'cat_about_sub', section(_about, 's_about')),
@@ -411,6 +413,60 @@ class SettingsPage extends StatelessWidget {
                   ),
                 ),
             ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 22),
+      SectionTitle(context.tr('fg_files')),
+      Glass(
+        child: Column(
+          children: [
+            _Switch(
+              icon: Icons.manage_search_rounded,
+              color: AppColors.cyan,
+              title: context.tr('f_metadata'),
+              subtitle: context.tr('f_metadata_sub'),
+              info: 'i_metadata_explorer',
+              value: s.showMetadata,
+              onChanged: (v) => s.update((x) => x.showMetadata = v),
+            ),
+            if (s.showMetadata)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 50),
+                child: _SubSwitch(
+                  label: context.tr('f_metadata_gps'),
+                  value: s.showGps,
+                  onChanged: (v) => s.update((x) => x.showGps = v),
+                ),
+              ),
+            _divider,
+            _Switch(
+              icon: Icons.travel_explore_rounded,
+              color: AppColors.violet,
+              title: context.tr('f_remote_search'),
+              subtitle: context.tr('f_remote_search_sub'),
+              info: 'i_remote_search',
+              value: s.remoteSearch,
+              onChanged: (v) => s.update((x) => x.remoteSearch = v),
+            ),
+            if (s.remoteSearch)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 50, top: 4),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(context.tr('f_remote_limit'), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                    for (final n in const [20, 50, 100, 200])
+                      ChoiceChip(
+                        label: Text('$n'),
+                        selected: s.remoteSearchLimit == n,
+                        onSelected: (_) => s.update((x) => x.remoteSearchLimit = n),
+                      ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),

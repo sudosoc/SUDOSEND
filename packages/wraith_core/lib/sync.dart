@@ -69,11 +69,19 @@ List<ManifestEntry> decodeManifest(String b64) {
 }
 
 /// Moves an existing file into the archive before it is overwritten.
-Future<void> archiveExisting(Directory root, File existing) async {
-  if (!await existing.exists()) return;
+/// Where [existing] goes in the archive if it is replaced now.
+String archivePathFor(Directory root, File existing) {
   final stamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
   final rel = p.relative(existing.path, from: root.path);
-  final dest = File(p.join(root.path, kSyncArchive, stamp, rel));
+  return p.join(root.path, kSyncArchive, stamp, rel);
+}
+
+/// Moves an existing file into the archive before it is overwritten.
+/// Returns where it went (null if there was nothing to archive).
+Future<String?> archiveExisting(Directory root, File existing, {String? to}) async {
+  if (!await existing.exists()) return null;
+  final dest = File(to ?? archivePathFor(root, existing));
   await dest.parent.create(recursive: true);
   await existing.rename(dest.path);
+  return dest.path;
 }

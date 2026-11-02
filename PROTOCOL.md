@@ -211,6 +211,15 @@ forwarded on the P2P interface. Phones advertise a DNS-SD record `_sudosend._tcp
 (device name) and `fp` (first 8 hex of the fingerprint) so scanners can label SUDOSEND phones;
 the record is unauthenticated and used for display only.
 
+## 15. Search across devices (v0.9)
+
+- `"search": {"q": "text", "c"?: "<category>", "limit"?: n}` in an OFFER with no files. Trusted
+  devices that allow it answer ACCEPT `{"results": [{"n": name, "s": size, "h": sha256-hex,
+  "c": category, "at": received-ms, "from": source device}]}` (≤ 200); others get DECLINE.
+  No paths are ever included.
+- `"fetch": "<sha256 hex>"` asks the device to send that file back. On ACCEPT the holder opens a
+  normal transfer to the requester, which accepts it without a prompt because it asked for it.
+
 ## Known limitations
 
 - Discovery metadata (device name, fingerprint) is visible on the LAN — use stealth mode to stop announcing.

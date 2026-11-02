@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:wraith_core/models.dart';
+import 'safe_file.dart';
 
 /// A transfer waiting for a trusted device to come online.
 class OutboxItem {
@@ -70,8 +71,9 @@ class OutboxStore {
     final file = File(p.join(dir.path, 'outbox.json'));
     final items = <OutboxItem>[];
     try {
-      if (await file.exists()) {
-        for (final e in jsonDecode(await file.readAsString()) as List<dynamic>) {
+      final list = await SafeFile.readJson(file, (j) => j as List<dynamic>);
+      if (list != null) {
+        for (final e in list) {
           try {
             items.add(OutboxItem.fromJson(e as Map<String, dynamic>));
           } catch (_) {}
@@ -93,8 +95,7 @@ class OutboxStore {
 
   Future<void> save() async {
     try {
-      await _file.parent.create(recursive: true);
-      await _file.writeAsString(jsonEncode([for (final i in items) i.toJson()]));
+      await SafeFile.write(_file, jsonEncode([for (final i in items) i.toJson()]));
     } catch (_) {}
   }
 }

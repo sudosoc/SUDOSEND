@@ -27,6 +27,11 @@ import 'theme.dart';
       AuditKind.riskyFile => (Icons.gpp_maybe_rounded, AppColors.danger),
       AuditKind.storageLow => (Icons.sd_card_alert_rounded, AppColors.danger),
       AuditKind.settingsChanged => (Icons.tune_rounded, AppColors.cyan),
+      AuditKind.recovered => (Icons.healing_rounded, AppColors.mint),
+      AuditKind.trashed => (Icons.delete_outline_rounded, AppColors.muted),
+      AuditKind.restored => (Icons.restore_from_trash_rounded, AppColors.mint),
+      AuditKind.remoteSearch => (Icons.travel_explore_rounded, AppColors.cyan),
+      AuditKind.remoteFetch => (Icons.cloud_download_rounded, AppColors.violet),
     };
 
 /// Security log: connections, transfers, trust changes, deletions.
@@ -50,6 +55,8 @@ class _AuditPageState extends State<AuditPage> {
     AuditKind.trustExpired,
     AuditKind.permissionDenied,
     AuditKind.riskyFile,
+    AuditKind.remoteSearch,
+    AuditKind.remoteFetch,
   };
   static const _transfers = {
     AuditKind.requestAccepted,

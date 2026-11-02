@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:wraith_core/organize.dart';
+import 'safe_file.dart';
 
 /// One received file, as SUDOSEND knows it.
 class LibraryItem {
@@ -137,9 +138,14 @@ class LibraryStore {
     final file = File(p.join(dir.path, 'library.json'));
     final items = <LibraryItem>[];
     try {
-      if (await file.exists()) {
-        final raw = await compute(_decode, await file.readAsString());
-        items.addAll(raw.map(LibraryItem.fromJson).whereType<LibraryItem>());
+      for (final candidate in [file, File('${file.path}.bak')]) {
+        try {
+          if (!await candidate.exists()) continue;
+          final raw = await compute(_decode, await candidate.readAsString());
+          items.addAll(raw.map(LibraryItem.fromJson).whereType<LibraryItem>());
+          if (!identical(candidate, file)) SafeFile.restored.add(file.path);
+          break;
+        } catch (_) {}
       }
     } catch (_) {}
     final store = LibraryStore._(file, items);
@@ -243,9 +249,8 @@ class LibraryStore {
 
   Future<void> save() => _pending = _pending.then((_) async {
         try {
-          await _file.parent.create(recursive: true);
           final data = await compute(_encode, [for (final i in items) i.toJson()]);
-          await _file.writeAsString(data);
+          await SafeFile.write(_file, data);
         } catch (_) {}
       });
 

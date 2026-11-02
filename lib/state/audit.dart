@@ -22,6 +22,11 @@ enum AuditKind {
   riskyFile,
   storageLow,
   settingsChanged,
+  recovered, // Smart Recovery repaired something after a crash
+  trashed,
+  restored,
+  remoteSearch, // another device searched this one
+  remoteFetch, // another device asked for a copy of a file
 }
 
 class AuditEvent {

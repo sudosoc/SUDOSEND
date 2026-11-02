@@ -290,6 +290,15 @@ class _DevicePageState extends State<DevicePage> {
                                     ),
                                     divider,
                                     _Perm(
+                                      icon: Icons.travel_explore_rounded,
+                                      color: AppColors.violet,
+                                      title: context.tr('dp_search'),
+                                      value: d.search,
+                                      globalOff: !s.remoteSearch,
+                                      onChanged: (v) => _set((x) => x.search = v),
+                                    ),
+                                    divider,
+                                    _Perm(
                                       icon: Icons.speed_rounded,
                                       color: AppColors.mint,
                                       title: context.tr('dp_speed'),

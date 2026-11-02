@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:video_player/video_player.dart';
+import 'package:wraith_core/inspect.dart';
 import 'package:wraith_core/organize.dart';
 import 'package:wraith_core/risk.dart';
 import 'package:wraith_core/util.dart';
@@ -401,7 +402,7 @@ class _InfoPanel extends StatelessWidget {
           ),
         );
     return Container(
-      constraints: const BoxConstraints(maxHeight: 260),
+      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.45),
       color: const Color(0xFF0E1530),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(14),
@@ -414,6 +415,7 @@ class _InfoPanel extends StatelessWidget {
             row(context.tr('prev_type'), item.category.folder),
             row('SHA-256', item.sha256, mono: true, copy: item.sha256),
             row(context.tr('prev_path'), item.path, mono: true, copy: item.path),
+            if (controller.settings.showMetadata) _MetadataSection(path: item.path, showGps: controller.settings.showGps, openUrl: controller.openUrl),
             if (twins.isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(context.tr('prev_identical', {'n': twins.length}),
@@ -424,6 +426,110 @@ class _InfoPanel extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// File Metadata Explorer: EXIF, document properties, media info and
+/// security flags, grouped and translated.
+class _MetadataSection extends StatelessWidget {
+  const _MetadataSection({required this.path, required this.showGps, required this.openUrl});
+  final String path;
+  final bool showGps;
+  final Future<bool> Function(String url) openUrl;
+
+  static const _order = ['security', 'gps', 'camera', 'image', 'document', 'media', 'audio', 'file'];
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<FileMetadata>(
+      future: inspectFile(path),
+      builder: (context, snap) {
+        final m = snap.data;
+        if (m == null) return const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator(minHeight: 2));
+        final fields = m.fields.where((f) => (showGps || f.group != 'gps') && f.key != 'size').toList();
+        final groups = <String, List<MetaField>>{};
+        for (final f in fields) {
+          (groups[f.group] ??= []).add(f);
+        }
+        String label(String key) {
+          final k = 'mk_$key';
+          final t = context.tr(k);
+          return t == k ? key : t;
+        }
+
+        String value(MetaField f) {
+          if (f.key == 'size') return formatBytes(int.tryParse(f.value) ?? 0);
+          if (f.value == 'yes') return context.tr('mv_yes');
+          if (f.value == 'present') return context.tr('mv_present');
+          return f.value;
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.manage_search_rounded, size: 18, color: AppColors.cyan),
+                const SizedBox(width: 6),
+                Text(context.tr('meta_title'), style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.white)),
+                if (m.format != null) ...[
+                  const SizedBox(width: 8),
+                  Text(m.format!, style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                ],
+              ],
+            ),
+            if (m.hasLocation && showGps)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  children: [
+                    const Icon(Icons.location_on_rounded, size: 16, color: AppColors.pink),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(context.tr('meta_has_location'),
+                          style: const TextStyle(color: AppColors.pink, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                    ),
+                    TextButton(
+                      onPressed: () => openUrl(
+                          'https://www.openstreetmap.org/?mlat=${m.latitude}&mlon=${m.longitude}#map=16/${m.latitude}/${m.longitude}'),
+                      child: Text(context.tr('meta_map')),
+                    ),
+                  ],
+                ),
+              ),
+            if (!showGps && m.hasLocation)
+              Text(context.tr('meta_gps_hidden'), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+            for (final g in _order)
+              if (groups[g] != null) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 2),
+                  child: Text(context.tr('mg_$g').toUpperCase(),
+                      style: TextStyle(
+                          color: g == 'security' ? AppColors.amber : AppColors.muted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2)),
+                ),
+                for (final f in groups[g]!)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(width: 130, child: Text(label(f.key), style: const TextStyle(color: AppColors.muted, fontSize: 12))),
+                        Expanded(
+                          child: SelectableText(value(f),
+                              style: TextStyle(fontSize: 12, color: g == 'security' ? AppColors.amber : Colors.white)),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+          ],
+        );
+      },
     );
   }
 }

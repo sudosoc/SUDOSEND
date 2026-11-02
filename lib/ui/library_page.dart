@@ -11,6 +11,8 @@ import '../state/library.dart';
 import 'dashboard_page.dart';
 import 'glass.dart';
 import 'preview_page.dart';
+import 'remote_search_page.dart';
+import 'storage_map_page.dart';
 import 'theme.dart';
 
 IconData categoryIcon(FileCategory c) => switch (c) {
@@ -116,10 +118,36 @@ class _LibraryTabState extends State<LibraryTab> {
                 icon: Icon(_timeline ? Icons.view_list_rounded : Icons.timeline_rounded),
               ),
               IconButton(
-                tooltip: context.tr('dash_title'),
-                onPressed: () => Navigator.of(context)
-                    .push(MaterialPageRoute<void>(builder: (_) => DashboardPage(controller: c))),
-                icon: const Icon(Icons.insights_rounded, color: AppColors.violet),
+                tooltip: context.tr('rs_title'),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => RemoteSearchPage(controller: c, initial: _search.text.trim()),
+                )),
+                icon: const Icon(Icons.travel_explore_rounded, color: AppColors.cyan),
+              ),
+              PopupMenuButton<String>(
+                tooltip: context.tr('more_info'),
+                icon: const Icon(Icons.more_vert_rounded),
+                onSelected: (v) => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => v == 'map' ? StorageMapPage(controller: c) : DashboardPage(controller: c),
+                )),
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'dash',
+                    child: ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.insights_rounded, color: AppColors.violet),
+                      title: Text(context.tr('dash_title')),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'map',
+                    child: ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.grid_view_rounded, color: AppColors.amber),
+                      title: Text(context.tr('heat_title')),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

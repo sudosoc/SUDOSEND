@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'safe_file.dart';
 
 /// One period during which a device was visible on the network.
 class DeviceSession {
@@ -94,8 +95,8 @@ class DeviceRegistry {
   static Future<DeviceRegistry> load(Directory dir) async {
     final r = DeviceRegistry._(File(p.join(dir.path, 'devices.json')));
     try {
-      if (await r._file.exists()) {
-        final m = jsonDecode(await r._file.readAsString()) as Map<String, dynamic>;
+      {
+        final m = await SafeFile.readJson(r._file, (j) => j as Map<String, dynamic>) ?? const <String, dynamic>{};
         for (final e in m.entries) {
           final d = DeviceProfile.fromJson(e.key, e.value);
           if (d != null) r.profiles[e.key] = d;
@@ -142,7 +143,7 @@ class DeviceRegistry {
   Future<void> save() => _pending = _pending.then((_) async {
         try {
           await _file.parent.create(recursive: true);
-          await _file.writeAsString(jsonEncode({for (final e in profiles.entries) e.key: e.value.toJson()}));
+          await SafeFile.write(_file, jsonEncode({for (final e in profiles.entries) e.key: e.value.toJson()}));
         } catch (_) {}
       });
 }

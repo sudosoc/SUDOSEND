@@ -5,6 +5,7 @@ import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'safe_file.dart';
 
 /// What one trusted device is allowed to do here. Global feature switches
 /// still apply on top: a feature that is off is off for every device.
@@ -24,6 +25,7 @@ class DevicePrefs {
     this.trustExpires,
     this.byType,
     this.byDate,
+    this.search = true,
   });
 
   /// Folder name for this device's files (null = its device name).
@@ -57,6 +59,9 @@ class DevicePrefs {
   bool? byType;
   bool? byDate;
 
+  /// May search this device's received files and ask for a copy.
+  bool search;
+
   bool get mayReceiveFrom => direction != 'sendOnly';
   bool get maySendTo => direction != 'receiveOnly';
 
@@ -75,6 +80,7 @@ class DevicePrefs {
         if (trustExpires != null) 'trustExpires': trustExpires!.millisecondsSinceEpoch,
         if (byType != null) 'byType': byType,
         if (byDate != null) 'byDate': byDate,
+        'search': search,
       };
 
   static DevicePrefs fromJson(Object? raw) {
@@ -97,6 +103,7 @@ class DevicePrefs {
           raw['trustExpires'] is int ? DateTime.fromMillisecondsSinceEpoch(raw['trustExpires'] as int) : null,
       byType: raw['byType'] is bool ? raw['byType'] as bool : null,
       byDate: raw['byDate'] is bool ? raw['byDate'] as bool : null,
+      search: b('search', true),
     );
   }
 }
@@ -223,6 +230,17 @@ class SettingsController extends ChangeNotifier {
   bool notifyDuplicates = true;
   bool notifyStorage = true;
 
+  /// File Metadata Explorer in previews, and whether GPS positions are shown.
+  bool showMetadata = true;
+  bool showGps = true;
+
+  /// Deleted files go to a trash for this many days (0 = delete at once).
+  int trashDays = 30;
+
+  /// Trusted devices may search the files received here and ask for a copy.
+  bool remoteSearch = true;
+  int remoteSearchLimit = 50;
+
   /// Device groups (names), e.g. Personal, Work.
   List<String> deviceGroups = ['Personal', 'Work'];
 
@@ -248,8 +266,8 @@ class SettingsController extends ChangeNotifier {
   Future<void> load(Directory dir) async {
     _file = File(p.join(dir.path, 'settings.json'));
     try {
-      if (await _file!.exists()) {
-        final m = jsonDecode(await _file!.readAsString()) as Map<String, dynamic>;
+      final m = await SafeFile.readJson(_file!, (j) => j as Map<String, dynamic>);
+      if (m != null) {
         language = (m['language'] as String?) ?? language;
         final savedEffects = m['effects'] as String?;
         if (savedEffects == 'full' || savedEffects == 'balanced' || savedEffects == 'lite') {
@@ -289,6 +307,11 @@ class SettingsController extends ChangeNotifier {
         notifyFailed = (m['notifyFailed'] as bool?) ?? notifyFailed;
         notifyDuplicates = (m['notifyDuplicates'] as bool?) ?? notifyDuplicates;
         notifyStorage = (m['notifyStorage'] as bool?) ?? notifyStorage;
+        showMetadata = (m['showMetadata'] as bool?) ?? showMetadata;
+        showGps = (m['showGps'] as bool?) ?? showGps;
+        trashDays = (m['trashDays'] as int?) ?? trashDays;
+        remoteSearch = (m['remoteSearch'] as bool?) ?? remoteSearch;
+        remoteSearchLimit = ((m['remoteSearchLimit'] as int?) ?? remoteSearchLimit).clamp(10, 200);
         final groups = m['deviceGroups'];
         if (groups is List) deviceGroups = groups.whereType<String>().toList();
         final md = m['metadata'];
@@ -316,8 +339,7 @@ class SettingsController extends ChangeNotifier {
     final file = _file;
     if (file == null) return;
     try {
-      await file.parent.create(recursive: true);
-      await file.writeAsString(jsonEncode({
+      await SafeFile.write(file, jsonEncode({
         'language': language,
         'effects': effects,
         'clipboardSync': clipboardSync,
@@ -351,6 +373,11 @@ class SettingsController extends ChangeNotifier {
         'notifyDuplicates': notifyDuplicates,
         'notifyStorage': notifyStorage,
         'deviceGroups': deviceGroups,
+        'showMetadata': showMetadata,
+        'showGps': showGps,
+        'trashDays': trashDays,
+        'remoteSearch': remoteSearch,
+        'remoteSearchLimit': remoteSearchLimit,
         'devicePrefs': {for (final e in devicePrefs.entries) e.key: e.value.toJson()},
         'wifiDirect': wifiDirect,
         'autoUpdateCheck': autoUpdateCheck,

@@ -8,6 +8,8 @@ import 'package:wraith_core/identity.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:wraith_core/aead.dart';
 import 'package:wraith_core/chacha_poly.dart';
+import 'package:wraith_core/inspect.dart';
+import 'package:wraith_core/journal.dart';
 import 'package:wraith_core/metadata.dart';
 import 'package:wraith_core/models.dart';
 import 'package:wraith_core/organize.dart';
@@ -729,6 +731,215 @@ void main() {
     expect(assessRisk('cv.pdf', [0x4D, 0x5A, 0x90, 0x00]).reason, 'disguised');
     expect(assessRisk('notes.txt', '#!/bin/sh'.codeUnits).reason, 'disguised-script');
     expect(assessRisk('cv.pdf', '%PDF-1.7'.codeUnits).level, RiskLevel.none);
+  });
+
+  group('metadata explorer', () {
+    test('JPEG EXIF: camera and GPS', () {
+      final t = BytesBuilder();
+      void u16(int v) => t.add([v >> 8, v & 0xFF]);
+      void u32(int v) => t.add([v >> 24, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF]);
+      t.add([0x4D, 0x4D]);
+      u16(42);
+      u32(8);
+      u16(2); // IFD0
+      u16(0x010F); u16(2); u32(6); u32(38);
+      u16(0x8825); u16(4); u32(1); u32(44);
+      u32(0);
+      t.add('Canon\u0000'.codeUnits); // 38..43
+      u16(4); // GPS IFD at 44
+      u16(1); u16(2); u32(2); t.add([0x4E, 0, 0, 0]);
+      u16(2); u16(5); u32(3); u32(98);
+      u16(3); u16(2); u32(2); t.add([0x45, 0, 0, 0]);
+      u16(4); u16(5); u32(3); u32(122);
+      u32(0); // 94..97
+      for (final v in [30, 1, 2, 1, 40, 1, 31, 1, 14, 1, 852, 100]) {
+        u32(v);
+      }
+      final tiff = t.takeBytes();
+      final app1 = [...'Exif'.codeUnits, 0, 0, ...tiff];
+      final jpeg = Uint8List.fromList([
+        0xFF, 0xD8,
+        0xFF, 0xE1, (app1.length + 2) >> 8, (app1.length + 2) & 0xFF, ...app1,
+        0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x01, 0xE0, 0x02, 0x80, 0x03, 0x01, 0x22, 0x00, //
+        0xFF, 0xDA, 0x00, 0x02, 0xFF, 0xD9,
+      ]);
+      final m = inspectBytes(jpeg);
+      expect(m.format, 'JPEG');
+      expect(m['make'], 'Canon');
+      expect(m['width'], '640');
+      expect(m['height'], '480');
+      expect(m.latitude, closeTo(30.044444, 1e-5));
+      expect(m.longitude, closeTo(31.235667, 1e-5));
+    });
+
+    test('PDF info dictionary and risky features', () {
+      final pdf = Uint8List.fromList(
+          '%PDF-1.7\n1 0 obj << /Title (Quarterly \\(Q3\\) report) /Author (Seif) /CreationDate (D:20261102120000) >> endobj\n/OpenAction << /S /JavaScript /JS (app.alert(1)) >>\ntrailer << /Encrypt 5 0 R >>'
+              .codeUnits);
+      final m = inspectBytes(pdf);
+      expect(m['pdfVersion'], '1.7');
+      expect(m['title'], 'Quarterly (Q3) report');
+      expect(m['author'], 'Seif');
+      expect(m['created'], '2026-11-02 12:00');
+      expect(m['encrypted'], 'yes');
+      expect(m['javascript'], 'yes');
+    });
+
+    test('Office document properties and macros (zip)', () async {
+      final dir = await Directory.systemTemp.createTemp('sudosend_meta_');
+      addTearDown(() => dir.delete(recursive: true));
+      List<int> le16(int v) => [v & 0xFF, v >> 8];
+      List<int> le32(int v) => [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF];
+      final files = {
+        'docProps/core.xml':
+            '<cp:coreProperties><dc:title>Budget</dc:title><dc:creator>Seif &amp; Co</dc:creator><dcterms:created xsi:type="x">2026-11-01T10:00:00Z</dcterms:created></cp:coreProperties>',
+        'docProps/app.xml': '<Properties><Application>Microsoft Excel</Application><Company>SUDOSOC</Company></Properties>',
+        'xl/vbaProject.bin': 'macro',
+      };
+      final out = BytesBuilder();
+      final central = BytesBuilder();
+      for (final e in files.entries) {
+        final name = e.key.codeUnits, data = e.value.codeUnits;
+        final offset = out.length;
+        out
+          ..add(le32(0x04034b50))
+          ..add(le16(20))
+          ..add(le16(0))
+          ..add(le16(0)) // stored
+          ..add(le16(0))
+          ..add(le16(0))
+          ..add(le32(0))
+          ..add(le32(data.length))
+          ..add(le32(data.length))
+          ..add(le16(name.length))
+          ..add(le16(0))
+          ..add(name)
+          ..add(data);
+        central
+          ..add(le32(0x02014b50))
+          ..add(le16(20))
+          ..add(le16(20))
+          ..add(le16(0))
+          ..add(le16(0))
+          ..add(le16(0))
+          ..add(le16(0))
+          ..add(le32(0))
+          ..add(le32(data.length))
+          ..add(le32(data.length))
+          ..add(le16(name.length))
+          ..add(le16(0))
+          ..add(le16(0))
+          ..add(le16(0))
+          ..add(le16(0))
+          ..add(le32(0))
+          ..add(le32(offset))
+          ..add(name);
+      }
+      final cdOffset = out.length;
+      final cd = central.takeBytes();
+      out
+        ..add(cd)
+        ..add(le32(0x06054b50))
+        ..add(le16(0))
+        ..add(le16(0))
+        ..add(le16(files.length))
+        ..add(le16(files.length))
+        ..add(le32(cd.length))
+        ..add(le32(cdOffset))
+        ..add(le16(0));
+      final f = File(p.join(dir.path, 'budget.xlsm'))..writeAsBytesSync(out.takeBytes());
+      final m = await inspectFile(f.path);
+      expect(m['title'], 'Budget');
+      expect(m['author'], 'Seif & Co');
+      expect(m['application'], 'Microsoft Excel');
+      expect(m['company'], 'SUDOSOC');
+      expect(m['created'], '2026-11-01T10:00:00Z');
+      expect(m['macros'], 'yes');
+    });
+
+    test('MP4 creation date and duration, MP3 tags', () async {
+      final dir = await Directory.systemTemp.createTemp('sudosend_meta_');
+      addTearDown(() => dir.delete(recursive: true));
+      List<int> be32(int v) => [(v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF];
+      final created = DateTime.utc(2026, 1, 2).difference(DateTime.utc(1904)).inSeconds;
+      final mvhd = [0, 0, 0, 0, ...be32(created), ...be32(created), ...be32(1000), ...be32(65000), ...List<int>.filled(80, 0)];
+      final mvhdBox = [...be32(mvhd.length + 8), ...'mvhd'.codeUnits, ...mvhd];
+      final moov = [...be32(mvhdBox.length + 8), ...'moov'.codeUnits, ...mvhdBox];
+      final ftyp = [...be32(16), ...'ftyp'.codeUnits, ...'isom'.codeUnits, 0, 0, 0, 0];
+      final mp4 = File(p.join(dir.path, 'clip.mp4'))..writeAsBytesSync([...ftyp, ...moov]);
+      final m = await inspectFile(mp4.path);
+      expect(m['duration'], '01:05');
+      expect(m['created'], startsWith('2026-01-02'));
+      expect(m['brand'], 'isom');
+
+      final frame = [0, ...'Hello'.codeUnits];
+      final id3 = [
+        ...'ID3'.codeUnits, 3, 0, 0, 0, 0, 0, 10 + frame.length, //
+        ...'TIT2'.codeUnits, ...be32(frame.length), 0, 0, ...frame,
+      ];
+      expect(inspectBytes(Uint8List.fromList(id3))['title'], 'Hello');
+    });
+
+    test('hostile input never throws', () {
+      for (final junk in [
+        [0xFF, 0xD8, 0xFF, 0xE1, 0x00, 0x08, 0x45, 0x78, 0x69, 0x66, 0x00, 0x00],
+        [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0xFF, 0xFF, 0xFF, 0xFF, 0x49, 0x48],
+        '%PDF-'.codeUnits,
+        'ID3\u0004\u0000\u0000\u007f\u007f\u007f\u007f'.codeUnits,
+      ]) {
+        expect(() => inspectBytes(Uint8List.fromList(junk)), returnsNormally);
+      }
+    });
+  });
+
+  test('smart recovery: an interrupted replace is rolled back', () async {
+    final dir = await Directory.systemTemp.createTemp('sudosend_journal_');
+    addTearDown(() => dir.delete(recursive: true));
+    final j = Journal(File(p.join(dir.path, 'journal.jsonl')));
+    final dest = File(p.join(dir.path, 'notes.txt'));
+    final archived = File(p.join(dir.path, 'archive', 'notes.txt'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync('old copy');
+    // Crash: the old file was archived but the new one never arrived.
+    j.begin('replace', {'dest': dest.path, 'archived': archived.path});
+    final done = j.begin('replace', {'dest': '/nope', 'archived': '/nope2'});
+    j.end(done);
+    expect(j.pending(), hasLength(1));
+    final r = await recoverJournal(j);
+    expect(dest.readAsStringSync(), 'old copy');
+    expect(r.repaired, hasLength(1));
+    expect(j.pending(), isEmpty);
+
+    // Interrupted cross-volume move: the partial copy is removed, the original kept.
+    final from = File(p.join(dir.path, 'big.bin'))..writeAsBytesSync(List<int>.filled(1000, 1));
+    final to = File(p.join(dir.path, 'trash', 'big.bin'))
+      ..createSync(recursive: true)
+      ..writeAsBytesSync(List<int>.filled(10, 1));
+    j.begin('move', {'from': from.path, 'to': to.path});
+    await recoverJournal(j);
+    expect(from.existsSync(), isTrue);
+    expect(to.existsSync(), isFalse);
+  });
+
+  test('search across devices: trusted only, no paths, fetch by hash', () async {
+    final t = await _pair();
+    String? fetched;
+    t.receiver.onSearch = (fp, q) => [
+          {'n': 'report.pdf', 's': 1234, 'h': 'a' * 64, 'q': q['q']},
+        ];
+    t.receiver.onFetch = (fp, sha) {
+      fetched = sha;
+      return true;
+    };
+    expect(await t.sender.searchRemote(t.peer, {'q': 'rep'}), isNull, reason: 'untrusted devices get nothing');
+    expect(await t.sender.requestFetch(t.peer, 'a' * 64), isFalse);
+    await t.bobTrust.add(t.alice.fingerprint, t.alice.name);
+    final hits = await t.sender.searchRemote(t.peer, {'q': 'rep'});
+    expect(hits!.single['n'], 'report.pdf');
+    expect(hits.single['q'], 'rep');
+    expect(await t.sender.requestFetch(t.peer, 'not-a-hash'), isFalse);
+    expect(await t.sender.requestFetch(t.peer, 'b' * 64), isTrue);
+    expect(fetched, 'b' * 64);
   });
 
   group('metadata scrubbing', () {

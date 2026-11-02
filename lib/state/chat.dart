@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'safe_file.dart';
 
 enum ChatState { sending, sent, failed, received }
 
@@ -65,8 +66,8 @@ class ChatStore {
   static Future<ChatStore> load(Directory dir) async {
     final store = ChatStore._(File(p.join(dir.path, 'chat.json')));
     try {
-      if (await store._file.exists()) {
-        final m = jsonDecode(await store._file.readAsString()) as Map<String, dynamic>;
+      final m = await SafeFile.readJson(store._file, (j) => j as Map<String, dynamic>);
+      if (m != null) {
         for (final e in m.entries) {
           final v = e.value as Map<String, dynamic>;
           final t = ChatThread(e.key, v['name'] as String? ?? '?')..unread = v['unread'] as int? ?? 0;
@@ -122,8 +123,7 @@ class ChatStore {
 
   Future<void> _write() async {
     try {
-      await _file.parent.create(recursive: true);
-      await _file.writeAsString(jsonEncode({
+      await SafeFile.write(_file, jsonEncode({
         for (final t in threads.values)
           t.fingerprint: {
             'name': t.peerName,

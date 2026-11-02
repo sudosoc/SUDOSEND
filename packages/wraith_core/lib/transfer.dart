@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import 'hashing.dart';
 import 'identity.dart';
+import 'journal.dart';
 import 'models.dart';
 import 'pairing.dart';
 import 'receipt.dart';
@@ -145,6 +146,17 @@ class TransferEngine {
   /// path under the inbox (e.g. device/category/date/name). Not used for
   /// folder sync. Every returned segment is re-sanitized here.
   List<String> Function(String peerName, String fingerprint, List<String> segments)? placeFile;
+
+  /// Write-ahead journal for multi-step file operations (Smart Recovery).
+  Journal? journal;
+
+  /// Search from another device: return result maps (or null to refuse).
+  /// Only ever called for trusted devices.
+  List<Map<String, Object?>>? Function(String fingerprint, Map<String, dynamic> query)? onSearch;
+
+  /// Another device asks this one to send it a file by SHA-256 (hex).
+  /// Return true if the file will be sent. Only called for trusted devices.
+  bool Function(String fingerprint, String sha256)? onFetch;
   final void Function(IncomingRequest request) onIncoming;
   final void Function(TransferJob job) onJob;
 
@@ -527,7 +539,10 @@ class TransferEngine {
         invite = (id: rawInvite['id'] as String, name: sanitizeFileName(rawInvite['name'] as String));
       }
       final syncId = rawFiles.isNotEmpty && offer['sync'] is String ? offer['sync'] as String : null;
-      if (rawFiles.isEmpty && text == null && !ring && !speedTest && manifestFor is! String && invite == null) {
+      final search = rawFiles.isEmpty && text == null ? offer['search'] : null;
+      final fetch = rawFiles.isEmpty && text == null ? offer['fetch'] : null;
+      if (rawFiles.isEmpty && text == null && !ring && !speedTest && manifestFor is! String && invite == null &&
+          search is! Map && fetch is! String) {
         throw const WraithException('Empty offer');
       }
 
@@ -561,6 +576,26 @@ class TransferEngine {
       if (trust.isBlocked(hs.peerFingerprint)) {
         onRejected?.call(ip, 'blocked');
         await channel.send(Frame.decline);
+        return;
+      }
+
+      // Search across devices: answer with matching files (no paths).
+      if (search is Map) {
+        final results = trust.isTrusted(hs.peerFingerprint)
+            ? onSearch?.call(hs.peerFingerprint, Map<String, dynamic>.from(search))
+            : null;
+        if (results == null) {
+          await channel.send(Frame.decline);
+        } else {
+          await channel.sendJson(Frame.accept, {'results': results.take(200).toList()});
+        }
+        return;
+      }
+      if (fetch is String) {
+        final ok = trust.isTrusted(hs.peerFingerprint) &&
+            RegExp(r'^[0-9a-f]{64}$').hasMatch(fetch) &&
+            (onFetch?.call(hs.peerFingerprint, fetch) ?? false);
+        await channel.send(ok ? Frame.accept : Frame.decline);
         return;
       }
 
@@ -792,8 +827,13 @@ class TransferEngine {
           if (syncRoot != null) {
             // Folder sync: replace in place, keeping the old version in the archive.
             dest = File(p.join(targets[index].dir.path, targets[index].baseName));
-            await archiveExisting(syncRoot, dest);
+            // Journaled: a crash between "archive" and "rename" is rolled back
+            // on the next start (Smart Recovery), so the old copy is never lost.
+            final archivePath = archivePathFor(syncRoot, dest);
+            final op = journal?.begin('replace', {'dest': dest.path, 'archived': archivePath});
+            await archiveExisting(syncRoot, dest, to: archivePath);
             await part.rename(dest.path);
+            if (op != null) journal!.end(op);
             final mtime = files[index].mtime;
             if (mtime != null) {
               try {
@@ -930,6 +970,39 @@ class TransferEngine {
       final reply = await channel.receive(timeout: const Duration(seconds: 60));
       if (reply.type != Frame.accept) throw const WraithException('The other device has no such sync folder');
       return decodeManifest(reply.json()['manifest'] as String);
+    } finally {
+      await channel.close();
+    }
+  }
+
+  /// Searches the received files of [peer] (a trusted device that allows it).
+  /// Returns null if the device refused.
+  Future<List<Map<String, dynamic>>?> searchRemote(Peer peer, Map<String, Object?> query) async {
+    final (_, hs) = await _openSecure(peer);
+    final channel = hs.channel;
+    try {
+      await channel.sendJson(Frame.offer, {'files': [], 'search': query});
+      final reply = await channel.receive(timeout: const Duration(seconds: 15));
+      if (reply.type != Frame.accept) return null;
+      final raw = reply.json()['results'];
+      return [
+        if (raw is List)
+          for (final r in raw.take(200))
+            if (r is Map) Map<String, dynamic>.from(r),
+      ];
+    } finally {
+      await channel.close();
+    }
+  }
+
+  /// Asks [peer] to send this device the file with [sha256].
+  Future<bool> requestFetch(Peer peer, String sha256) async {
+    final (_, hs) = await _openSecure(peer);
+    final channel = hs.channel;
+    try {
+      await channel.sendJson(Frame.offer, {'files': [], 'fetch': sha256});
+      final reply = await channel.receive(timeout: const Duration(seconds: 15));
+      return reply.type == Frame.accept;
     } finally {
       await channel.close();
     }

@@ -43,6 +43,10 @@
 
 ## What's new
 
+**0.9** — File Metadata Explorer (EXIF, PDF/Office/video properties, security flags) · Smart Recovery
+(journaled operations, crash-safe data, trash) · storage map · search across devices with
+"get a copy".
+
 **0.8** — Files tab with search, timeline and in-app previews · duplicate detection (SHA-256) ·
 device profiles, nicknames, groups and permission profiles · audit log for your SIEM · storage guard ·
 statistics with CSV/JSON/PDF reports · smart folders `device/type/date` · photo location stripping ·
@@ -72,6 +76,13 @@ button that explains what it does — in English and Arabic.
 - **Files tab** — search by name, extension, device, date, size and type; **timeline** by day
 - **In-app preview** — photos (zoom, swipe), video and audio, PDF, text and code
 - **Duplicate detection** with SHA-256 — even when the name is different; keep both or drop the new copy
+- **File Metadata Explorer** — EXIF (camera, date taken, GPS with map link), PDF and Office properties,
+  video and music info, plus security flags: PDF JavaScript / auto-run, embedded files, Office macros
+- **Search across devices** — find a file on every trusted device at once, see each identical copy and
+  where it came from, and pull a copy with one tap (no folder paths are ever shared)
+- **Storage map** — treemap of space by device, type, day, or real folders on disk
+- **Smart Recovery** — journaled file operations, crash-safe app data with automatic backup restore,
+  a trash with restore (7/30/90 days), and cleanup of interrupted transfers
 - **Storage guard** — warns before the disk fills and refuses transfers that would not fit
 - **Statistics** — totals, average and top speed, daily/weekly/monthly activity, top senders and
   types, duplicates, storage — exportable as **CSV, JSON or PDF**
@@ -308,6 +319,8 @@ sudosend --help
 | Speed test refused | The other device must trust you and allow speed tests. |
 | Wi-Fi Direct finds nothing | Wi-Fi ON on both phones, SUDOSEND open on both, *Nearby devices* allowed (Location ON on Android ≤ 12); accept the *Invitation to connect*. |
 | Hotspot won't start | Turn off normal tethering, turn on Location (Android ≤ 12), allow *Nearby devices*. |
+| A deleted file is needed again | *Settings → Recovery & trash* → **Restore** (kept for the days you chose). |
+| Search across devices finds nothing on a device | It must be trusted, online, and allow *Search across devices* (Features) and *Search my files* (its device permissions). |
 | No video preview on Windows/Linux | Videos open in your system player there; in-app video is on Android, iOS and macOS. |
 | Devices ask for the code again after an update | The device key couldn't be unlocked (OS key store reset) and was recreated — pair again. |
 
@@ -391,6 +404,7 @@ packages/wraith_core/   pure-Dart core, shared by the app and the CLI
   transfer.dart           sender/receiver (resume, folders, text, compression, sync, speed test)
   discovery.dart          UDP announce / probe / unicast reconnect
   organize.dart           device/type/date placement · metadata.dart  photo scrubbing
+  inspect.dart            metadata explorer (EXIF, PDF, OOXML, MP4, ID3) · journal.dart  recovery journal
   risk.dart               risky / disguised file detection · disk.dart  free space
   sync.dart · receipt.dart · pairing.dart · identity.dart · web_share.dart · vault_windows.dart
   bin/sudosend.dart       command-line client
@@ -413,6 +427,9 @@ test/                   RFC 8439 vectors, loopback end-to-end tests, organizatio
 | SHA-256 check of every file | ✅ | — | — | — |
 | Resume interrupted transfers | ✅ | — | — | — |
 | Duplicate detection | ✅ | — | — | — |
+| Metadata explorer (EXIF, PDF, Office, video) | ✅ | — | — | — |
+| Search files across devices | ✅ | — | — | — |
+| Trash + crash recovery | ✅ | — | — | — |
 | Search, timeline and in-app preview of received files | ✅ | — | — | — |
 | Automatic device/type/date folders | ✅ | — | — | — |
 | Per-device permission profiles, expiring trust | ✅ | — | ⚠️ per plugin | — |

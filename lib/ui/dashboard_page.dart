@@ -19,6 +19,7 @@ import 'background.dart';
 import 'devices_page.dart';
 import 'glass.dart';
 import 'library_page.dart' show categoryColor, categoryIcon, categoryLabel;
+import 'storage_map_page.dart';
 import 'sync_page.dart' show SubPageHeader;
 import 'theme.dart';
 
@@ -150,7 +151,15 @@ class _DashboardPageState extends State<DashboardPage> {
                                       ),
                               ),
                               const SizedBox(height: 22),
-                              SectionTitle(context.tr('dash_storage')),
+                              SectionTitle(
+                                context.tr('dash_storage'),
+                                trailing: TextButton.icon(
+                                  onPressed: () => Navigator.of(context)
+                                      .push(MaterialPageRoute<void>(builder: (_) => StorageMapPage(controller: c))),
+                                  icon: const Icon(Icons.grid_view_rounded, size: 17, color: AppColors.cyan),
+                                  label: Text(context.tr('heat_title'), style: const TextStyle(color: AppColors.cyan)),
+                                ),
+                              ),
                               Glass(child: _StorageCard(controller: c)),
                               const SizedBox(height: 22),
                               SectionTitle(context.tr('dash_duplicates')),

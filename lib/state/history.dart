@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:wraith_core/models.dart';
+import 'safe_file.dart';
 
 /// A finished transfer, kept across restarts. Text message contents are
 /// deliberately not stored (they may be passwords or links).
@@ -123,8 +124,9 @@ class HistoryStore {
     final file = File(p.join(dir.path, 'history.json'));
     final entries = <HistoryEntry>[];
     try {
-      if (await file.exists()) {
-        for (final e in jsonDecode(await file.readAsString()) as List<dynamic>) {
+      final list = await SafeFile.readJson(file, (j) => j as List<dynamic>);
+      if (list != null) {
+        for (final e in list) {
           try {
             entries.add(HistoryEntry.fromJson(e as Map<String, dynamic>));
           } catch (_) {}
@@ -151,8 +153,7 @@ class HistoryStore {
 
   Future<void> _save() async {
     try {
-      await _file.parent.create(recursive: true);
-      await _file.writeAsString(jsonEncode([for (final e in entries) e.toJson()]));
+      await SafeFile.write(_file, jsonEncode([for (final e in entries) e.toJson()]));
     } catch (_) {}
   }
 }

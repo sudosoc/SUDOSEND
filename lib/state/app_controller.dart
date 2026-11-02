@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -12,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:wraith_core/discovery.dart';
 import 'package:wraith_core/disk.dart';
 import 'package:wraith_core/identity.dart';
+import 'package:wraith_core/journal.dart';
 import 'package:wraith_core/metadata.dart';
 import 'package:wraith_core/models.dart';
 import 'package:wraith_core/organize.dart';
@@ -36,7 +38,9 @@ import 'history.dart';
 import 'library.dart';
 import 'outbox.dart';
 import 'previews.dart';
+import 'safe_file.dart';
 import 'settings.dart';
+import 'trash.dart';
 import 'updater.dart';
 
 class AppController extends ChangeNotifier {
@@ -53,6 +57,9 @@ class AppController extends ChangeNotifier {
   late LibraryStore library;
   late DeviceRegistry devices;
   late AuditLog audit;
+  late Journal journal;
+  late TrashStore trash;
+  RecoveryResult? lastRecovery;
   late Discovery _discovery;
   late Directory _support;
   late TransferEngine _engine;
@@ -121,6 +128,20 @@ class AppController extends ChangeNotifier {
       library = await LibraryStore.load(support);
       devices = await DeviceRegistry.load(support);
       audit = await AuditLog.load(support);
+      // Smart Recovery: finish or roll back anything a crash interrupted.
+      journal = Journal(File(p.join(support.path, 'journal.jsonl')));
+      final recovery = await recoverJournal(journal);
+      for (final r in recovery.repaired) {
+        audit.add(AuditKind.recovered, detail: r);
+      }
+      for (final r in recovery.needsAttention) {
+        audit.add(AuditKind.recovered, detail: 'check: $r');
+      }
+      lastRecovery = recovery;
+      for (final f in SafeFile.restored) {
+        audit.add(AuditKind.recovered, detail: 'restored from backup: ${p.basename(f)}');
+      }
+      trash = await TrashStore.load(support, journal);
       outbox = await OutboxStore.load(support);
       saveDir = await _resolveSaveDir();
 
@@ -135,6 +156,7 @@ class AppController extends ChangeNotifier {
           if (!r.trusted) return false;
           final d = settings.prefsFor(r.fingerprint);
           if (!d.mayReceiveFrom || !_fits(r)) return false;
+          if (_isExpectedFetch(r)) return true;
           if (r.ring) return settings.allowRing && d.ring;
           if (r.clipboard) return settings.clipboardSync && d.clipboard;
           if (r.speedTest) return settings.allowSpeedTest && d.speedTest;
@@ -152,6 +174,9 @@ class AppController extends ChangeNotifier {
       );
       _engine.syncFolder = _syncFolderFor;
       _engine.placeFile = _placeFile;
+      _engine.journal = journal;
+      _engine.onSearch = _onRemoteSearch;
+      _engine.onFetch = _onRemoteFetch;
       await _engine.start();
 
       _discovery = Discovery(identity: identity, transferPort: _engine.port, onChanged: _onPeersChanged)
@@ -1003,9 +1028,9 @@ class AppController extends ChangeNotifier {
   /// Sends with automatic retries (3 attempts) for dropped connections; each
   /// retry resumes where the last one stopped.
   Future<TransferJob> _sendWithRetry(Peer peer, List<FileEntry> input,
-      {String? text, String? pairToken, Map<int, Uint8List>? previews}) async {
+      {String? text, String? pairToken, Map<int, Uint8List>? previews, bool scrub = true}) async {
     var target = peer;
-    final files = await _scrubFor(peer, input);
+    final files = scrub ? await _scrubFor(peer, input) : input;
     var job = await _engine.send(target, files, text: text, pairToken: pairToken, previews: previews);
     for (final wait in const [Duration(seconds: 3), Duration(seconds: 10)]) {
       if (!_retryable(job)) break;
@@ -1178,6 +1203,7 @@ class AppController extends ChangeNotifier {
   // ─────────────────────────── Devices: profiles, names, groups ───────────────────────────
 
   Timer? _deviceTimer;
+  DateTime _lastPurge = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// The name to show for a device: its nickname here, else its own name.
   String displayName(String fingerprint, String fallback) =>
@@ -1221,6 +1247,11 @@ class AppController extends ChangeNotifier {
   /// Every 30 s: extend sessions of visible devices, expire trust, check storage.
   void _housekeeping() {
     _trackDevices();
+    final now = DateTime.now();
+    if (now.difference(_lastPurge) > const Duration(hours: 6)) {
+      _lastPurge = now;
+      if (settings.trashDays > 0) unawaited(trash.purge(settings.trashDays));
+    }
     _expireTrust();
     unawaited(refreshStorage());
   }
@@ -1323,7 +1354,7 @@ class AppController extends ChangeNotifier {
         audit.add(AuditKind.duplicateFound, device: who, detail: '${item.name} = ${twin.path}');
         if (settings.duplicates == 'remove') {
           try {
-            await File(path).delete();
+            await _discard(path);
             library.remove(path);
             removed++;
           } catch (_) {}
@@ -1396,10 +1427,22 @@ class AppController extends ChangeNotifier {
   /// Checks a file before opening it from SUDOSEND.
   Future<FileRisk> riskOf(String path) => _riskOf(path);
 
+  /// Deletes a received file — into the trash when it is on (Smart Recovery).
+  Future<void> _discard(String path) async {
+    final f = File(path);
+    if (!await f.exists()) return;
+    final inbox = saveDir;
+    if (settings.trashDays > 0 && inbox != null) {
+      await trash.put(path, inbox);
+      audit.add(AuditKind.trashed, detail: path);
+    } else {
+      await f.delete();
+    }
+  }
+
   Future<void> deleteLibraryItem(LibraryItem item) async {
     try {
-      final f = File(item.path);
-      if (await f.exists()) await f.delete();
+      await _discard(item.path);
     } catch (_) {}
     library.remove(item.path);
     audit.add(AuditKind.fileDeleted, device: item.device, detail: item.path);
@@ -1416,6 +1459,175 @@ class AppController extends ChangeNotifier {
     final n = await library.scan(dir, onProgress: onProgress);
     notifyListeners();
     return n;
+  }
+
+  // ─────────────────────────── Smart Recovery: trash, partial files ───────────────────────────
+
+  Future<String?> restoreFromTrash(TrashItem item) async {
+    try {
+      final path = await trash.restore(item);
+      audit.add(AuditKind.restored, detail: path);
+      // Back into the index so search and duplicates see it again.
+      await _indexPath(path, device: '?');
+      notifyListeners();
+      return null;
+    } catch (e) {
+      return describeError(e);
+    }
+  }
+
+  Future<void> deleteFromTrash(TrashItem item) async {
+    await trash.delete(item);
+    notifyListeners();
+  }
+
+  Future<void> emptyTrash() async {
+    await trash.empty();
+    await refreshStorage();
+    notifyListeners();
+  }
+
+  Future<void> _indexPath(String path, {required String device}) async {
+    try {
+      final hash = await compute(hashFile, path);
+      library.add(LibraryItem(
+        path: path,
+        name: p.basename(path),
+        size: await File(path).length(),
+        sha256: hash,
+        receivedAt: DateTime.now(),
+        device: device,
+      ));
+      await library.save();
+    } catch (_) {}
+  }
+
+  /// Leftovers of interrupted transfers (they resume automatically when the
+  /// same device sends the same file again).
+  Future<List<File>> findPartials() async {
+    final roots = <String>{if (saveDir != null) saveDir!.path, for (final s in settings.syncPairs) s.path};
+    final out = <File>[];
+    for (final r in roots) {
+      try {
+        await for (final e in Directory(r).list(recursive: true, followLinks: false)) {
+          if (e is File && (e.path.endsWith('.sudosend-part') || e.path.endsWith('.web-part'))) out.add(e);
+          if (out.length > 5000) break;
+        }
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  Future<int> cleanPartials() async {
+    var n = 0;
+    for (final f in await findPartials()) {
+      try {
+        await f.delete();
+        n++;
+      } catch (_) {}
+    }
+    if (n > 0) audit.add(AuditKind.fileDeleted, detail: '$n partial file(s) from interrupted transfers');
+    await refreshStorage();
+    return n;
+  }
+
+  // ─────────────────────────── Search across devices ───────────────────────────
+
+  List<Map<String, Object?>>? _onRemoteSearch(String fp, Map<String, dynamic> q) {
+    if (!settings.remoteSearch || !settings.prefsFor(fp).search) return null;
+    final text = q['q'] is String ? (q['q'] as String) : '';
+    final cat = FileCategory.values.where((c) => c.name == q['c']).firstOrNull;
+    final limit = math.min(settings.remoteSearchLimit, q['limit'] is int ? q['limit'] as int : 200);
+    final hits = library.search(LibraryQuery(text: text, category: cat)).where((i) => File(i.path).existsSync()).take(limit);
+    audit.add(AuditKind.remoteSearch, device: _nameOf(fp), detail: '"$text"');
+    return [
+      for (final i in hits)
+        {'n': i.name, 's': i.size, 'h': i.sha256, 'c': i.category.name, 'at': i.receivedAt.millisecondsSinceEpoch, 'from': i.device},
+    ];
+  }
+
+  bool _onRemoteFetch(String fp, String sha) {
+    final d = settings.prefsFor(fp);
+    if (!settings.remoteSearch || !d.search || !d.maySendTo) return false;
+    final item = library.items.where((i) => i.sha256 == sha && File(i.path).existsSync()).firstOrNull;
+    final peer = peers.where((x) => x.id == fp).firstOrNull;
+    if (item == null || peer == null) return false;
+    audit.add(AuditKind.remoteFetch, device: _nameOf(fp), detail: item.name);
+    // The exact original (no metadata scrubbing): it was asked for by hash.
+    unawaited(_sendWithRetry(peer, [FileEntry(name: item.name, size: item.size, path: item.path)], scrub: false));
+    return true;
+  }
+
+  /// Files this device asked another device for: accepted without a prompt.
+  final List<(String, String, DateTime)> _expectedFetches = [];
+
+  bool _isExpectedFetch(IncomingRequest r) {
+    _expectedFetches.removeWhere((e) => DateTime.now().isAfter(e.$3));
+    if (r.files.length != 1) return false;
+    final i = _expectedFetches.indexWhere((e) => e.$1 == r.fingerprint && e.$2 == r.files.single.name);
+    if (i < 0) return false;
+    _expectedFetches.removeAt(i);
+    return true;
+  }
+
+  /// Searches this device and every trusted online device that allows it.
+  Future<List<RemoteHit>> searchEverywhere(String text, {FileCategory? category}) async {
+    final out = <RemoteHit>[
+      for (final i in library.search(LibraryQuery(text: text, category: category)).take(200))
+        if (File(i.path).existsSync())
+          RemoteHit(
+            holder: null,
+            holderName: t('rs_this_device'),
+            name: i.name,
+            size: i.size,
+            sha256: i.sha256,
+            category: i.category,
+            receivedAt: i.receivedAt,
+            from: i.device,
+            localPath: i.path,
+          ),
+    ];
+    final targets = trustedOnline.where((p) => settings.prefsFor(p.id).search).toList();
+    final answers = await Future.wait([
+      for (final peer in targets)
+        _engine
+            .searchRemote(peer, {'q': text, if (category != null) 'c': category.name, 'limit': 200})
+            .timeout(const Duration(seconds: 10))
+            .then((r) => (peer, r), onError: (Object _) => (peer, null)),
+    ]);
+    for (final (peer, results) in answers) {
+      for (final r in results ?? const <Map<String, dynamic>>[]) {
+        final hash = r['h'];
+        if (hash is! String || r['n'] is! String) continue;
+        out.add(RemoteHit(
+          holder: peer,
+          holderName: displayName(peer.id, peer.name),
+          name: r['n'] as String,
+          size: (r['s'] as num?)?.toInt() ?? 0,
+          sha256: hash,
+          category: FileCategory.values.where((c) => c.name == r['c']).firstOrNull ?? categorize(r['n'] as String),
+          receivedAt: DateTime.fromMillisecondsSinceEpoch((r['at'] as num?)?.toInt() ?? 0),
+          from: r['from'] as String? ?? '?',
+        ));
+      }
+    }
+    return out;
+  }
+
+  /// Asks the device holding [hit] to send it here.
+  Future<String?> fetchHit(RemoteHit hit) async {
+    final peer = hit.holder;
+    if (peer == null) return null;
+    _expectedFetches.add((peer.id, hit.name, DateTime.now().add(const Duration(minutes: 3))));
+    try {
+      final ok = await _engine.requestFetch(peer, hit.sha256);
+      if (!ok) return t('rs_refused', {'name': displayName(peer.id, peer.name)});
+      tab = 2;
+      notifyListeners();
+      return null;
+    } catch (e) {
+      return describeError(e);
+    }
   }
 
   // ─────────────────────────── Storage ───────────────────────────
@@ -2009,3 +2221,31 @@ class AppController extends ChangeNotifier {
 
 /// Runs in a background isolate: reads a photo and strips its metadata.
 Uint8List? _scrubFile((String, int) job) => scrubMetadata(File(job.$1).readAsBytesSync(), MetadataMode.values[job.$2]);
+
+/// A file found by "search across devices".
+class RemoteHit {
+  RemoteHit({
+    required this.holder,
+    required this.holderName,
+    required this.name,
+    required this.size,
+    required this.sha256,
+    required this.category,
+    required this.receivedAt,
+    required this.from,
+    this.localPath,
+  });
+
+  /// Device that has it (null = this device).
+  final Peer? holder;
+  final String holderName;
+  final String name;
+  final int size;
+  final String sha256;
+  final FileCategory category;
+  final DateTime receivedAt;
+
+  /// Who sent it to the holder.
+  final String from;
+  final String? localPath;
+}
