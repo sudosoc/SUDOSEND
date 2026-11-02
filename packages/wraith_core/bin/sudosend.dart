@@ -473,7 +473,7 @@ Future<int> _speedtest(DeviceIdentity identity, TrustStore trust, _Args args) as
 }
 
 Future<int> _update() async {
-  const repo = 'sudosoc/SUDOSEND-APP';
+  const repo = 'sudosoc/SUDOSEND';
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
   try {
     final req = await client.getUrl(Uri.parse('https://api.github.com/repos/$repo/releases/latest'));

@@ -7,7 +7,11 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 /// Public repository the builds are published to (the source repo is private).
-const String kReleaseRepo = 'sudosoc/SUDOSEND-APP';
+/// Where releases are published. Updates are looked for in every repository
+/// listed and the newest one wins, so moving downloads between them later
+/// needs no app change.
+const String kReleaseRepo = 'sudosoc/SUDOSEND';
+const List<String> kReleaseRepos = ['sudosoc/SUDOSEND', 'sudosoc/SUDOSEND-APP'];
 const String kReleasePage = 'https://github.com/$kReleaseRepo/releases/latest';
 const String kLinuxInstallCommand = 'curl -fsSL https://raw.githubusercontent.com/$kReleaseRepo/main/get.sh | bash';
 
@@ -53,11 +57,26 @@ class Updater {
   Updater(this.currentVersion);
   final String currentVersion;
 
-  /// Fetches the latest published release. Throws on network errors.
+  /// The newest release across [kReleaseRepos]. Throws if none can be read.
   Future<UpdateInfo> latest() async {
+    UpdateInfo? best;
+    Object? error;
+    for (final repo in kReleaseRepos) {
+      try {
+        final info = await _latestIn(repo);
+        if (best == null || isNewer(info.version, best.version)) best = info;
+      } catch (e) {
+        error ??= e;
+      }
+    }
+    if (best != null) return best;
+    throw error ?? const HttpException('No release published yet');
+  }
+
+  Future<UpdateInfo> _latestIn(String repo) async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
     try {
-      final req = await client.getUrl(Uri.parse('https://api.github.com/repos/$kReleaseRepo/releases/latest'));
+      final req = await client.getUrl(Uri.parse('https://api.github.com/repos/$repo/releases/latest'));
       req.headers
         ..set(HttpHeaders.acceptHeader, 'application/vnd.github+json')
         ..set(HttpHeaders.userAgentHeader, 'SUDOSEND/$currentVersion');

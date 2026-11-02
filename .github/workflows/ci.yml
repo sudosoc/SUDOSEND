@@ -10,10 +10,6 @@ on:
 permissions:
   contents: write
 
-env:
-  # Builds are published here; the source repository can stay private.
-  RELEASE_REPO: sudosoc/SUDOSEND-APP
-
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -25,6 +21,7 @@ jobs:
     outputs:
       release: ${{ steps.plan.outputs.release }}
       tag: ${{ steps.plan.outputs.tag }}
+      repo: ${{ steps.plan.outputs.repo }}
     steps:
       - uses: actions/checkout@v5
       # Windows/macOS/iOS runners cost 2-10x on private repos, so they only
@@ -32,8 +29,15 @@ jobs:
       - name: Is there a new version to release?
         id: plan
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          HAS_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN != '' }}
         run: |
+          # With a RELEASE_TOKEN, downloads go to the separate public
+          # SUDOSEND-APP repo (so this one can be private); without it they
+          # are published right here.
+          if [ "$HAS_RELEASE_TOKEN" = true ]; then repo=sudosoc/SUDOSEND-APP; else repo="$GITHUB_REPOSITORY"; fi
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          RELEASE_REPO="$repo"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             tag="${GITHUB_REF#refs/tags/}"
           else
@@ -110,6 +114,14 @@ jobs:
         run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY/CodeQL" || true
       - name: Pre-install NDK
         run: ./tool/install_ndk.sh
+      # Without the release-key secrets, APKs are signed with Gradle's debug
+      # key. Keeping that key between runs lets each build install over the
+      # previous one (in-app updates) until the real key is configured.
+      - name: Keep the debug signing key stable
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-v1
       - run: ./tool/ci_run.sh flutter build apk --release --split-per-abi
       - run: ./tool/ci_run.sh flutter build apk --release
       - name: Collect APKs
@@ -304,26 +316,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Required secrets present?
+      - name: Signing status
         env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          ok=1
-          if [ -z "$RELEASE_TOKEN" ]; then
-            echo "::error title=RELEASE_TOKEN missing::Add a fine-grained token with Contents read and write on $RELEASE_REPO as the RELEASE_TOKEN secret."
-            ok=0
-          fi
           if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "::error title=Android signing missing::Refusing to publish debug-signed APKs because in-app updates would fail. Add the ANDROID_* secrets."
-            ok=0
+            echo "::warning title=Android signing::Release key secrets not set: APKs use the CI debug key. When the real key is added, Android users uninstall once."
           fi
-          [ "$ok" = 1 ]
+          echo "Publishing to ${{ needs.check.outputs.repo }}" 
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
       - name: Publish release with labelled downloads
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          RELEASE_REPO: ${{ needs.check.outputs.repo }}
         run: ./tool/publish_release.sh "${{ needs.check.outputs.tag }}" dist

@@ -4,158 +4,166 @@
 
 <p align="center">
   <b>Secure. Local. Instant.</b><br>
-  Encrypted file sharing between Android, Windows, Linux, macOS and iPhone on the same network.<br>
-  No cloud · no accounts · no internet.
+  End-to-end encrypted file sharing between Android, Windows, Linux, macOS and iPhone on the same network.<br>
+  No cloud · no accounts · no internet · no ads.
 </p>
 
 <p align="center">
+  <a href="https://github.com/sudosoc/SUDOSEND/releases/latest"><img src="https://img.shields.io/github/v/release/sudosoc/SUDOSEND?label=download&color=22d3ee" alt="latest release"></a>
   <a href="https://github.com/sudosoc/SUDOSEND/actions/workflows/ci.yml"><img src="https://github.com/sudosoc/SUDOSEND/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/sudosoc/SUDOSEND-APP/releases/latest"><img src="https://img.shields.io/github/v/release/sudosoc/SUDOSEND-APP?label=release" alt="release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"></a>
+  <img src="https://img.shields.io/badge/platforms-Android%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20macOS%20%C2%B7%20iOS-8b5cf6" alt="platforms">
+</p>
+
+<p align="center">
+  <b><a href="https://github.com/sudosoc/SUDOSEND/releases/latest/download/sudosend-android-arm64-v8a.apk">⬇ Android</a></b> ·
+  <b><a href="https://github.com/sudosoc/SUDOSEND/releases/latest/download/sudosend-windows-x64-setup.exe">⬇ Windows</a></b> ·
+  <b><a href="#linux--kali-debian-ubuntu-raspberry-pi-os">⬇ Linux</a></b> ·
+  <b><a href="https://github.com/sudosoc/SUDOSEND/releases/latest/download/sudosend-macos.zip">⬇ macOS</a></b> ·
+  <b><a href="https://github.com/sudosoc/SUDOSEND/releases/latest">All downloads</a></b>
 </p>
 
 ---
 
 ## Contents
 
+- [What's new](#whats-new)
 - [Features](#features)
-- [Install](#install)
-  - [Which file do I download?](#which-file-do-i-download)
-  - [Android](#android)
-  - [Windows](#windows)
-  - [Linux — Kali, Debian, Ubuntu, Raspberry Pi OS](#linux--kali-debian-ubuntu-raspberry-pi-os)
-  - [Linux — any other distro](#linux--any-other-distro)
-  - [macOS](#macos)
-  - [iPhone / iPad](#iphone--ipad)
-  - [One-line install (Linux)](#one-line-install-linux)
+- [Install](#install) — [which file?](#which-file-do-i-download) · [Android](#android) · [Windows](#windows) · [Linux](#linux--kali-debian-ubuntu-raspberry-pi-os) · [macOS](#macos) · [iPhone](#iphone--ipad) · [one-line Linux](#one-line-install-linux)
+- [Updating](#updating)
 - [First transfer](#first-transfer)
+- [Where received files go](#where-received-files-go)
 - [Command line](#command-line)
 - [Troubleshooting](#troubleshooting)
 - [Uninstall](#uninstall)
-- [Build from source](#build-from-source)
-- [Security](#security)
+- [Build from source](#build-from-source) · [Releases and signing](#releases-and-signing)
+- [Comparison](#comparison) · [Security](#security) · [Roadmap](#roadmap)
+
+---
+
+## What's new
+
+**0.8** — Files tab with search, timeline and in-app previews · duplicate detection (SHA-256) ·
+device profiles, nicknames, groups and permission profiles · audit log for your SIEM · storage guard ·
+statistics with CSV/JSON/PDF reports · smart folders `device/type/date` · photo location stripping ·
+Wi-Fi Direct between phones · drag & drop onto a device · in-app updates.
+Full notes: [release_notes/](release_notes/).
 
 ---
 
 ## Features
 
-**Sharing**
-- Files of any size, **whole folders** (structure kept), and **text / clipboard**
-- **Share sheet** on Android: *Share → SUDOSEND* from any app
-- **Drag & drop** and right-click **Send to** on desktop
-- **Resume**: a dropped transfer continues where it stopped
-- **Background transfers** on Android: keeps going with the screen off or the app closed, with progress in a notification; optional *receive in the background*
-- **Notifications** with Accept / Decline right from the notification
-- **History** of every transfer, with *Open* and *Show in folder*
+Every optional feature can be switched off in **Settings → Features**, and each one has an **(i)**
+button that explains what it does — in English and Arabic.
 
-**Paid elsewhere — free here**
-- 📋 **Universal clipboard** — copy on one device, paste on your others (Pushbullet charges for this)
-- 🌐 **Share with any browser** — send to *and receive from* a device that doesn't have the app,
-  even an iPhone: it scans a QR and gets a download/upload page (Send Anywhere / Feem-style)
-- 🔎 **Files tab** — search by name, extension, device, date, size and type; timeline by day; in-app preview of photos, videos, PDFs, text and code
-- ♻️ **Duplicate detection** with SHA-256, even when the name differs
-- 🖥️ **Device profiles** — nicknames, groups, connection & transfer history, permission profiles (both / receive only / send only), expiring trust
-- 📜 **Audit log** (CSV / JSON Lines for your SIEM) and **statistics dashboard** with CSV / JSON / PDF reports
-- 🛡️ **Secure file handling** — warns about programs, scripts, macros and disguised files; Mark-of-the-Web on Windows, quarantine on macOS
-- 💽 **Storage guard** — warns before the disk fills and refuses transfers that would not fit
-- 🗂️ **Smart file organization** — received files file themselves into `SUDOSEND/<device>/<type>/<date>/`
-- 🧹 **Photo privacy** — GPS location (or all metadata) is stripped from photos before sending, no quality loss
-- 🔐 **Per-device permissions** — decide what each trusted device may do (auto-accept, ring, clipboard, sync…)
-- 📶 **No Wi-Fi? Make one** — Android creates a private hotspot; the other phone joins by scanning a QR
-- 📡 **Wi-Fi Direct** — two Android phones link directly, no router and no hotspot, and both keep their Wi-Fi and mobile data
-- 🔒 **Protected, self-destructing links** — PIN, expiry (10 min – 2 h), one-download links (WeTransfer Pro / Send Anywhere Plus)
-- 📬 **Outbox** — send to a trusted device that's switched off; it's delivered the moment it comes online,
-  and dropped connections **retry and resume automatically**
-- 📂 **Hot folders** (desktop) — drop anything into `SUDOSEND Outbox/<device>/` and it's sent by itself (Resilio-style)
-- 🔔 **Find my device** — make your phone ring at full volume, even on silent (AirDroid Premium)
-- 🚦 **Upload speed limit** and 📊 **per-device data usage**
-- 🔄 **Two-way folder sync** — keep a folder identical on two trusted devices; older versions go to
-  an archive, deletions are never propagated (Resilio Sync Pro / SyncBack Pro-style)
-- 🗜️ **Smart compression** — text, code, logs and documents shrink on the wire; photos and videos are left alone
-- 🖼️ **Previews before accepting** — see thumbnails of incoming photos before you say yes
-- 💬 **Messages** — encrypted text threads between your trusted devices
-- ⚡ **Real speed test** — measures actual encrypted throughput between two devices, not a link-rate guess
-- 📺 **Android TV** (remote/D-pad) and a compact mode for small screens / Wear OS
-- 🧾 Signed delivery receipts, multi-device send, no file-size limits, no ads, no account
+### Sharing
+- Files of any size, **whole folders** (structure kept), **text** and **clipboard**
+- **Resume**: a dropped transfer continues where it stopped; failed sends **retry automatically**
+- **Send to several devices at once**, or to a whole **device group** (Personal, Work…)
+- **Drag & drop** onto the window, or straight **onto a device** to send to it (desktop)
+- Android **share sheet**, desktop **Send to** menu, **hot folders** that send whatever you drop in them
+- **Outbox**: queue files for a trusted device that is off — delivered when it comes online
+- **Smart compression** for text, code, logs and documents; photos and videos are left alone
+- **Previews before accepting**: thumbnails of incoming photos in the request
+- **Upload speed limit** so a big transfer doesn't make everyone's video call lag
 
-Every extra can be switched off in **Settings → Features**, and each one has an **(i)** button that
-explains what it does, in English and Arabic.
+### Files you receive
+- **Smart organization** — `SUDOSEND/<device>/<type>/<date>/file`, automatically (each level optional)
+- **Files tab** — search by name, extension, device, date, size and type; **timeline** by day
+- **In-app preview** — photos (zoom, swipe), video and audio, PDF, text and code
+- **Duplicate detection** with SHA-256 — even when the name is different; keep both or drop the new copy
+- **Storage guard** — warns before the disk fills and refuses transfers that would not fit
+- **Statistics** — totals, average and top speed, daily/weekly/monthly activity, top senders and
+  types, duplicates, storage — exportable as **CSV, JSON or PDF**
 
-**Only in SUDOSEND**
-- **Signed proof of delivery** — every transfer ends with a receipt the *receiver's device key* signs:
-  who sent what to whom, when, and the SHA-256 of every file. Export it and anyone can check it
-  offline with `sudosend verify receipt.json`. Built for evidence handling, audits and "I never got it" disputes.
-- **Send to several devices at once** — select devices, one tap
-- **Pipe anything from the terminal** — `tar c project | sudosend send - --name project.tar --to laptop`
-- **Received links open with one tap**, received text can go **straight to the clipboard**
-- **A folder per sender** and a **JSON transfer log** export
+### Devices
+- **Device profiles** — system, first and last seen, last address, connection history, transfer history
+- **Nicknames** and **groups** (Personal, Work, or your own)
+- **Permission profiles** — both ways / receive only / send only, and what each device may do without
+  asking (files, messages, clipboard, ring, sync, speed test)
+- **Trust that expires** after 1 hour, 1 day, 7 or 30 days
+- **Per-device archiving rules** and folder names
+- **Auto-reconnect** — trusted devices are found by their last address even where broadcast is blocked
 
-**Security**
-- **End-to-end encryption**: X25519 + ChaCha20-Poly1305, fresh keys per transfer
-- **QR pairing**: scan once → both devices trust each other, no code to compare
-- **MITM-proof first contact** otherwise: 6-digit code backed by a hash commitment
-- **Trusted / blocked devices**, **auto-accept** for trusted ones
-- **Flood protection**: connection rate limits per IP, one prompt per device, block list
-- **Private key in the OS key store** (Android Keystore, Windows DPAPI)
-- **Stealth mode**: stop announcing yourself; reachable only by QR or IP
-- **SHA-256 verification** of every file; path-traversal-safe receiver
+### Between your devices
+- 💬 **Messages** — encrypted text threads
+- 📋 **Universal clipboard**
+- 🔄 **Two-way folder sync** — newest wins, older copies archived, deletions never propagated
+- ⚡ **Real speed test** through the encrypted channel
+- 🔔 **Find my device** — rings at full volume, even on silent
 
-**App**
-- **Arabic and English**, full right-to-left layout
-- **Glassmorphism UI** with three effect levels — *Balanced* (default) keeps the glass look
-  without live blur, *Lite* is automatic on Raspberry Pi and low-end phones
-- **CLI** for Linux, Windows and macOS — prints a pairing QR right in the terminal
+### No Wi-Fi, no app
+- 📡 **Wi-Fi Direct** — two Android phones link directly, both keep their Wi-Fi and data
+- 📶 **Hotspot** — Android makes a private network; the other device joins by scanning a QR
+- 🌐 **Browser share** — any phone or laptop with a browser can download from you or upload to you;
+  links can have a **PIN**, an **expiry** and a **download limit**
+
+### Security
+- **End-to-end encryption** — X25519 + ChaCha20-Poly1305, fresh keys for every transfer
+- **Verified devices** — 6-digit code backed by a hash commitment, or **QR pairing**; identity keys are pinned
+- **Signed proof of delivery** — the receiver's device key signs who sent what, when, and every file's
+  SHA-256; anyone can check it offline with `sudosend verify`
+- **SHA-256 check** of every file; path-traversal-safe receiver
+- **Audit log** — connections refused, requests, transfers, trust changes, deletions, risky files;
+  export as CSV or **JSON Lines** for Wazuh / ELK / Splunk
+- **Secure file handling** — never opens anything by itself; warns before opening programs, scripts,
+  macros and **disguised files** (`invoice.pdf.exe`, a program renamed `.pdf`); Windows
+  **Mark-of-the-Web** and macOS **quarantine** on received files
+- **Photo privacy** — GPS location (or all metadata) is stripped before sending, without re-compressing
+- **Flood protection**, **block list**, **stealth mode**
+- Private key kept in **Android Keystore** / **Windows DPAPI**
+
+### App
+- **Arabic and English** with full right-to-left layout
+- **Glass UI** with three effect levels — *Lite* is automatic on Raspberry Pi and low-end phones
+- **Android TV** (remote / D-pad) and a compact layout for small screens
+- **In-app updates**
+- **CLI** for Linux, Windows and macOS, with pipes and a pairing QR in the terminal
 
 ---
 
 ## Install
 
-All files are on the **[Releases page](https://github.com/sudosoc/SUDOSEND-APP/releases/latest)** —
-each one is labelled with its system in parentheses, e.g. **SUDOSEND (Android) — arm64-v8a**.
+All files are on the **[Releases page](https://github.com/sudosoc/SUDOSEND/releases/latest)**,
+each labelled with its system, e.g. **SUDOSEND (Android) — arm64-v8a · most phones**.
 
 ### Which file do I download?
 
-| Your device | Download | Install with |
+| Your device | File | Install |
 |---|---|---|
-| Android — most phones (64-bit) | `sudosend-android-arm64-v8a.apk` | tap it |
-| Android — older 32-bit phones | `sudosend-android-armeabi-v7a.apk` | tap it |
-| Android — emulator / Chromebook | `sudosend-android-x86_64.apk` | tap it |
-| Android — not sure | `sudosend-android-universal.apk` (works everywhere, bigger) | tap it |
-| Windows 10 / 11 | `sudosend-windows-x64-setup.exe` | double-click |
-| Windows (no install) | `sudosend-windows-x64-portable.zip` | unzip, run `sudosend.exe` |
-| Kali / Debian / Ubuntu / Mint on a **PC or laptop** | `sudosend_<version>_amd64.deb` | `sudo apt install ./sudosend_*_amd64.deb` |
-| Kali / Raspberry Pi OS / Ubuntu on a **Raspberry Pi** or other ARM board | `sudosend_<version>_arm64.deb` | `sudo apt install ./sudosend_*_arm64.deb` |
-| Fedora / Arch / openSUSE / other Linux | `sudosend-linux-x64.tar.gz` or `sudosend-linux-arm64.tar.gz` | `./install.sh` |
-| Mac (Apple Silicon or Intel) | `sudosend-macos.zip` | unzip, drag to Applications |
-| iPhone / iPad | `sudosend-ios-unsigned.ipa` | sideload (see below) |
+| Android — most phones (64-bit) | [`sudosend-android-arm64-v8a.apk`](https://github.com/sudosoc/SUDOSEND/releases/latest/download/sudosend-android-arm64-v8a.apk) | tap it |
+| Android — older 32-bit phones | [`sudosend-android-armeabi-v7a.apk`](https://github.com/sudosoc/SUDOSEND/releases/latest/download/sudosend-android-armeabi-v7a.apk) | tap it |
+| Android — emulator / Chromebook | [`sudosend-android-x86_64.apk`](https://github.com/sudosoc/SUDOSEND/releases/latest/download/sudosend-android-x86_64.apk) | tap it |
+| Android — not sure / Android TV | [`sudosend-android-universal.apk`](https://github.com/sudosoc/SUDOSEND/releases/latest/download/sudosend-android-universal.apk) | tap it |
+| Windows 10 / 11 | [`sudosend-windows-x64-setup.exe`](https://github.com/sudosoc/SUDOSEND/releases/latest/download/sudosend-windows-x64-setup.exe) | double-click |
+| Windows, no install | [`sudosend-windows-x64-portable.zip`](https://github.com/sudosoc/SUDOSEND/releases/latest/download/sudosend-windows-x64-portable.zip) | unzip, run `sudosend.exe` |
+| Kali / Debian / Ubuntu / Mint — **PC or laptop** | `sudosend_<version>_amd64.deb` | `sudo apt install ./sudosend_*_amd64.deb` |
+| Kali / Raspberry Pi OS / Ubuntu — **Raspberry Pi** / ARM64 | `sudosend_<version>_arm64.deb` | `sudo apt install ./sudosend_*_arm64.deb` |
+| Fedora / Arch / openSUSE / any Linux | [`x64.tar.gz`](https://github.com/sudosoc/SUDOSEND/releases/latest/download/sudosend-linux-x64.tar.gz) · [`arm64.tar.gz`](https://github.com/sudosoc/SUDOSEND/releases/latest/download/sudosend-linux-arm64.tar.gz) | `./install.sh` |
+| Mac, Apple Silicon or Intel (macOS 12+) | [`sudosend-macos.zip`](https://github.com/sudosoc/SUDOSEND/releases/latest/download/sudosend-macos.zip) | unzip, drag to Applications |
+| iPhone / iPad | [`sudosend-ios-unsigned.ipa`](https://github.com/sudosoc/SUDOSEND/releases/latest/download/sudosend-ios-unsigned.ipa) | sideload (below) |
+| Server / headless | `sudosend-cli-*` | copy and run |
 
-> **Linux: x64 or arm64?** Run `uname -m`.
-> `x86_64` → **x64 / amd64**. `aarch64` → **arm64** (every Raspberry Pi 3/4/5 running a 64-bit OS).
-> Running the wrong one gives `exec format error`.
+> **Linux: x64 or arm64?** Run `uname -m`. `x86_64` → **x64 / amd64**. `aarch64` → **arm64**
+> (every Raspberry Pi 3/4/5 on a 64-bit OS). The wrong one gives `exec format error`.
 
 ### Android
 
-1. Download the APK for your phone's CPU (almost every phone from 2017 on is **arm64-v8a**;
-   check *Settings → About phone*, or a CPU-info app — if unsure take **universal**).
-2. Open it. Android asks to allow installs from this source (your browser or file manager). Allow it, go back, and tap **Install**.
-3. Open **SUDOSEND**. Received files are saved in **Download/SUDOSEND**.
+1. Download the APK for your phone (almost every phone since 2017 is **arm64-v8a**; unsure → **universal**).
+2. Open it. Allow installs from your browser or file manager when Android asks, go back, tap **Install**.
+3. Open **SUDOSEND**. Received files go to **Download/SUDOSEND**.
 
-> Play Protect may warn about an unknown developer, because the APK is not from the Play Store. Choose **Install anyway**.
+> Play Protect may warn about an unknown developer (the app is not from the Play Store). Choose **Install anyway**.
 
 ### Windows
 
-1. Download `sudosend-windows-x64-setup.exe` and run it.
-2. If SmartScreen shows *Windows protected your PC*, click **More info → Run anyway** (the installer is not code-signed yet).
-3. Keep the default options:
-   - **Allow SUDOSEND through Windows Firewall** opens the network ports for you. Without it, other devices can't find this PC.
-   - **Add `sudosend` to PATH** enables the command-line tool in any terminal.
-4. Launch SUDOSEND from the Start menu.
-
-Received files go to **Downloads\SUDOSEND**.
+1. Run `sudosend-windows-x64-setup.exe`. If SmartScreen says *Windows protected your PC*,
+   click **More info → Run anyway** (the installer is not code-signed yet).
+2. Keep the defaults: **Allow through Windows Firewall** (otherwise other devices can't find this PC)
+   and **Add `sudosend` to PATH** (command line).
+3. Received files go to **Downloads\SUDOSEND**.
 
 ### Linux — Kali, Debian, Ubuntu, Raspberry Pi OS
-
-Check your CPU with `uname -m`, download the matching `.deb`, then:
 
 ```bash
 cd ~/Downloads
@@ -164,110 +172,118 @@ sudo apt install ./sudosend_*_arm64.deb     # Raspberry Pi / ARM (aarch64)
 sudo apt install ./sudosend_*_amd64.deb     # PC / laptop (x86_64)
 ```
 
-`apt` installs everything SUDOSEND needs (GTK, zenity) automatically. Then:
-
-- Open **SUDOSEND** from the applications menu (*Internet* / *Network* category), **or**
-- type `sudosend` in a terminal.
-
-> Keep the `./` in front of the file name. Without it, apt searches its repositories instead of the local file.
+`apt` installs what SUDOSEND needs (GTK, zenity). Open it from the applications menu or type `sudosend`.
+Keep the `./` in front of the file name.
 
 ### Linux — any other distro
 
 ```bash
-cd ~/Downloads
 tar -xzf sudosend-linux-arm64.tar.gz     # or sudosend-linux-x64.tar.gz
-cd sudosend
-./install.sh
+cd sudosend && ./install.sh
 ```
 
-The installer does everything for you:
-
-1. checks the file matches your CPU,
-2. installs GTK 3 and zenity if missing (apt / dnf / pacman / zypper),
-3. installs SUDOSEND to `~/.local/share/sudosend`. Use `sudo ./install.sh` to install to `/opt/sudosend` for every user,
-4. creates the `sudosend` command and an applications-menu entry,
-5. adds `~/.local/bin` to your PATH if needed,
-6. offers to open the firewall ports if `ufw` or `firewalld` is active.
-
-Add `--yes` to answer every question with yes. Open a new terminal afterwards so the `sudosend` command is found.
-
-> Just want to try it without installing? `./sudosend` inside the extracted folder works too.
+`install.sh` checks your CPU, installs GTK 3 and zenity if missing (apt / dnf / pacman / zypper),
+installs to `~/.local/share/sudosend` (or `/opt/sudosend` with `sudo`), adds the `sudosend` command and a
+menu entry, and offers to open the firewall ports. `--yes` answers everything with yes.
 
 ### macOS
 
-1. Download `sudosend-macos.zip`, unzip it and drag **SUDOSEND** into *Applications*.
-2. The app is not notarized yet: the first time, **right-click → Open → Open**
-   (or run `xattr -dr com.apple.quarantine /Applications/SUDOSEND.app`).
-3. Allow *local network* access when macOS asks — otherwise devices can't find each other.
+1. Unzip `sudosend-macos.zip` and drag **SUDOSEND** into *Applications*.
+2. Not notarized yet: the first time, **right-click → Open → Open**
+   (or `xattr -dr com.apple.quarantine /Applications/SUDOSEND.app`).
+3. Allow **local network** access when asked.
 
 ### iPhone / iPad
 
-There is no App Store build yet (that needs a paid Apple developer account). You can sideload the
-unsigned IPA with a free Apple ID using [AltStore](https://altstore.io) or
-[Sideloadly](https://sideloadly.io): load `sudosend-ios-unsigned.ipa`, sign in, install.
-Free-account installs must be refreshed every 7 days.
-
-On iPhone, Apple blocks network discovery for unapproved apps, so **use QR pairing or *IP / link***:
-scan the QR on the other device's Receive tab. Received files are in the **Files** app →
-*On My iPhone → SUDOSEND*.
+No App Store build yet. Sideload `sudosend-ios-unsigned.ipa` with a free Apple ID using
+[AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) (refresh every 7 days).
+Apple blocks network discovery for unapproved apps, so on iPhone **scan the other device's QR**
+(Receive tab) or use **IP / link**. Files are in the **Files** app → *On My iPhone → SUDOSEND*.
 
 ### One-line install (Linux)
 
 Detects your CPU and distro, downloads the right file and installs it:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sudosoc/SUDOSEND-APP/main/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/sudosoc/SUDOSEND/main/get.sh | bash
 ```
 
-> While the repository is **private**, this needs the GitHub CLI logged in (`sudo apt install gh && gh auth login`). Without it, download the file from the Releases page manually.
+---
+
+## Updating
+
+- **In the app:** Settings → About → **Check for updates**. Android downloads the APK and opens the
+  installer, Windows runs the new installer, Linux shows the one-line command. Every download is checked
+  against the SHA-256 GitHub publishes. An optional check at startup can be turned off in Features.
+- **Command line:** `sudosend update`.
+
+> **Android "App not installed" when updating:** Android only installs an update signed with the same
+> key as the installed app. Builds are currently signed with the project's CI key; when the permanent
+> release key is introduced, uninstall once and install again. Your received files are not touched.
 
 ---
 
 ## First transfer
 
-1. Open SUDOSEND on **both** devices, connected to the **same Wi-Fi or hotspot**.
-2. On the sender, open the **Send** tab, then pick **Files**, **Folder** or **Text**.
-3. Tap the receiver in **Nearby devices**.
-4. Both screens show the same **6-digit code**. On the receiver, check it matches, then tap **Accept**.
+1. Open SUDOSEND on **both** devices, on the **same Wi-Fi or hotspot** (or link two phones with Wi-Fi Direct).
+2. On the sender: **Send** tab → **Files**, **Folder** or **Text**.
+3. Tap the receiver under **Nearby devices**.
+4. Both screens show the same **6-digit code**. Check it on the receiver and tap **Accept**.
    Tick **Trust this device** to skip the code next time.
-5. Done. Every file is SHA-256 verified before it is saved.
+5. Done — every file is SHA-256 verified before it is saved.
 
-**Faster: QR pairing.** On the receiver open **Receive**; on the phone tap **Scan QR** (Send tab).
-Both devices now trust each other — no code, no prompt, now and next time.
+**Faster: QR pairing.** Receiver → **Receive** tab; phone → **Scan QR** on the Send tab. Both devices
+now trust each other. If a device doesn't appear, use **IP / link** and type the IP shown on the
+receiver's Receive tab.
 
-If a device doesn't appear, use **IP / link** on the Send tab and type the IP shown on the receiver's
-**Receive** tab (or paste its pairing link).
+---
+
+## Where received files go
+
+```
+Downloads/SUDOSEND/
+├── Galaxy A52/
+│   ├── Pictures/2026-11-02/photo1.jpg
+│   ├── Documents/2026-11-02/report.pdf
+│   ├── Videos/ · Audio/ · Archives/ · Applications/ · Code/
+│   ├── Other Files/2026-11-02/unknown.xyz        ← unknown types are never lost
+│   └── Folders/2026-11-02/Project/…              ← a sent folder stays whole
+├── Laptop/…
+└── Browser/…                                     ← uploads from a browser
+```
+
+Turn levels on or off in **Settings → Receiving → Organize received files**, or per device
+(its folder name, by type, by date) in **Settings → Devices**. Folder sync is never reorganized.
 
 ---
 
 ## Command line
 
-Installed together with the app (`.deb`, `install.sh`, or the Windows installer with *Add to PATH*):
+Installed with the app (`.deb`, `install.sh`, or the Windows installer with *Add to PATH*):
 
 ```bash
 sudosend                                    # no arguments → opens the app
-sudosend receive                            # wait for files, asks before accepting
+sudosend receive                            # wait for files, ask before accepting
 sudosend receive --yes --trust --once       # unattended, exit after one transfer
-sudosend receive --qr                       # print a pairing QR in the terminal
-sudosend receive --organize                # sort into <device>/<type>/<date>/
-sudosend send report.pdf photos/ --to laptop      # device name (prefix) …
-sudosend send --text "https://…" --to 192.168.1.20  # … or IP address
-sudosend send file.iso --to 'sudosend://pair?…'     # … or a pairing link
-sudosend devices                            # list devices on the network
-sudosend id --name Seif-Pi                  # show/rename this device
-tar c dir | sudosend send - --name dir.tar --to pi   # send from a pipe (stdin)
+sudosend receive --qr                       # pairing QR in the terminal
+sudosend receive --organize                 # sort into <device>/<type>/<date>/
 sudosend receive --receipts ~/receipts      # keep a signed receipt for every transfer
-sudosend verify ~/receipts/receipt-*.json   # check receipts offline
+sudosend send report.pdf photos/ --to laptop        # device name (prefix) …
+sudosend send --text "https://…" --to 192.168.1.20  # … IP address …
+sudosend send file.iso --to 'sudosend://pair?…'     # … or pairing link
+tar c dir | sudosend send - --name dir.tar --to pi   # send from a pipe
+sudosend send big.iso --to nas --limit 5M   # cap upload speed
+sudosend devices                            # list devices on the network
+sudosend id --name Seif-Pi                  # show / rename this device
+sudosend verify ~/receipts/*.json           # check receipts offline
 sudosend web report.pdf                     # QR + link: any browser can download it
 sudosend web --upload                       # let browsers send files to you
 sudosend web secret.pdf --pin 4821 --max 1  # PIN-protected, self-destructs after 1 download
 sudosend ring --to phone                    # find my phone (trusted devices)
-sudosend send big.iso --to nas --limit 5M   # cap upload speed
-sudosend speedtest --to laptop              # real encrypted throughput (trusted devices)
+sudosend speedtest --to laptop              # real encrypted throughput
+sudosend update                             # is there a newer version?
 sudosend --help
 ```
-
-Standalone binaries (`sudosend-cli-*`) are on the Releases page for servers without a desktop.
 
 ---
 
@@ -275,24 +291,25 @@ Standalone binaries (`sudosend-cli-*`) are on the Releases page for servers with
 
 | Problem | Fix |
 |---|---|
-| `exec format error` on Linux | Wrong CPU build. `uname -m` says `aarch64` → use the **arm64** file. `x86_64` → **x64/amd64**. |
-| `sudosend: command not found` after `./install.sh` | Open a new terminal, or run `export PATH="$HOME/.local/bin:$PATH"`. |
-| Devices don't see each other | Same Wi-Fi? Guest, campus and café Wi-Fi often block device-to-device traffic (*client isolation*), so use a phone hotspot instead. Or use **By IP**. |
-| Linux: other devices can't find mine | Firewall. `sudo ufw allow 47823/udp && sudo ufw allow 47824:47833/tcp && sudo ufw allow 47840:47849/tcp` (the last range is browser share) |
-| Windows: other devices can't find the PC | Re-run the installer with the firewall option, or allow SUDOSEND on **Private** networks. Make sure the Wi-Fi network is set to *Private*, not *Public*. |
-| *Pick files* does nothing on Linux | Install zenity: `sudo apt install zenity` |
-| Window is blank or very slow on a Raspberry Pi | Use a 64-bit OS with the desktop (X11/Wayland) running. On very old boards, the CLI is lighter: `sudosend receive`. |
-| *Fingerprint mismatch* error | Something on the network answered pretending to be that device. The transfer was blocked on purpose. |
-| Android stops mid-transfer | Allow notifications for SUDOSEND (the transfer runs as a foreground service), and on Xiaomi/Huawei/Samsung set battery usage to *Unrestricted*. |
-| Android: "App not installed" when updating | The new APK is signed with a different key than the installed one (only happens once, when moving to release-signed builds). Uninstall, then install. |
-| Laggy UI on a Raspberry Pi or old phone | Settings → Visual effects → **Lite** (automatic on Raspberry Pi and low-RAM phones). |
-| Browser link doesn't open on the other device | Both must be on the same Wi-Fi/hotspot; allow TCP 47840–47849 in your firewall. |
-| Folder sync doesn't start | Both devices must trust each other and be online; check *Settings → Features → Folder sync*. Not available on iOS. |
-| Speed test is refused | The other device must trust you and have *Allow speed tests* on. |
-| Watch (Wear OS) doesn't see devices | Watches usually reach the network through the phone's Bluetooth link, where LAN discovery doesn't work. Turn on the watch's own Wi-Fi (same network), or use **By IP**. |
-| Wi-Fi Direct finds nothing | Wi-Fi ON on both phones (no network needed), SUDOSEND open on both, *Nearby devices* allowed; on Android 12 and older also turn Location ON. The other phone must accept the system *Invitation to connect*. |
-| Hotspot won't start (Android) | Turn off the normal hotspot/tethering, turn on Location (Android ≤ 12), allow *Nearby devices*. |
-| Updated the app and devices ask for the code again | The device key couldn't be unlocked (e.g. OS key store reset) and was recreated — pair again. |
+| `exec format error` on Linux | Wrong CPU build: `aarch64` → **arm64**, `x86_64` → **x64/amd64**. |
+| `sudosend: command not found` after `./install.sh` | Open a new terminal, or `export PATH="$HOME/.local/bin:$PATH"`. |
+| Devices don't see each other | Same Wi-Fi? Guest, campus and café Wi-Fi often block device-to-device traffic. Use a hotspot, Wi-Fi Direct, QR or **IP / link**. |
+| Linux: others can't find this device | Firewall: `sudo ufw allow 47823/udp && sudo ufw allow 47824:47833/tcp && sudo ufw allow 47840:47849/tcp` (last range: browser share). |
+| Windows: others can't find the PC | Re-run the installer with the firewall option; set the Wi-Fi network to *Private*. |
+| *Pick files* does nothing on Linux | `sudo apt install zenity` |
+| Blank or slow window on a Raspberry Pi | Use a 64-bit OS with a desktop running; *Settings → Appearance → Lite*. Or use the CLI. |
+| *Fingerprint mismatch* | Something on the network pretended to be that device. The transfer was blocked on purpose. |
+| Android stops mid-transfer | Allow notifications for SUDOSEND; on Xiaomi/Huawei/Samsung set battery to *Unrestricted*. |
+| Android: "App not installed" when updating | Different signing key (see [Updating](#updating)). Uninstall once, then install. |
+| A transfer was declined automatically | Not enough free space (*Storage guard*), the device is *send only*, or it is blocked — see *Statistics → Audit log*. |
+| A received file was deleted right away | *Duplicate files → Remove the new copy* is on, and you already had an identical file. |
+| Browser link doesn't open on the other device | Same Wi-Fi/hotspot, and allow TCP 47840–47849 in the firewall. |
+| Folder sync doesn't start | Both devices must trust each other and be online; check *Features → Folder sync* and the device's permissions. Not on iOS. |
+| Speed test refused | The other device must trust you and allow speed tests. |
+| Wi-Fi Direct finds nothing | Wi-Fi ON on both phones, SUDOSEND open on both, *Nearby devices* allowed (Location ON on Android ≤ 12); accept the *Invitation to connect*. |
+| Hotspot won't start | Turn off normal tethering, turn on Location (Android ≤ 12), allow *Nearby devices*. |
+| No video preview on Windows/Linux | Videos open in your system player there; in-app video is on Android, iOS and macOS. |
+| Devices ask for the code again after an update | The device key couldn't be unlocked (OS key store reset) and was recreated — pair again. |
 
 ---
 
@@ -316,11 +333,9 @@ Requires [Flutter](https://docs.flutter.dev/get-started/install) (stable channel
 
 ```bash
 git clone https://github.com/sudosoc/SUDOSEND.git && cd SUDOSEND
-./setup.sh          # Windows: ./setup.ps1  — platform folders, packages, icons, tests
-flutter run -d linux                # or: windows, or an Android device id
+./setup.sh          # Windows: ./setup.ps1 — platform folders, packages, icons, tests
+flutter run -d linux                # or windows, macos, or an Android device id
 ```
-
-Release builds and packages:
 
 ```bash
 flutter build apk --release
@@ -329,59 +344,60 @@ flutter build linux --release
 ./tool/package_linux.sh build/linux/x64/release/bundle sudosend-cli x64   # → dist/*.tar.gz + *.deb
 ```
 
-CI (`.github/workflows/ci.yml`) runs analysis, tests and a CLI-to-CLI end-to-end transfer, then builds
-Android, Windows (installer + portable), Linux x64 and Linux ARM64 (tarball + .deb), and smoke-tests every
-Linux installer. Bumping `version:` in `pubspec.yaml` publishes a new release automatically.
+CI (`.github/workflows/ci.yml`) runs analysis, the test suite and CLI-to-CLI end-to-end transfers on every
+push, and benchmarks the crypto core. Full builds for all platforms run when there is a new version.
 
 ### Releases and signing
 
-Builds are published to the public **sudosoc/SUDOSEND-APP** repository (this source repo can be
-private). A release is made automatically when `version:` in `pubspec.yaml` has no release there yet;
-release notes come from `release_notes/<version>.md`. Windows/macOS/iOS builds only run for a new
-version or a manual *Run workflow* (they cost 2–10× minutes on private repos).
-
-Repository secrets (*Settings → Secrets and variables → Actions*), all required to publish:
+- **Releasing:** bump `version:` in `pubspec.yaml` and add `release_notes/<version>.md`. CI builds Android,
+  Windows, Linux (x64 + ARM64), macOS and iOS and publishes a release with every file labelled by system.
+- **Where:** releases are published **in this repository**. If a `RELEASE_TOKEN` secret is set (a
+  fine-grained token with *Contents: Read and write* on `sudosoc/SUDOSEND-APP`), they go to that public
+  downloads repository instead, so this one can be private. The app and `get.sh` look in both and take
+  the newest release, so switching needs no app update.
+- **Android signing:** without secrets, APKs are signed with a CI key that is kept between builds, so
+  updates install over each other. To use the permanent release key, add these secrets
+  (*Settings → Secrets and variables → Actions*):
 
 | Secret | What |
 |---|---|
-| `RELEASE_TOKEN` | Fine-grained token, repository **SUDOSEND-APP** only, *Contents: Read and write* |
 | `ANDROID_KEYSTORE_BASE64` | base64 of the release `.jks` |
-| `ANDROID_STORE_PASSWORD` / `ANDROID_KEY_PASSWORD` / `ANDROID_KEY_ALIAS` | keystore details |
-
-The release job refuses to publish debug-signed APKs, because in-app updates only install over an
-APK signed with the same key.
+| `ANDROID_STORE_PASSWORD` | keystore password |
+| `ANDROID_KEY_PASSWORD` | key password |
+| `ANDROID_KEY_ALIAS` | key alias |
+| `RELEASE_TOKEN` *(optional)* | publish to `sudosoc/SUDOSEND-APP` instead of here |
 
 ### Performance
 
-Every CI run benchmarks the core on x64 and ARM64 (see the run's annotations): the optimised
-ChaCha20-Poly1305 does ~100–110 MB/s per core on a 2-vCPU cloud runner (4–5× package:cryptography's
-pure-Dart cipher), spread over a pool of worker isolates; SHA-256 of large files runs on its own
-isolate. Real transfers are usually limited by Wi-Fi, not the CPU.
+The optimised ChaCha20-Poly1305 does ~100–110 MB/s per core on a 2-vCPU cloud runner (4–5× a pure-Dart
+cipher), spread over worker isolates; SHA-256 of large files runs on its own isolate. Real transfers
+are usually limited by Wi-Fi, not the CPU.
 
 ### Layout
 
 ```
 lib/
   app/                  strings (EN/AR), scope
-  state/                AppController, settings, history
+  state/                AppController, settings, history, library (files index), devices,
+                        audit log, stats, chat, outbox, previews, updater
   platform/             Android bridge, desktop helpers (open, notify, single instance)
-  ui/                   glass widgets, tabs, settings, QR scanner
-android/…/kotlin/       cached engine, foreground service, notifications, share, Keystore
-packages/wraith_core/   pure-Dart protocol core, shared by the app and the CLI
-  lib/wraith.dart         framing, handshake, pipelined secure channel
-  lib/chacha_poly.dart    optimised RFC 8439 ChaCha20-Poly1305
-  lib/aead.dart           AEAD engines (inline / isolate pool)
-  lib/pairing.dart        QR pairing links
-  lib/receipt.dart        signed delivery receipts
-  lib/discovery.dart      UDP announce / probe / listen
-  lib/transfer.dart       sender + receiver state machines (resume, folders, text)
-  lib/identity.dart       Ed25519 identity, key vaults, trusted/blocked devices
-  lib/vault_windows.dart  DPAPI seed vault
+  ui/                   tabs (send, receive, files, transfers, messages), preview, dashboard,
+                        devices, audit, settings, Wi-Fi Direct, sync, glass widgets
+android/…/kotlin/       engine, foreground service, notifications, share, Keystore, hotspot,
+                        Wi-Fi Direct, ringer, disk space
+packages/wraith_core/   pure-Dart core, shared by the app and the CLI
+  wraith.dart             framing, handshake, pipelined secure channel
+  chacha_poly.dart        optimised RFC 8439 ChaCha20-Poly1305 · aead.dart  engines
+  transfer.dart           sender/receiver (resume, folders, text, compression, sync, speed test)
+  discovery.dart          UDP announce / probe / unicast reconnect
+  organize.dart           device/type/date placement · metadata.dart  photo scrubbing
+  risk.dart               risky / disguised file detection · disk.dart  free space
+  sync.dart · receipt.dart · pairing.dart · identity.dart · web_share.dart · vault_windows.dart
   bin/sudosend.dart       command-line client
 packaging/              Linux install.sh, Windows Inno Setup script
-tool/                   bootstrap, packaging, CI helpers
-test/                   RFC 8439 vectors, loopback E2E: transfer, resume, tamper, folders,
-                        text, spoofing, QR pairing, block list, flood limits, translations
+tool/                   bootstrap, packaging, signing, release, CI helpers
+test/                   RFC 8439 vectors, loopback end-to-end tests, organization, metadata,
+                        risk, library, devices, audit, stats, translations
 ```
 
 ---
@@ -391,26 +407,29 @@ test/                   RFC 8439 vectors, loopback E2E: transfer, resume, tamper
 | | SUDOSEND | LocalSend | KDE Connect | Quick Share |
 |---|:-:|:-:|:-:|:-:|
 | Android · Windows · Linux · macOS · iOS | ✅ | ✅ | ⚠️ iOS limited | ❌ no Linux / iOS |
-| Works with no internet and no account | ✅ | ✅ | ✅ | ⚠️ account for some modes |
+| No internet, no account | ✅ | ✅ | ✅ | ⚠️ |
 | Verify the other device (code or QR) | ✅ | — | ✅ pairing | ✅ |
 | **Signed proof of delivery**, verifiable offline | ✅ | — | — | — |
-| SHA-256 verification of every file | ✅ | — | — | — |
+| SHA-256 check of every file | ✅ | — | — | — |
 | Resume interrupted transfers | ✅ | — | — | — |
+| Duplicate detection | ✅ | — | — | — |
+| Search, timeline and in-app preview of received files | ✅ | — | — | — |
+| Automatic device/type/date folders | ✅ | — | — | — |
+| Per-device permission profiles, expiring trust | ✅ | — | ⚠️ per plugin | — |
+| Audit log (CSV / JSON Lines) | ✅ | — | — | — |
+| Risky / disguised file warnings | ✅ | — | — | — |
+| Photo location stripping | ✅ | — | — | — |
 | Flood protection + block list | ✅ | — | — | — |
 | CLI with pipes and terminal QR | ✅ | — | ⚠️ `kdeconnect-cli` | — |
-| Universal clipboard | ✅ free | — | ✅ | — |
+| Universal clipboard | ✅ | — | ✅ | — |
 | Send to / receive from a plain browser | ✅ | ✅ send only | — | — |
-| Built-in hotspot when there is no Wi-Fi | ✅ Android | — | — | ✅ |
-| Wi-Fi Direct phone-to-phone | ✅ Android | — | — | ✅ |
-| PIN-protected, self-destructing share links | ✅ free | — | — | — |
-| Deliver to an offline device later (outbox) | ✅ | — | — | — |
-| Find my device (ring) | ✅ free | — | ✅ | — |
-| Upload speed limit | ✅ | — | — | — |
-| Two-way folder sync | ✅ free | — | — | — |
-| On-the-fly compression | ✅ | — | — | — |
-| Image previews before accepting | ✅ | — | — | ✅ |
-| Encrypted messages between devices | ✅ | — | ⚠️ SMS relay | — |
-| Built-in speed test | ✅ | — | — | — |
+| Hotspot / Wi-Fi Direct without a router | ✅ Android | — | — | ✅ |
+| PIN-protected, self-destructing links | ✅ | — | — | — |
+| Outbox for offline devices | ✅ | — | — | — |
+| Two-way folder sync | ✅ | — | — | — |
+| Encrypted messages | ✅ | — | ⚠️ SMS relay | — |
+| Find my device | ✅ | — | ✅ | — |
+| Built-in speed test, compression, speed limit | ✅ | — | — | — |
 | Android TV with remote | ✅ | ⚠️ | — | — |
 | Arabic UI with RTL | ✅ | ✅ | ✅ | ✅ |
 
@@ -422,14 +441,16 @@ documentation as of late 2026 — corrections welcome via an issue.*
 Wire protocol, threat model and design decisions: **[PROTOCOL.md](PROTOCOL.md)**.
 X25519 ephemeral keys + Ed25519 identities, hash-committed handshake with a 6-digit SAS,
 ChaCha20-Poly1305 with counter nonces, and SHA-256 on every file.
+Found a vulnerability? Please email **ceo@sudosoc.com** rather than opening a public issue.
 
 ## Roadmap
 
-- Folder sync on iOS (needs security-scoped bookmarks)
-- Signed & notarized builds (Windows code signing, Apple notarization, App Store / Play Store)
+- Permanent Android release key and signed / notarized desktop builds
+- Folder sync on iOS (security-scoped bookmarks)
+- Play Store and App Store builds
 
 ## License
 
 [MIT](LICENSE) © SUDOSOC. Bundled font: IBM Plex Sans Arabic (SIL OFL 1.1).
 
-<p align="center">Made by <b>SUDOSOC</b></p>
+<p align="center">Made by <b>Seif Alsayed Ali · SUDOSOC</b> — <a href="https://seif.sudosoc.com">seif.sudosoc.com</a></p>

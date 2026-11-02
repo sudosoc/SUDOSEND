@@ -7,7 +7,7 @@ set -euo pipefail
 tag="$1"
 dist="$2"
 # Public downloads repo (the source repo can be private).
-repo="${RELEASE_REPO:-sudosoc/SUDOSEND-APP}"
+repo="${RELEASE_REPO:-${GITHUB_REPOSITORY:-sudosoc/SUDOSEND}}"
 ver="${tag#v}"
 
 label() {
@@ -48,7 +48,7 @@ cat >> "$notes" <<NOTES
 | 🤖 | **Android** — not sure? | \`sudosend-android-universal.apk\` |
 | 🍎 | **iOS** — iPhone / iPad (sideload) | \`sudosend-ios-unsigned.ipa\` |
 | 🪟 | **Windows** 10/11 | \`sudosend-windows-x64-setup.exe\` · or portable \`.zip\` |
-| 🍏 | **macOS** 11+ | \`sudosend-macos.zip\` |
+| 🍏 | **macOS** 12+ | \`sudosend-macos.zip\` |
 | 🐧 | **Linux** PC — Kali / Debian / Ubuntu | \`sudosend_${ver}_amd64.deb\` |
 | 🐧 | **Linux** Raspberry Pi / ARM64 | \`sudosend_${ver}_arm64.deb\` |
 | 🐧 | **Linux** any distro | \`sudosend-linux-x64.tar.gz\` / \`-arm64.tar.gz\` → \`./install.sh\` |

@@ -2,7 +2,7 @@
 # ──────────────────────────────────────────────────────────────────────────
 #  SUDOSEND one-line installer for Linux.
 #
-#    curl -fsSL https://raw.githubusercontent.com/sudosoc/SUDOSEND-APP/main/get.sh | bash
+#    curl -fsSL https://raw.githubusercontent.com/sudosoc/SUDOSEND/main/get.sh | bash
 #
 #  Detects your CPU (x86_64 / ARM64 e.g. Raspberry Pi) and distro, downloads the
 #  latest release and installs it: the .deb on Debian/Ubuntu/Kali/Raspberry Pi OS,
@@ -10,7 +10,8 @@
 #  the GitHub CLI (`gh`) is installed and logged in.
 # ──────────────────────────────────────────────────────────────────────────
 set -euo pipefail
-REPO="sudosoc/SUDOSEND-APP"
+# Releases may live in either repository; the newest one wins.
+REPOS="${SUDOSEND_REPOS:-sudosoc/SUDOSEND sudosoc/SUDOSEND-APP}"
 
 if [ -t 1 ]; then G=$'\033[32m'; C=$'\033[36m'; R=$'\033[31m'; N=$'\033[0m'; else G= C= R= N=; fi
 step() { printf '%s▸%s %s\n' "$C" "$N" "$*"; }
@@ -34,12 +35,21 @@ trap 'rm -rf "$tmp"' EXIT
 if [ "$use_deb" = 1 ]; then pattern="sudosend_*_${deb_arch}.deb"; else pattern="sudosend-linux-${arch}.tar.gz"; fi
 step "Downloading the latest SUDOSEND for $(uname -m) ($pattern)…"
 
+command -v curl >/dev/null 2>&1 || die "curl is required"
+REPO=""; best=""
+for r in $REPOS; do
+  t="$(curl -fsSL "https://api.github.com/repos/$r/releases/latest" 2>/dev/null | grep -m1 -oE '"tag_name": *"[^"]+"' | cut -d'"' -f4 || true)"
+  [ -n "$t" ] || continue
+  if [ -z "$best" ] || [ "$(printf '%s\n%s\n' "${best#v}" "${t#v}" | sort -V | tail -n1)" = "${t#v}" ]; then best="$t"; REPO="$r"; fi
+done
+[ -n "$REPO" ] || REPO="${REPOS%% *}"
+[ -n "$best" ] && step "Latest release: $best ($REPO)"
+
 downloaded=0
 if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
   gh release download --repo "$REPO" --pattern "$pattern" --dir "$tmp" --clobber && downloaded=1
 fi
 if [ "$downloaded" = 0 ]; then
-  command -v curl >/dev/null 2>&1 || die "curl is required"
   api="https://api.github.com/repos/$REPO/releases/latest"
   url="$(curl -fsSL "$api" 2>/dev/null | grep -oE '"browser_download_url": *"[^"]+"' | cut -d'"' -f4 \
         | grep -E "/$(printf '%s' "$pattern" | sed 's/\./\\./g; s/\*/[^\/]*/g')$" | head -n1 || true)"

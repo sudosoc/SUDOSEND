@@ -142,7 +142,7 @@ const Map<String, Map<String, String>> featureStrings = {
     'f_update': 'Check for updates',
     'f_update_sub': 'Look for a new version once when the app starts.',
     'i_update':
-        'When on, SUDOSEND asks GitHub once at startup whether a newer release exists in github.com/sudosoc/SUDOSEND-APP, and shows a green dot on the settings button if there is one. Nothing is downloaded until you press Install.\n\nThis is the only time the app talks to the internet; your files never leave your network. Updates are checked against the SHA-256 GitHub publishes, and Android refuses an APK that is not signed with the same key as the installed app.\n\nYou can always check by hand in Settings → About.',
+        'When on, SUDOSEND asks GitHub once at startup whether a newer release exists in github.com/sudosoc/SUDOSEND, and shows a green dot on the settings button if there is one. Nothing is downloaded until you press Install.\n\nThis is the only time the app talks to the internet; your files never leave your network. Updates are checked against the SHA-256 GitHub publishes, and Android refuses an APK that is not signed with the same key as the installed app.\n\nYou can always check by hand in Settings → About.',
     'update_check': 'Check for updates',
     'update_title': 'App update',
     'update_current': 'You have version {v}',
@@ -571,7 +571,7 @@ const Map<String, Map<String, String>> featureStrings = {
     'f_update': 'دوّر على تحديثات',
     'f_update_sub': 'بيشوف في نسخة جديدة مرة واحدة لما التطبيق يفتح.',
     'i_update':
-        'لو شغالة، SUDOSEND بيسأل GitHub مرة واحدة أول ما يفتح هل في إصدار أحدث على github.com/sudosoc/SUDOSEND-APP، ولو في بيظهر نقطة خضرا على زرار الإعدادات. مفيش أي حاجة بتتحمّل غير لما تدوس تثبيت.\n\nدي المرة الوحيدة اللي التطبيق بيكلم فيها النت؛ ملفاتك عمرها ما بتخرج من شبكتك. التحديث بيتراجع بالـ SHA-256 اللي GitHub بينشره، وأندرويد بيرفض أي APK مش متوقّع بنفس مفتاح التطبيق المتثبّت.\n\nتقدر تدوّر بإيدك في أي وقت من الإعدادات ← عن التطبيق.',
+        'لو شغالة، SUDOSEND بيسأل GitHub مرة واحدة أول ما يفتح هل في إصدار أحدث على github.com/sudosoc/SUDOSEND، ولو في بيظهر نقطة خضرا على زرار الإعدادات. مفيش أي حاجة بتتحمّل غير لما تدوس تثبيت.\n\nدي المرة الوحيدة اللي التطبيق بيكلم فيها النت؛ ملفاتك عمرها ما بتخرج من شبكتك. التحديث بيتراجع بالـ SHA-256 اللي GitHub بينشره، وأندرويد بيرفض أي APK مش متوقّع بنفس مفتاح التطبيق المتثبّت.\n\nتقدر تدوّر بإيدك في أي وقت من الإعدادات ← عن التطبيق.',
     'update_check': 'دوّر على تحديث',
     'update_title': 'تحديث التطبيق',
     'update_current': 'معاك الإصدار {v}',
