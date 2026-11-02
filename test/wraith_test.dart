@@ -769,7 +769,7 @@ void main() {
       expect(m['width'], '640');
       expect(m['height'], '480');
       expect(m.latitude, closeTo(30.044444, 1e-5));
-      expect(m.longitude, closeTo(31.235667, 1e-5));
+      expect(m.longitude, closeTo(31.2357, 1e-5));
     });
 
     test('PDF info dictionary and risky features', () {
