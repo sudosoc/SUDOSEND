@@ -27,6 +27,7 @@ enum AuditKind {
   restored,
   remoteSearch, // another device searched this one
   remoteFetch, // another device asked for a copy of a file
+  appInstall, // a shared app was installed (or failed to)
 }
 
 class AuditEvent {

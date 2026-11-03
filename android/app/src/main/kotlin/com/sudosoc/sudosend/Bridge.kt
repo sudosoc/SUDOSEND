@@ -143,6 +143,9 @@ object Bridge {
                         Ringer.stop(app)
                         result.success(true)
                     }
+                    "listApps" -> Apps.list(app, result)
+                    "apkInfo" -> Apps.apkInfo(app, call.argument<String>("path") ?: "", result)
+                    "installApks" -> Apps.install(app, call.argument<List<String>>("paths") ?: emptyList(), result)
                     "diskSpace" -> {
                         val path = call.argument<String>("path") ?: app.filesDir.path
                         val dir = File(path).let { if (it.exists()) it else app.filesDir }

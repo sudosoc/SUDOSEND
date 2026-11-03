@@ -86,6 +86,11 @@
             android:name=".NotificationActionReceiver"
             android:exported="false" />
 
+        <!-- Result of installing a shared app (single or split APKs) -->
+        <receiver
+            android:name=".InstallReceiver"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"
@@ -106,6 +111,11 @@
     </application>
 
     <queries>
+        <!-- App sharing: list apps that appear in the launcher -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />

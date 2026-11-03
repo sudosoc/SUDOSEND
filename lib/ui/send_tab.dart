@@ -9,6 +9,7 @@ import 'package:wraith_core/util.dart';
 import '../app/scope.dart';
 import '../platform/desktop.dart';
 import '../state/app_controller.dart';
+import 'app_picker_page.dart';
 import 'device_actions.dart';
 import 'devices_page.dart' show groupLabel;
 import 'glass.dart';
@@ -160,6 +161,13 @@ class _FilesCard extends StatelessWidget {
                 GhostButton(
                     label: context.tr('folder'), icon: Icons.folder_rounded, onPressed: () => _pickFolder(context)),
                 GhostButton(label: context.tr('text'), icon: Icons.notes_rounded, onPressed: () => _editText(context)),
+                if (controller.appSharing)
+                  GhostButton(
+                    label: context.tr('apps'),
+                    icon: Icons.apps_rounded,
+                    color: AppColors.mint,
+                    onPressed: () => openAppPicker(context, controller),
+                  ),
               ],
             ),
             if (isDesktop) ...[
@@ -275,6 +283,13 @@ class _FilesCard extends StatelessWidget {
             children: [
               GhostButton(label: context.tr('add'), icon: Icons.add_rounded, onPressed: controller.pickFiles),
               GhostButton(label: context.tr('folder'), icon: Icons.folder_rounded, onPressed: () => _pickFolder(context)),
+              if (controller.appSharing)
+                GhostButton(
+                  label: context.tr('apps'),
+                  icon: Icons.apps_rounded,
+                  color: AppColors.mint,
+                  onPressed: () => openAppPicker(context, controller),
+                ),
               if (controller.settings.webShare)
                 GhostButton(
                   label: context.tr('web_link'),

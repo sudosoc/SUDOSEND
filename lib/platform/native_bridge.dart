@@ -11,6 +11,33 @@ class SharedPayload {
   final String? text;
 }
 
+/// An app installed on this Android device (for app sharing).
+class InstalledApp {
+  const InstalledApp({
+    required this.label,
+    required this.package,
+    required this.version,
+    required this.paths,
+    required this.size,
+    required this.system,
+    required this.updated,
+    this.icon,
+  });
+
+  final String label;
+  final String package;
+  final String version;
+
+  /// base.apk first, then split APKs (if any).
+  final List<String> paths;
+  final int size;
+  final bool system;
+  final DateTime updated;
+  final Uint8List? icon;
+
+  bool get isSplit => paths.length > 1;
+}
+
 /// A phone seen over Wi-Fi Direct.
 class P2pPeer {
   const P2pPeer({required this.name, required this.address, required this.status, this.sudosendName});
@@ -84,6 +111,10 @@ class NativeBridge {
   final StreamController<void> _hotspotStopped = StreamController<void>.broadcast();
   final StreamController<void> _ringStopped = StreamController<void>.broadcast();
   final StreamController<P2pEvent> _p2p = StreamController<P2pEvent>.broadcast();
+  final StreamController<Map<String, Object?>> _installs = StreamController<Map<String, Object?>>.broadcast();
+
+  /// Results of app installs: {ok, status, message, package}.
+  Stream<Map<String, Object?>> get installResults => _installs.stream;
 
   Stream<P2pEvent> get p2pEvents => _p2p.stream;
 
@@ -105,6 +136,8 @@ class NativeBridge {
         _ringStopped.add(null);
       case 'onHotspotStopped':
         _hotspotStopped.add(null);
+      case 'onInstallResult':
+        _installs.add(Map<String, Object?>.from(call.arguments as Map));
       case 'onP2p':
         final e = _parseP2p(Map<Object?, Object?>.from(call.arguments as Map));
         if (e != null) _p2p.add(e);
@@ -182,6 +215,35 @@ class NativeBridge {
 
   /// "ok" | "permission" | "error" — see Bridge.installApk.
   Future<String> installApk(String path) async => (await _invoke<String>('installApk', {'path': path})) ?? 'error';
+
+  /// Apps in the launcher, with their APK files.
+  Future<List<InstalledApp>> listApps() async {
+    final raw = await _invoke<List<Object?>>('listApps');
+    return [
+      for (final r in raw ?? const <Object?>[])
+        if (r is Map)
+          InstalledApp(
+            label: r['label'] as String? ?? '?',
+            package: r['package'] as String? ?? '',
+            version: r['version'] as String? ?? '',
+            paths: [for (final x in (r['paths'] as List<Object?>? ?? const [])) '$x'],
+            size: (r['size'] as num?)?.toInt() ?? 0,
+            system: r['system'] == true,
+            updated: DateTime.fromMillisecondsSinceEpoch((r['updated'] as num?)?.toInt() ?? 0),
+            icon: r['icon'] as Uint8List?,
+          ),
+    ];
+  }
+
+  /// Name, package, version, permissions, signer of an APK file (null if not an APK).
+  Future<Map<String, Object?>?> apkInfo(String path) async {
+    final r = await _invoke<Map<Object?, Object?>>('apkInfo', {'path': path});
+    return r == null ? null : {for (final e in r.entries) '${e.key}': e.value};
+  }
+
+  /// "ok" (Android shows its confirm screen) | "permission" | "error: …".
+  Future<String> installApks(List<String> paths) async =>
+      (await _invoke<String>('installApks', {'paths': paths})) ?? 'error';
 
   /// (free, total) bytes of the volume holding [path].
   Future<(int, int)?> diskSpace(String path) async {

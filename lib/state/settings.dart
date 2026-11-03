@@ -230,6 +230,10 @@ class SettingsController extends ChangeNotifier {
   bool notifyDuplicates = true;
   bool notifyStorage = true;
 
+  /// Android: share installed apps; include system apps in the list.
+  bool shareApps = true;
+  bool showSystemApps = false;
+
   /// File Metadata Explorer in previews, and whether GPS positions are shown.
   bool showMetadata = true;
   bool showGps = true;
@@ -307,6 +311,8 @@ class SettingsController extends ChangeNotifier {
         notifyFailed = (m['notifyFailed'] as bool?) ?? notifyFailed;
         notifyDuplicates = (m['notifyDuplicates'] as bool?) ?? notifyDuplicates;
         notifyStorage = (m['notifyStorage'] as bool?) ?? notifyStorage;
+        shareApps = (m['shareApps'] as bool?) ?? shareApps;
+        showSystemApps = (m['showSystemApps'] as bool?) ?? showSystemApps;
         showMetadata = (m['showMetadata'] as bool?) ?? showMetadata;
         showGps = (m['showGps'] as bool?) ?? showGps;
         trashDays = (m['trashDays'] as int?) ?? trashDays;
@@ -373,6 +379,8 @@ class SettingsController extends ChangeNotifier {
         'notifyDuplicates': notifyDuplicates,
         'notifyStorage': notifyStorage,
         'deviceGroups': deviceGroups,
+        'shareApps': shareApps,
+        'showSystemApps': showSystemApps,
         'showMetadata': showMetadata,
         'showGps': showGps,
         'trashDays': trashDays,

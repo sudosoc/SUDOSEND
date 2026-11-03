@@ -421,6 +421,27 @@ class SettingsPage extends StatelessWidget {
       Glass(
         child: Column(
           children: [
+            if (Platform.isAndroid) ...[
+              _Switch(
+                icon: Icons.apps_rounded,
+                color: AppColors.mint,
+                title: context.tr('f_share_apps'),
+                subtitle: context.tr('f_share_apps_sub'),
+                info: 'i_share_apps',
+                value: s.shareApps,
+                onChanged: (v) => s.update((x) => x.shareApps = v),
+              ),
+              if (s.shareApps)
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(start: 50),
+                  child: _SubSwitch(
+                    label: context.tr('apps_system'),
+                    value: s.showSystemApps,
+                    onChanged: (v) => s.update((x) => x.showSystemApps = v),
+                  ),
+                ),
+              _divider,
+            ],
             _Switch(
               icon: Icons.manage_search_rounded,
               color: AppColors.cyan,

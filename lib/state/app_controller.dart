@@ -208,6 +208,12 @@ class AppController extends ChangeNotifier {
       unawaited(refreshStorage());
       _subs.add(_native.ringStopped.listen((_) => _rings.add('')));
       _subs.add(_native.p2pEvents.listen(_onP2p));
+      _subs.add(_native.installResults.listen((r) {
+        final ok = r['ok'] == true;
+        final pkg = r['package'] as String? ?? '';
+        _messages.add(ok ? t('apk_installed', {'name': pkg}) : t('apk_install_failed', {'reason': '${r['message'] ?? r['status']}'}));
+        audit.add(AuditKind.appInstall, detail: '$pkg ${ok ? 'installed' : 'failed: ${r['message'] ?? r['status']}'}');
+      }));
       if (isDesktop) unawaited(SingleInstance.listen((args) => addPaths(args)));
 
       if (Platform.isAndroid && !settings.effectsChosen && await _native.isLowRam()) {
@@ -1459,6 +1465,66 @@ class AppController extends ChangeNotifier {
     final n = await library.scan(dir, onProgress: onProgress);
     notifyListeners();
     return n;
+  }
+
+  // ─────────────────────────── App sharing (Android) ───────────────────────────
+
+  bool get appSharing => Platform.isAndroid && settings.shareApps;
+
+  Future<List<InstalledApp>> installedApps() => _native.listApps();
+
+  /// Adds apps to the selection. A single-APK app is sent as "Name 1.2.apk"
+  /// (filed under Applications); a split app as a folder "Name 1.2/" with
+  /// base.apk and its split_*.apk parts, installed together on arrival.
+  void addApps(List<InstalledApp> apps) {
+    for (final a in apps) {
+      final title = sanitizeFileName('${a.label} ${a.version}'.trim());
+      if (!a.isSplit) {
+        final path = a.paths.first;
+        if (selected.any((s) => s.path == path)) continue;
+        selected.add(FileEntry(name: '$title.apk', size: File(path).lengthSync(), path: path));
+      } else {
+        for (final path in a.paths) {
+          if (selected.any((s) => s.path == path)) continue;
+          final base = p.basename(path);
+          selected.add(FileEntry(name: '$title/$base', size: File(path).lengthSync(), path: path));
+        }
+      }
+    }
+    selectedText = null;
+    tab = 0;
+    notifyListeners();
+  }
+
+  /// The APKs to install together with [path]: a split set when [path] sits
+  /// next to base.apk / split_*.apk files, otherwise just [path].
+  List<String> apkSet(String path) {
+    final dir = Directory(p.dirname(path));
+    try {
+      final siblings = dir
+          .listSync()
+          .whereType<File>()
+          .map((f) => f.path)
+          .where((x) => p.basename(x) == 'base.apk' || RegExp(r'^split_.*\.apk$').hasMatch(p.basename(x)))
+          .toList();
+      final name = p.basename(path);
+      if (siblings.length > 1 && (name == 'base.apk' || name.startsWith('split_'))) {
+        siblings.sort((a, b) => p.basename(a) == 'base.apk' ? -1 : (p.basename(b) == 'base.apk' ? 1 : a.compareTo(b)));
+        return siblings;
+      }
+    } catch (_) {}
+    return [path];
+  }
+
+  Future<Map<String, Object?>?> apkInfo(String path) => _native.apkInfo(path);
+
+  /// Returns null when Android's install screen opened, else a message.
+  Future<String?> installApp(String path) async {
+    final paths = apkSet(path);
+    final r = await _native.installApks(paths);
+    if (r == 'ok') return null;
+    if (r == 'permission') return t('apk_need_permission');
+    return t('apk_install_failed', {'reason': r.replaceFirst('error: ', '')});
   }
 
   // ─────────────────────────── Smart Recovery: trash, partial files ───────────────────────────

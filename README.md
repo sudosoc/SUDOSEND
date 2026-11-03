@@ -43,6 +43,9 @@
 
 ## What's new
 
+**0.10** — share installed apps (Android), including split Play Store apps, with a safe-install screen
+(version, signer, permissions).
+
 **0.9** — File Metadata Explorer (EXIF, PDF/Office/video properties, security flags) · Smart Recovery
 (journaled operations, crash-safe data, trash) · storage map · search across devices with
 "get a copy".
@@ -65,6 +68,8 @@ button that explains what it does — in English and Arabic.
 - **Resume**: a dropped transfer continues where it stopped; failed sends **retry automatically**
 - **Send to several devices at once**, or to a whole **device group** (Personal, Work…)
 - **Drag & drop** onto the window, or straight **onto a device** to send to it (desktop)
+- **Share installed apps** (Android) — split Play Store apps included; received APKs show version,
+  signer and permissions before you install
 - Android **share sheet**, desktop **Send to** menu, **hot folders** that send whatever you drop in them
 - **Outbox**: queue files for a trusted device that is off — delivered when it comes online
 - **Smart compression** for text, code, logs and documents; photos and videos are left alone
@@ -319,6 +324,7 @@ sudosend --help
 | Speed test refused | The other device must trust you and allow speed tests. |
 | Wi-Fi Direct finds nothing | Wi-Fi ON on both phones, SUDOSEND open on both, *Nearby devices* allowed (Location ON on Android ≤ 12); accept the *Invitation to connect*. |
 | Hotspot won't start | Turn off normal tethering, turn on Location (Android ≤ 12), allow *Nearby devices*. |
+| A shared app won't install | Allow *Install unknown apps* for SUDOSEND; an app signed by a different developer than the installed one must be uninstalled first; split apps need all their parts (send the app again). |
 | A deleted file is needed again | *Settings → Recovery & trash* → **Restore** (kept for the days you chose). |
 | Search across devices finds nothing on a device | It must be trusted, online, and allow *Search across devices* (Features) and *Search my files* (its device permissions). |
 | No video preview on Windows/Linux | Videos open in your system player there; in-app video is on Android, iOS and macOS. |
@@ -427,6 +433,7 @@ test/                   RFC 8439 vectors, loopback end-to-end tests, organizatio
 | SHA-256 check of every file | ✅ | — | — | — |
 | Resume interrupted transfers | ✅ | — | — | — |
 | Duplicate detection | ✅ | — | — | — |
+| Share installed apps (incl. split APKs) | ✅ Android | — | — | — |
 | Metadata explorer (EXIF, PDF, Office, video) | ✅ | — | — | — |
 | Search files across devices | ✅ | — | — | — |
 | Trash + crash recovery | ✅ | — | — | — |

@@ -200,6 +200,7 @@ class _Viewer extends StatelessWidget {
       );
     }
     if (ext == 'pdf') return PdfViewer.file(item.path);
+    if (ext == 'apk' && Platform.isAndroid) return _ApkView(controller: controller, path: item.path);
     if ((item.category == FileCategory.videos || item.category == FileCategory.audio) && _videoSupported) {
       return _MediaPlayer(path: item.path, audio: item.category == FileCategory.audio);
     }
@@ -528,6 +529,133 @@ class _MetadataSection extends StatelessWidget {
                   ),
               ],
           ],
+        );
+      },
+    );
+  }
+}
+
+/// Received app: what it is, how it relates to what is installed, what it
+/// asks for — then install it (split apps as one set).
+class _ApkView extends StatelessWidget {
+  const _ApkView({required this.controller, required this.path});
+  final AppController controller;
+  final String path;
+
+  static const _sensitive = {
+    'android.permission.READ_SMS', 'android.permission.RECEIVE_SMS', 'android.permission.SEND_SMS', //
+    'android.permission.READ_CONTACTS', 'android.permission.READ_CALL_LOG', 'android.permission.CALL_PHONE',
+    'android.permission.RECORD_AUDIO', 'android.permission.CAMERA', 'android.permission.ACCESS_FINE_LOCATION',
+    'android.permission.ACCESS_BACKGROUND_LOCATION', 'android.permission.SYSTEM_ALERT_WINDOW',
+    'android.permission.REQUEST_INSTALL_PACKAGES', 'android.permission.READ_EXTERNAL_STORAGE',
+    'android.permission.MANAGE_EXTERNAL_STORAGE', 'android.permission.BIND_ACCESSIBILITY_SERVICE',
+    'android.permission.BIND_DEVICE_ADMIN', 'android.permission.QUERY_ALL_PACKAGES',
+    'android.permission.READ_PHONE_STATE', 'android.permission.BODY_SENSORS',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final set = controller.apkSet(path);
+    return FutureBuilder<Map<String, Object?>?>(
+      future: controller.apkInfo(set.first),
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+        final i = snap.data;
+        if (i == null) {
+          return Center(child: Text(context.tr('apk_invalid'), style: const TextStyle(color: AppColors.danger)));
+        }
+        final perms = [for (final x in (i['permissions'] as List<Object?>? ?? const [])) '$x'];
+        final risky = perms.where(_sensitive.contains).toList();
+        final installed = i['installedVersion'] as String?;
+        final same = i['sameSigner'] as bool?;
+        final newCode = (i['versionCode'] as num?)?.toInt() ?? 0;
+        final oldCode = (i['installedCode'] as num?)?.toInt();
+        final String status;
+        final Color statusColor;
+        if (installed == null) {
+          status = context.tr('apk_new');
+          statusColor = AppColors.mint;
+        } else if (same == false) {
+          status = context.tr('apk_other_signer');
+          statusColor = AppColors.danger;
+        } else if (oldCode != null && newCode < oldCode) {
+          status = context.tr('apk_downgrade', {'v': installed});
+          statusColor = AppColors.amber;
+        } else if (oldCode != null && newCode == oldCode) {
+          status = context.tr('apk_same', {'v': installed});
+          statusColor = AppColors.muted;
+        } else {
+          status = context.tr('apk_update', {'v': installed});
+          statusColor = AppColors.cyan;
+        }
+        return Container(
+          color: const Color(0xFF0B1022),
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              Row(
+                children: [
+                  if (i['icon'] is Uint8List)
+                    Image.memory(i['icon']! as Uint8List, width: 64, height: 64)
+                  else
+                    const Icon(Icons.android_rounded, size: 64, color: AppColors.mint),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${i['label']}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white)),
+                        Text('${i['package']} · ${i['version']}',
+                            textDirection: TextDirection.ltr, style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.w800)),
+              if (set.length > 1)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(context.tr('apk_parts', {'n': set.length}), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                ),
+              const SizedBox(height: 14),
+              GlowButton(
+                expand: true,
+                icon: Icons.install_mobile_rounded,
+                label: context.tr(installed == null ? 'apk_install' : 'apk_install_update'),
+                onPressed: same == false
+                    ? null
+                    : () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        final error = await controller.installApp(path);
+                        if (error != null) messenger.showSnackBar(SnackBar(content: Text(error)));
+                      },
+              ),
+              const SizedBox(height: 18),
+              Text(context.tr('apk_permissions', {'n': perms.length}),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              if (risky.isNotEmpty)
+                Text(context.tr('apk_sensitive', {'n': risky.length}),
+                    style: const TextStyle(color: AppColors.amber, fontSize: 12.5, fontWeight: FontWeight.w700)),
+              for (final p in perms)
+                Text('• ${p.split('.').last}',
+                    textDirection: TextDirection.ltr,
+                    style: TextStyle(
+                        fontSize: 12, color: risky.contains(p) ? AppColors.amber : AppColors.muted)),
+              const SizedBox(height: 14),
+              Text(context.tr('apk_signer'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+              SelectableText('${i['signer'] ?? '—'}',
+                  style: kMono.copyWith(fontSize: 11, color: AppColors.muted)),
+              if (i['minSdk'] != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(context.tr('apk_min_sdk', {'n': i['minSdk']}),
+                      style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                ),
+            ],
+          ),
         );
       },
     );

@@ -32,6 +32,7 @@ import 'theme.dart';
       AuditKind.restored => (Icons.restore_from_trash_rounded, AppColors.mint),
       AuditKind.remoteSearch => (Icons.travel_explore_rounded, AppColors.cyan),
       AuditKind.remoteFetch => (Icons.cloud_download_rounded, AppColors.violet),
+      AuditKind.appInstall => (Icons.install_mobile_rounded, AppColors.cyan),
     };
 
 /// Security log: connections, transfers, trust changes, deletions.
