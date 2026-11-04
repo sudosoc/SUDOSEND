@@ -6,7 +6,8 @@ import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
-import 'package:flutter/widgets.dart' show AppLifecycleListener, AppLifecycleState, WidgetsBinding;
+import 'package:flutter/widgets.dart'
+    show AppLifecycleListener, AppLifecycleState, WidgetsBinding;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:wraith_core/discovery.dart';
@@ -80,8 +81,10 @@ class AppController extends ChangeNotifier {
 
   final Map<String, StreamSubscription<void>> _jobSubs = {};
   final Map<String, IncomingRequest> _pendingRequests = {};
-  final StreamController<IncomingRequest> _incoming = StreamController<IncomingRequest>.broadcast();
-  final StreamController<String> _messages = StreamController<String>.broadcast();
+  final StreamController<IncomingRequest> _incoming =
+      StreamController<IncomingRequest>.broadcast();
+  final StreamController<String> _messages =
+      StreamController<String>.broadcast();
   final List<StreamSubscription<Object?>> _subs = [];
   AppLifecycleListener? _lifecycle;
 
@@ -93,12 +96,19 @@ class AppController extends ChangeNotifier {
   /// Short user-facing messages (snackbars).
   Stream<String> get messages => _messages.stream;
 
-  List<Peer> get peers => ready ? _discovery.peers : const [];
-  int get port => ready ? _engine.port : kTransferPort;
+  /// Screenshots/tests: pretend these devices are nearby (no sockets needed).
+  @visibleForTesting
+  List<Peer>? demoPeers;
+
+  List<Peer> get peers => demoPeers ?? (ready ? _discovery.peers : const []);
+  int get port => demoPeers != null
+      ? kTransferPort
+      : (ready ? _engine.port : kTransferPort);
   bool get hasSelection => selected.isNotEmpty || selectedText != null;
   int get selectedBytes => selected.fold<int>(0, (a, f) => a + f.size);
   int get activeJobs => jobs.where((j) => j.isActive).length;
-  String t(String key, [Map<String, Object?> args = const {}]) => tr(settings.lang, key, args);
+  String t(String key, [Map<String, Object?> args = const {}]) =>
+      tr(settings.lang, key, args);
 
   /// History entries from earlier sessions (this session's jobs are shown live).
   List<HistoryEntry> get earlierHistory {
@@ -138,7 +148,8 @@ class AppController extends ChangeNotifier {
       }
       lastRecovery = recovery;
       for (final f in SafeFile.restored) {
-        audit.add(AuditKind.recovered, detail: 'restored from backup: ${p.basename(f)}');
+        audit.add(AuditKind.recovered,
+            detail: 'restored from backup: ${p.basename(f)}');
       }
       trash = await TrashStore.load(support, journal);
       outbox = await OutboxStore.load(support);
@@ -148,9 +159,10 @@ class AppController extends ChangeNotifier {
         identity: identity,
         trust: trust,
         saveDir: () async => saveDir!,
-        saveDirFor: (name, fp) async => !settings.organize && settings.senderFolders
-            ? Directory(p.join(saveDir!.path, sanitizeFileName(name)))
-            : saveDir!,
+        saveDirFor: (name, fp) async =>
+            !settings.organize && settings.senderFolders
+                ? Directory(p.join(saveDir!.path, sanitizeFileName(name)))
+                : saveDir!,
         autoAccept: (r) {
           if (!r.trusted) return false;
           final d = settings.prefsFor(r.fingerprint);
@@ -160,7 +172,8 @@ class AppController extends ChangeNotifier {
           if (r.clipboard) return settings.clipboardSync && d.clipboard;
           if (r.speedTest) return settings.allowSpeedTest && d.speedTest;
           if (r.chat) return settings.chat && d.chat;
-          if (r.syncInvite != null) return false; // always asks: a folder must be chosen
+          if (r.syncInvite != null)
+            return false; // always asks: a folder must be chosen
           return d.autoAccept ?? settings.autoAcceptTrusted;
         },
         onIncoming: _onIncoming,
@@ -178,7 +191,10 @@ class AppController extends ChangeNotifier {
       _engine.onFetch = _onRemoteFetch;
       await _engine.start();
 
-      _discovery = Discovery(identity: identity, transferPort: _engine.port, onChanged: _onPeersChanged)
+      _discovery = Discovery(
+          identity: identity,
+          transferPort: _engine.port,
+          onChanged: _onPeersChanged)
         ..stealth = settings.stealth;
       await _discovery.start();
       await _refreshAddresses();
@@ -205,8 +221,10 @@ class AppController extends ChangeNotifier {
         notifyListeners();
       }));
       settings.addListener(_applySettings);
-      _outboxTimer = Timer.periodic(const Duration(seconds: 30), (_) => unawaited(_flushOutbox()));
-      _deviceTimer = Timer.periodic(const Duration(seconds: 30), (_) => _housekeeping());
+      _outboxTimer = Timer.periodic(
+          const Duration(seconds: 30), (_) => unawaited(_flushOutbox()));
+      _deviceTimer =
+          Timer.periodic(const Duration(seconds: 30), (_) => _housekeeping());
       _rememberTrustedAddresses();
       unawaited(refreshStorage());
       _subs.add(_native.ringStopped.listen((_) => _rings.add('')));
@@ -214,12 +232,19 @@ class AppController extends ChangeNotifier {
       _subs.add(_native.installResults.listen((r) {
         final ok = r['ok'] == true;
         final pkg = r['package'] as String? ?? '';
-        _messages.add(ok ? t('apk_installed', {'name': pkg}) : t('apk_install_failed', {'reason': '${r['message'] ?? r['status']}'}));
-        audit.add(AuditKind.appInstall, detail: '$pkg ${ok ? 'installed' : 'failed: ${r['message'] ?? r['status']}'}');
+        _messages.add(ok
+            ? t('apk_installed', {'name': pkg})
+            : t('apk_install_failed',
+                {'reason': '${r['message'] ?? r['status']}'}));
+        audit.add(AuditKind.appInstall,
+            detail:
+                '$pkg ${ok ? 'installed' : 'failed: ${r['message'] ?? r['status']}'}');
       }));
       if (isDesktop) unawaited(SingleInstance.listen((args) => addPaths(args)));
 
-      if (Platform.isAndroid && !settings.effectsChosen && await _native.isLowRam()) {
+      if (Platform.isAndroid &&
+          !settings.effectsChosen &&
+          await _native.isLowRam()) {
         settings.effects = 'lite';
       }
       _applySettings();
@@ -228,15 +253,18 @@ class AppController extends ChangeNotifier {
 
       if (identity.regenerated) _messages.add(t('identity_regenerated'));
       if (Platform.isAndroid) {
-        if (settings.wifiDirect) unawaited(_native.p2pAttach(identity.name, identity.fingerprint));
-        if (settings.notifications) await _native.requestPermission('notifications');
+        if (settings.wifiDirect)
+          unawaited(_native.p2pAttach(identity.name, identity.fingerprint));
+        if (settings.notifications)
+          await _native.requestPermission('notifications');
         await _importShare();
         _updateService();
       }
       unawaited(_cleanScrubDir());
       if (initialArgs.isNotEmpty) await addPaths(initialArgs);
       if (settings.autoUpdateCheck && !Platform.isIOS) {
-        unawaited(Future<void>.delayed(const Duration(seconds: 8), () => checkForUpdates(silent: true)));
+        unawaited(Future<void>.delayed(
+            const Duration(seconds: 8), () => checkForUpdates(silent: true)));
       }
     } catch (e) {
       startupError = describeError(e);
@@ -245,6 +273,8 @@ class AppController extends ChangeNotifier {
   }
 
   void setTab(int i) {
+    if (i == 1)
+      i = 0; // the old Receive tab is now "My device" (opened from the header)
     if (tab == i) return;
     tab = i;
     notifyListeners();
@@ -256,13 +286,15 @@ class AppController extends ChangeNotifier {
     final label = displayName(r.fingerprint, r.peerName);
     if (r.trusted && !settings.prefsFor(r.fingerprint).mayReceiveFrom) {
       r.respond(false);
-      audit.add(AuditKind.permissionDenied, device: label, detail: 'send-only device tried to send');
+      audit.add(AuditKind.permissionDenied,
+          device: label, detail: 'send-only device tried to send');
       return;
     }
     if (!_fits(r)) {
       r.respond(false);
       final need = formatBytes(r.totalBytes);
-      audit.add(AuditKind.storageLow, device: label, detail: 'declined $need: not enough space');
+      audit.add(AuditKind.storageLow,
+          device: label, detail: 'declined $need: not enough space');
       _messages.add(t('storage_declined', {'name': label, 'size': need}));
       _notifyStorage(force: true);
       return;
@@ -270,33 +302,48 @@ class AppController extends ChangeNotifier {
     // Clipboard pushes never prompt: accepted silently from trusted devices
     // when sync is on (see autoAccept), declined otherwise.
     if (r.clipboard || r.ring || r.speedTest) {
-      if (r.trusted) audit.add(AuditKind.permissionDenied, device: label, detail: r.ring ? 'ring' : r.clipboard ? 'clipboard' : 'speed test');
+      if (r.trusted)
+        audit.add(AuditKind.permissionDenied,
+            device: label,
+            detail: r.ring
+                ? 'ring'
+                : r.clipboard
+                    ? 'clipboard'
+                    : 'speed test');
       r.respond(false);
       return;
     }
-    if (r.chat && (!settings.chat || (r.trusted && !settings.prefsFor(r.fingerprint).chat))) {
-      if (r.trusted) audit.add(AuditKind.permissionDenied, device: label, detail: 'chat');
+    if (r.chat &&
+        (!settings.chat ||
+            (r.trusted && !settings.prefsFor(r.fingerprint).chat))) {
+      if (r.trusted)
+        audit.add(AuditKind.permissionDenied, device: label, detail: 'chat');
       r.respond(false);
       return;
     }
-    if (r.syncInvite != null && (!syncSupported || (r.trusted && !settings.prefsFor(r.fingerprint).sync))) {
+    if (r.syncInvite != null &&
+        (!syncSupported ||
+            (r.trusted && !settings.prefsFor(r.fingerprint).sync))) {
       r.respond(false);
       return;
     }
     _pendingRequests[r.id] = r;
-    tab = 1;
     notifyListeners();
     _incoming.add(r);
     final what = r.syncInvite != null
         ? t('sync_invite_notif', {'name': r.syncInvite!.name})
         : r.text != null
-        ? t('notif_incoming_text')
-        : t('notif_incoming_files', {'n': r.files.length, 'size': formatBytes(r.totalBytes)});
+            ? t('notif_incoming_text')
+            : t('notif_incoming_files',
+                {'n': r.files.length, 'size': formatBytes(r.totalBytes)});
     final title = t('notif_incoming_title', {'name': r.peerName});
-    final body = r.trusted ? '$what · ${t('trusted_device')}' : '$what · ${t('notif_code', {'code': formatSas(r.sas)})}';
+    final body = r.trusted
+        ? '$what · ${t('trusted_device')}'
+        : '$what · ${t('notif_code', {'code': formatSas(r.sas)})}';
     if (settings.notifications) {
       if (Platform.isAndroid) {
-        unawaited(_native.notifyIncoming(r.id, title, body, accept: t('accept'), decline: t('decline')));
+        unawaited(_native.notifyIncoming(r.id, title, body,
+            accept: t('accept'), decline: t('decline')));
       } else if (!foreground) {
         unawaited(desktopNotify(title, body));
       }
@@ -304,10 +351,17 @@ class AppController extends ChangeNotifier {
     unawaited(r.decision.then((d) {
       _pendingRequests.remove(r.id);
       unawaited(_native.cancelNotification(r.id));
-      audit.add(d.accept ? AuditKind.requestAccepted : AuditKind.requestDeclined,
-          device: label, detail: '${r.files.length} file(s), ${formatBytes(r.totalBytes)} from ${r.peerAddress}');
-      if (d.trust) audit.add(AuditKind.deviceTrusted, device: label, detail: r.fingerprint);
-      if (d.block) audit.add(AuditKind.deviceBlocked, device: label, detail: r.fingerprint);
+      audit.add(
+          d.accept ? AuditKind.requestAccepted : AuditKind.requestDeclined,
+          device: label,
+          detail:
+              '${r.files.length} file(s), ${formatBytes(r.totalBytes)} from ${r.peerAddress}');
+      if (d.trust)
+        audit.add(AuditKind.deviceTrusted,
+            device: label, detail: r.fingerprint);
+      if (d.block)
+        audit.add(AuditKind.deviceBlocked,
+            device: label, detail: r.fingerprint);
     }));
   }
 
@@ -320,7 +374,7 @@ class AppController extends ChangeNotifier {
       case 'decline':
         request?.respond(false);
       case 'open':
-        setTab(request != null ? 1 : 2);
+        setTab(request != null ? 0 : 2);
     }
   }
 
@@ -346,7 +400,8 @@ class AppController extends ChangeNotifier {
       job.changes.listen((_) {
         if (finished || job.isActive) return;
         finished = true;
-        if (job.direction == TransferDirection.incoming && job.status == TransferStatus.done) {
+        if (job.direction == TransferDirection.incoming &&
+            job.status == TransferStatus.done) {
           _startRinging(job.peerName);
         }
         job.dispose();
@@ -359,11 +414,13 @@ class AppController extends ChangeNotifier {
       job.changes.listen((_) {
         if (finished || job.isActive) return;
         finished = true;
-        if (job.direction == TransferDirection.incoming && job.status == TransferStatus.done) {
+        if (job.direction == TransferDirection.incoming &&
+            job.status == TransferStatus.done) {
           _lastRemoteClip = job.text;
           _lastClip = job.text;
           unawaited(Clipboard.setData(ClipboardData(text: job.text!)));
-          if (foreground) _messages.add(t('clip_received', {'name': job.peerName}));
+          if (foreground)
+            _messages.add(t('clip_received', {'name': job.peerName}));
         }
         job.dispose();
       });
@@ -388,8 +445,10 @@ class AppController extends ChangeNotifier {
     if (job.status == TransferStatus.done) {
       audit.add(AuditKind.transferDone,
           device: who,
-          detail: '${job.direction.name} ${job.files.length} file(s), ${formatBytes(job.totalBytes)}');
-      if (job.direction == TransferDirection.incoming && job.savedPaths.isNotEmpty) unawaited(_afterReceive(job));
+          detail:
+              '${job.direction.name} ${job.files.length} file(s), ${formatBytes(job.totalBytes)}');
+      if (job.direction == TransferDirection.incoming &&
+          job.savedPaths.isNotEmpty) unawaited(_afterReceive(job));
     } else if (job.status == TransferStatus.failed) {
       audit.add(AuditKind.transferFailed, device: who, detail: job.error);
     }
@@ -401,7 +460,8 @@ class AppController extends ChangeNotifier {
       _messages.add(t('copied_auto', {'name': job.peerName}));
     }
     notifyListeners();
-    if (!settings.notifications || job.status == TransferStatus.cancelled) return;
+    if (!settings.notifications || job.status == TransferStatus.cancelled)
+      return;
     if (job.status == TransferStatus.done && !settings.notifyDone) return;
     if (job.status != TransferStatus.done && !settings.notifyFailed) return;
     final incoming = job.direction == TransferDirection.incoming;
@@ -409,16 +469,22 @@ class AppController extends ChangeNotifier {
     switch (job.status) {
       case TransferStatus.done:
         title = incoming
-            ? (job.isText ? t('notif_text_received', {'name': job.peerName}) : t('notif_received', {'n': job.files.length, 'name': job.peerName}))
+            ? (job.isText
+                ? t('notif_text_received', {'name': job.peerName})
+                : t('notif_received',
+                    {'n': job.files.length, 'name': job.peerName}))
             : t('notif_sent', {'name': job.peerName});
       case TransferStatus.declined:
         title = t('notif_declined', {'name': job.peerName});
       default:
         title = t('notif_failed', {'name': job.peerName});
     }
-    final body = job.error ?? (job.isText ? (job.text ?? '') : formatBytes(job.totalBytes));
+    final body = job.error ??
+        (job.isText ? (job.text ?? '') : formatBytes(job.totalBytes));
     if (Platform.isAndroid) {
-      if (!foreground) unawaited(_native.notify(job.id, title, body.length > 200 ? '${body.substring(0, 200)}…' : body));
+      if (!foreground)
+        unawaited(_native.notify(job.id, title,
+            body.length > 200 ? '${body.substring(0, 200)}…' : body));
     } else if (!foreground) {
       unawaited(desktopNotify(title, body));
     }
@@ -429,7 +495,8 @@ class AppController extends ChangeNotifier {
     final receipt = job.receipt;
     if (receipt != null) {
       try {
-        final dir = await Directory(p.join(_support.path, 'receipts')).create(recursive: true);
+        final dir = await Directory(p.join(_support.path, 'receipts'))
+            .create(recursive: true);
         final file = File(p.join(dir.path, '${job.id}.json'));
         await file.writeAsString(receipt.toPrettyJson());
         receiptPath = file.path;
@@ -452,18 +519,21 @@ class AppController extends ChangeNotifier {
       exportBytes(fileName, Uint8List.fromList(utf8.encode(content)));
 
   Future<String?> exportBytes(String fileName, Uint8List bytes) async {
-    final path = await FilePicker.platform.saveFile(fileName: fileName, bytes: bytes);
+    final path =
+        await FilePicker.platform.saveFile(fileName: fileName, bytes: bytes);
     if (path == null) return null;
     if (isDesktop) {
       final f = File(path);
-      if (!await f.exists() || await f.length() == 0) await f.writeAsBytes(bytes);
+      if (!await f.exists() || await f.length() == 0)
+        await f.writeAsBytes(bytes);
     }
     return path;
   }
 
   Future<String?> exportReceipt(DeliveryReceipt receipt) {
     final d = receipt.data;
-    final when = (d['completed'] as String? ?? '').split('.').first.replaceAll(':', '-');
+    final when =
+        (d['completed'] as String? ?? '').split('.').first.replaceAll(':', '-');
     return exportText('sudosend-receipt-$when.json', receipt.toPrettyJson());
   }
 
@@ -501,7 +571,8 @@ class AppController extends ChangeNotifier {
       final done = active.fold<int>(0, (a, j) => a + j.doneBytes);
       final speed = active.fold<double>(0, (a, j) => a + j.speed);
       progress = total == 0 ? -1 : (done * 100 ~/ total);
-      final sending = active.where((j) => j.direction == TransferDirection.outgoing).length;
+      final sending =
+          active.where((j) => j.direction == TransferDirection.outgoing).length;
       final receiving = active.length - sending;
       text = [
         if (sending > 0) t('svc_sending', {'n': sending}),
@@ -519,10 +590,14 @@ class AppController extends ChangeNotifier {
     final key = '$mode|$text|$progress';
     final now = DateTime.now();
     final modeChanged = !_lastService.startsWith('$mode|');
-    if (key == _lastService || (!modeChanged && now.difference(_lastServiceAt) < const Duration(milliseconds: 900))) return;
+    if (key == _lastService ||
+        (!modeChanged &&
+            now.difference(_lastServiceAt) < const Duration(milliseconds: 900)))
+      return;
     _lastService = key;
     _lastServiceAt = now;
-    unawaited(_native.service(mode, title: 'SUDOSEND', text: text, progress: progress));
+    unawaited(_native.service(mode,
+        title: 'SUDOSEND', text: text, progress: progress));
   }
 
   void clearFinished() {
@@ -546,12 +621,14 @@ class AppController extends ChangeNotifier {
   // ─────────────────────────── Selection ───────────────────────────
 
   Future<void> pickFiles() async {
-    final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: false);
+    final result = await FilePicker.platform
+        .pickFiles(allowMultiple: true, withData: false);
     if (result == null) return;
     for (final f in result.files) {
       final path = f.path;
       if (path == null || selected.any((s) => s.path == path)) continue;
-      selected.add(FileEntry(name: f.name, size: await File(path).length(), path: path));
+      selected.add(
+          FileEntry(name: f.name, size: await File(path).length(), path: path));
     }
     selectedText = null;
     notifyListeners();
@@ -576,15 +653,24 @@ class AppController extends ChangeNotifier {
         if (type == FileSystemEntityType.file) {
           final f = File(raw);
           if (selected.any((s) => s.path == f.path)) continue;
-          selected.add(FileEntry(name: p.basename(f.path), size: await f.length(), path: f.path));
+          selected.add(FileEntry(
+              name: p.basename(f.path), size: await f.length(), path: f.path));
           added++;
         } else if (type == FileSystemEntityType.directory) {
           final root = Directory(raw);
           final rootName = p.basename(p.normalize(root.path));
-          await for (final entity in root.list(recursive: true, followLinks: false)) {
-            if (entity is! File || selected.any((s) => s.path == entity.path)) continue;
-            final rel = p.relative(entity.path, from: root.path).split(p.separator).join('/');
-            selected.add(FileEntry(name: '$rootName/$rel', size: await entity.length(), path: entity.path));
+          await for (final entity
+              in root.list(recursive: true, followLinks: false)) {
+            if (entity is! File || selected.any((s) => s.path == entity.path))
+              continue;
+            final rel = p
+                .relative(entity.path, from: root.path)
+                .split(p.separator)
+                .join('/');
+            selected.add(FileEntry(
+                name: '$rootName/$rel',
+                size: await entity.length(),
+                path: entity.path));
             added++;
           }
         }
@@ -606,7 +692,10 @@ class AppController extends ChangeNotifier {
     if (share.files.isNotEmpty) {
       selected
         ..clear()
-        ..addAll([for (final f in share.files) FileEntry(name: f.name, size: f.size, path: f.path)]);
+        ..addAll([
+          for (final f in share.files)
+            FileEntry(name: f.name, size: f.size, path: f.path)
+        ]);
       selectedText = null;
     } else {
       selected.clear();
@@ -647,7 +736,8 @@ class AppController extends ChangeNotifier {
     tab = 2;
     notifyListeners();
     final previews = await _previewsFor(files);
-    await _sendWithRetry(peer, files, text: text, pairToken: pairToken, previews: previews);
+    await _sendWithRetry(peer, files,
+        text: text, pairToken: pairToken, previews: previews);
     notifyListeners();
   }
 
@@ -662,7 +752,10 @@ class AppController extends ChangeNotifier {
     tab = 2;
     notifyListeners();
     final previews = await _previewsFor(files);
-    await Future.wait([for (final peer in peers) _sendWithRetry(peer, files, text: text, previews: previews)]);
+    await Future.wait([
+      for (final peer in peers)
+        _sendWithRetry(peer, files, text: text, previews: previews)
+    ]);
     notifyListeners();
   }
 
@@ -680,9 +773,11 @@ class AppController extends ChangeNotifier {
     if (text.startsWith('sudosend:')) return t('err_bad_link');
     final idx = text.lastIndexOf(':');
     final host = idx > 0 ? text.substring(0, idx) : text;
-    final port = idx > 0 ? int.tryParse(text.substring(idx + 1)) : kTransferPort;
+    final port =
+        idx > 0 ? int.tryParse(text.substring(idx + 1)) : kTransferPort;
     final address = InternetAddress.tryParse(host);
-    if (address == null || address.type != InternetAddressType.IPv4) return t('err_ip');
+    if (address == null || address.type != InternetAddressType.IPv4)
+      return t('err_ip');
     if (port == null || port < 1 || port > 65535) return t('err_port');
     unawaited(sendTo(Peer.manual(address, port)));
     return null;
@@ -691,16 +786,23 @@ class AppController extends ChangeNotifier {
   // ─────────────────────────── Pairing ───────────────────────────
 
   /// QR / link for the Receive tab. Rotates every 10 minutes and after use.
+  @visibleForTesting
+  PairingInfo? demoPairing;
+
   PairingInfo? get pairing {
+    if (demoPeers != null) return demoPairing;
     if (!ready || localAddresses.isEmpty) return null;
     final current = _pairing;
-    if (current == null || DateTime.now().isAfter(_pairingExpires) || !_engineHasToken(current.token)) {
+    if (current == null ||
+        DateTime.now().isAfter(_pairingExpires) ||
+        !_engineHasToken(current.token)) {
       refreshPairing(notify: false);
     }
     return _pairing;
   }
 
-  bool _engineHasToken(String? token) => token != null && _engine.isPairingTokenValid(token);
+  bool _engineHasToken(String? token) =>
+      token != null && _engine.isPairingTokenValid(token);
 
   void refreshPairing({bool notify = true}) {
     final old = _pairing?.token;
@@ -743,9 +845,11 @@ class AppController extends ChangeNotifier {
       tab = 0;
       notifyListeners();
     }
-    final wantSync = settings.folderSync && settings.syncPairs.any((s) => s.enabled);
+    final wantSync =
+        settings.folderSync && settings.syncPairs.any((s) => s.enabled);
     if (wantSync && _syncTimer == null) {
-      _syncTimer = Timer.periodic(const Duration(seconds: 60), (_) => unawaited(syncNow()));
+      _syncTimer = Timer.periodic(
+          const Duration(seconds: 60), (_) => unawaited(syncNow()));
       unawaited(Future<void>.delayed(const Duration(seconds: 5), syncNow));
     } else if (!wantSync && _syncTimer != null) {
       _syncTimer!.cancel();
@@ -755,7 +859,8 @@ class AppController extends ChangeNotifier {
     if (!settings.wifiDirect && p2pScanning) unawaited(stopP2pScan());
     final wantHot = settings.hotFolders && isDesktop;
     if (wantHot && _hotTimer == null) {
-      _hotTimer = Timer.periodic(const Duration(seconds: 4), (_) => unawaited(_scanHotFolders()));
+      _hotTimer = Timer.periodic(
+          const Duration(seconds: 4), (_) => unawaited(_scanHotFolders()));
       unawaited(_scanHotFolders());
     } else if (!wantHot && _hotTimer != null) {
       _hotTimer!.cancel();
@@ -763,15 +868,18 @@ class AppController extends ChangeNotifier {
     }
     final wantPolling = settings.clipboardSync && isDesktop;
     if (wantPolling && _clipTimer == null) {
-      unawaited(Clipboard.getData(Clipboard.kTextPlain).then((d) => _lastClip = d?.text));
-      _clipTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) => unawaited(pollClipboard()));
+      unawaited(Clipboard.getData(Clipboard.kTextPlain)
+          .then((d) => _lastClip = d?.text));
+      _clipTimer = Timer.periodic(const Duration(milliseconds: 1500),
+          (_) => unawaited(pollClipboard()));
     } else if (!wantPolling && _clipTimer != null) {
       _clipTimer!.cancel();
       _clipTimer = null;
     }
   }
 
-  List<Peer> get trustedOnline => peers.where((p) => trust.isTrusted(p.id)).toList();
+  List<Peer> get trustedOnline =>
+      peers.where((p) => trust.isTrusted(p.id)).toList();
 
   /// Pushes the clipboard to trusted devices if it changed. Returns how many
   /// devices it was sent to. [force] sends even if unchanged (manual button).
@@ -783,7 +891,8 @@ class AppController extends ChangeNotifier {
     } catch (_) {
       return 0;
     }
-    if (text == null || text.trim().isEmpty || text.length > kMaxTextLength) return 0;
+    if (text == null || text.trim().isEmpty || text.length > kMaxTextLength)
+      return 0;
     if (!force && (text == _lastClip || text == _lastRemoteClip)) {
       _lastClip = text;
       return 0;
@@ -801,7 +910,8 @@ class AppController extends ChangeNotifier {
   WebShare? webShare;
   final List<WebShareEvent> webEvents = [];
 
-  List<String> get webUrls => webShare == null ? const [] : webShare!.urls(localAddresses);
+  List<String> get webUrls =>
+      webShare == null ? const [] : webShare!.urls(localAddresses);
 
   /// Shares the current selection (if [withSelection]) with browsers, and
   /// optionally lets browsers upload files to this device.
@@ -822,11 +932,14 @@ class AppController extends ChangeNotifier {
       text: text,
       allowUpload: upload,
       deviceName: identity.name,
-      saveDir: () async => !settings.organize && settings.senderFolders ? Directory(p.join(saveDir!.path, 'Browser')) : saveDir!,
+      saveDir: () async => !settings.organize && settings.senderFolders
+          ? Directory(p.join(saveDir!.path, 'Browser'))
+          : saveDir!,
       uploadDirFor: settings.organize
           ? (name) async {
               final parts = _placeFile('Browser', '', [name]);
-              return Directory(p.joinAll([saveDir!.path, ...parts.sublist(0, parts.length - 1)]));
+              return Directory(p.joinAll(
+                  [saveDir!.path, ...parts.sublist(0, parts.length - 1)]));
             }
           : null,
       onEvent: _onWebEvent,
@@ -855,7 +968,8 @@ class AppController extends ChangeNotifier {
   void _onWebEvent(WebShareEvent e) {
     webEvents.insert(0, e);
     if (webEvents.length > 200) webEvents.removeLast();
-    if (e.kind == 'upload' && e.path != null) unawaited(_indexUpload(e.path!, e.name));
+    if (e.kind == 'upload' && e.path != null)
+      unawaited(_indexUpload(e.path!, e.name));
     if (e.kind == 'upload') {
       unawaited(history.add(HistoryEntry(
         id: 'web-${e.at.microsecondsSinceEpoch}',
@@ -871,9 +985,11 @@ class AppController extends ChangeNotifier {
         savedPaths: [if (e.path != null) e.path!],
       )));
       if (settings.notifications && !foreground) {
-        final title = t('notif_received', {'n': 1, 'name': 'Browser ${e.address}'});
+        final title =
+            t('notif_received', {'n': 1, 'name': 'Browser ${e.address}'});
         if (Platform.isAndroid) {
-          unawaited(_native.notify('web-${e.at.microsecondsSinceEpoch}', title, e.name));
+          unawaited(_native.notify(
+              'web-${e.at.microsecondsSinceEpoch}', title, e.name));
         } else {
           unawaited(desktopNotify(title, e.name));
         }
@@ -895,7 +1011,8 @@ class AppController extends ChangeNotifier {
 
   /// Returns an error message, or null when the hotspot is up.
   Future<String?> startHotspot() async {
-    if (!await _native.requestPermission('hotspot')) return t('err_hotspot_permission');
+    if (!await _native.requestPermission('hotspot'))
+      return t('err_hotspot_permission');
     try {
       hotspot = await _native.startHotspot();
     } catch (e) {
@@ -933,12 +1050,13 @@ class AppController extends ChangeNotifier {
       case P2pState(:final enabled):
         p2pEnabled = enabled;
       case P2pPeers(:final peers):
-        p2pPeers = [...peers]
-          ..sort((a, b) {
-            if (a.runsSudosend != b.runsSudosend) return a.runsSudosend ? -1 : 1;
+        p2pPeers = [...peers]..sort((a, b) {
+            if (a.runsSudosend != b.runsSudosend)
+              return a.runsSudosend ? -1 : 1;
             return a.status.compareTo(b.status);
           });
-        final invited = p2pPeers.where((p) => p.address == p2pInviting).firstOrNull;
+        final invited =
+            p2pPeers.where((p) => p.address == p2pInviting).firstOrNull;
         if (invited != null && invited.status == 2) {
           p2pInviting = null;
           p2pError = 'declined';
@@ -956,7 +1074,8 @@ class AppController extends ChangeNotifier {
           _messages.add(t('p2p_connected', {'name': link.peerName ?? '?'}));
           _rescanSoon();
         } else if (link == null && before != null) {
-          _discovery.extraTargets.removeWhere((a) => a.startsWith('192.168.49.'));
+          _discovery.extraTargets
+              .removeWhere((a) => a.startsWith('192.168.49.'));
           _messages.add(t('p2p_disconnected'));
           _rescanSoon();
         }
@@ -981,7 +1100,8 @@ class AppController extends ChangeNotifier {
   /// Starts looking for nearby phones. Returns an error message or null.
   Future<String?> startP2pScan() async {
     if (!wifiDirectAvailable) return t('p2p_unsupported');
-    if (!await _native.requestPermission('wifidirect')) return t('p2p_permission');
+    if (!await _native.requestPermission('wifidirect'))
+      return t('p2p_permission');
     // Advertise now that the permission is there (it may not have been at startup).
     await _native.p2pAttach(identity.name, identity.fingerprint);
     p2pError = null;
@@ -1048,10 +1168,14 @@ class AppController extends ChangeNotifier {
   /// Sends with automatic retries (3 attempts) for dropped connections; each
   /// retry resumes where the last one stopped.
   Future<TransferJob> _sendWithRetry(Peer peer, List<FileEntry> input,
-      {String? text, String? pairToken, Map<int, Uint8List>? previews, bool scrub = true}) async {
+      {String? text,
+      String? pairToken,
+      Map<int, Uint8List>? previews,
+      bool scrub = true}) async {
     var target = peer;
     final files = scrub ? await _scrubFor(peer, input) : input;
-    var job = await _engine.send(target, files, text: text, pairToken: pairToken, previews: previews);
+    var job = await _engine.send(target, files,
+        text: text, pairToken: pairToken, previews: previews);
     for (final wait in const [Duration(seconds: 3), Duration(seconds: 10)]) {
       if (!_retryable(job)) break;
       await Future<void>.delayed(wait);
@@ -1059,7 +1183,8 @@ class AppController extends ChangeNotifier {
         // The device may have changed address (e.g. Wi-Fi reconnect).
         target = peers.firstWhere((p) => p.id == peer.id, orElse: () => target);
       }
-      job = await _engine.send(target, files, text: text, pairToken: pairToken, previews: previews);
+      job = await _engine.send(target, files,
+          text: text, pairToken: pairToken, previews: previews);
     }
     return job;
   }
@@ -1072,7 +1197,10 @@ class AppController extends ChangeNotifier {
     final online = {for (final p in peers) p.id};
     final fresh = online.difference(_seenPeers);
     _seenPeers = online;
-    if (fresh.isNotEmpty && settings.folderSync && settings.syncPairs.any((s) => s.enabled && fresh.contains(s.fingerprint))) {
+    if (fresh.isNotEmpty &&
+        settings.folderSync &&
+        settings.syncPairs
+            .any((s) => s.enabled && fresh.contains(s.fingerprint))) {
       unawaited(syncNow());
     }
   }
@@ -1118,7 +1246,9 @@ class AppController extends ChangeNotifier {
         pingDevice(item.fingerprint);
         continue;
       }
-      final files = item.files.where((f) => f.path != null && File(f.path!).existsSync()).toList();
+      final files = item.files
+          .where((f) => f.path != null && File(f.path!).existsSync())
+          .toList();
       if (files.isEmpty && item.text == null) {
         await outbox.remove(item.id);
         continue;
@@ -1158,7 +1288,8 @@ class AppController extends ChangeNotifier {
       await root.create(recursive: true);
       final readme = File(p.join(root.path, 'README.txt'));
       if (!await readme.exists()) {
-        await readme.writeAsString("Drop files or folders into a device's folder here and SUDOSEND sends them "
+        await readme.writeAsString(
+            "Drop files or folders into a device's folder here and SUDOSEND sends them "
             'automatically when that device is online. Delivered items move to its "Sent" folder.\n');
       }
       for (final device in trust.all) {
@@ -1166,19 +1297,29 @@ class AppController extends ChangeNotifier {
         await dir.create(recursive: true);
         await for (final entity in dir.list(followLinks: false)) {
           final name = p.basename(entity.path);
-          if (name == 'Sent' || name.startsWith('.') || _hotQueued.contains(entity.path)) continue;
-          final size = entity is File ? await entity.length() : await _dirSize(entity as Directory);
+          if (name == 'Sent' ||
+              name.startsWith('.') ||
+              _hotQueued.contains(entity.path)) continue;
+          final size = entity is File
+              ? await entity.length()
+              : await _dirSize(entity as Directory);
           final prev = _hotSizes[entity.path];
           _hotSizes[entity.path] = size;
-          if (prev == null || prev != size) continue; // wait until it stops changing
+          if (prev == null || prev != size)
+            continue; // wait until it stops changing
           final files = <FileEntry>[];
           if (entity is File) {
             files.add(FileEntry(name: name, size: size, path: entity.path));
           } else {
-            await for (final f in (entity as Directory).list(recursive: true, followLinks: false)) {
+            await for (final f in (entity as Directory)
+                .list(recursive: true, followLinks: false)) {
               if (f is! File) continue;
-              final rel = p.relative(f.path, from: entity.path).split(p.separator).join('/');
-              files.add(FileEntry(name: '$name/$rel', size: await f.length(), path: f.path));
+              final rel = p
+                  .relative(f.path, from: entity.path)
+                  .split(p.separator)
+                  .join('/');
+              files.add(FileEntry(
+                  name: '$name/$rel', size: await f.length(), path: f.path));
             }
           }
           if (files.isEmpty) continue;
@@ -1214,11 +1355,15 @@ class AppController extends ChangeNotifier {
         await sent.create(recursive: true);
         var dest = p.join(sent.path, p.basename(path));
         var i = 1;
-        while (FileSystemEntity.typeSync(dest) != FileSystemEntityType.notFound) {
-          dest = p.join(sent.path, '${p.basenameWithoutExtension(path)} ($i)${p.extension(path)}');
+        while (
+            FileSystemEntity.typeSync(dest) != FileSystemEntityType.notFound) {
+          dest = p.join(sent.path,
+              '${p.basenameWithoutExtension(path)} ($i)${p.extension(path)}');
           i++;
         }
-        await (FileSystemEntity.isDirectorySync(path) ? Directory(path).rename(dest) : File(path).rename(dest));
+        await (FileSystemEntity.isDirectorySync(path)
+            ? Directory(path).rename(dest)
+            : File(path).rename(dest));
       } catch (_) {}
       _hotQueued.remove(path);
     }
@@ -1231,10 +1376,16 @@ class AppController extends ChangeNotifier {
 
   /// The name to show for a device: its nickname here, else its own name.
   String displayName(String fingerprint, String fallback) =>
-      (fingerprint.isEmpty ? null : settings.devicePrefs[fingerprint]?.nickname) ?? fallback;
+      (fingerprint.isEmpty
+          ? null
+          : settings.devicePrefs[fingerprint]?.nickname) ??
+      fallback;
 
-  String _nameOf(String fp) =>
-      displayName(fp, devices[fp]?.name ?? trust.all.where((d) => d.fingerprint == fp).firstOrNull?.name ?? fp.substring(0, 8));
+  String _nameOf(String fp) => displayName(
+      fp,
+      devices[fp]?.name ??
+          trust.all.where((d) => d.fingerprint == fp).firstOrNull?.name ??
+          fp.substring(0, 8));
 
   bool isOnline(String fp) => peers.any((p) => p.id == fp);
 
@@ -1246,13 +1397,17 @@ class AppController extends ChangeNotifier {
     if (!ready || job.status != TransferStatus.done) return;
     final fp = job.peerFingerprint;
     final addr = job.peerAddress;
-    if (fp == null || addr == null || !_fpRe.hasMatch(fp) || trust.isBlocked(fp)) return;
+    if (fp == null ||
+        addr == null ||
+        !_fpRe.hasMatch(fp) ||
+        trust.isBlocked(fp)) return;
     final outgoing = job.direction == TransferDirection.outgoing;
     devices.seen(fp,
         name: job.peerName,
         platform: job.peerPlatform,
         address: addr,
-        port: outgoing ? job.peerPort : (devices[fp]?.lastPort ?? kTransferPort));
+        port:
+            outgoing ? job.peerPort : (devices[fp]?.lastPort ?? kTransferPort));
     _lastContact[fp] = DateTime.now();
     unawaited(devices.save());
     _rememberTrustedAddresses();
@@ -1287,7 +1442,7 @@ class AppController extends ChangeNotifier {
   DateTime? lastSeenOf(String fp) {
     DateTime? best;
     for (final t in [
-      if (ready) _discovery.lastHeard(fp),
+      if (ready && demoPeers == null) _discovery.lastHeard(fp),
       _lastContact[fp],
       devices[fp]?.lastSeen,
     ]) {
@@ -1299,12 +1454,13 @@ class AppController extends ChangeNotifier {
   /// Reachable without a live beacon: heard from in the last few minutes.
   bool isRecent(String fp) {
     final t = lastSeenOf(fp);
-    return t != null && DateTime.now().difference(t) < const Duration(minutes: 5);
+    return t != null &&
+        DateTime.now().difference(t) < const Duration(minutes: 5);
   }
 
   /// Knock on a device's last address (unicast) — it answers if it is alive.
   void pingDevice(String fp) {
-    if (!ready) return;
+    if (!ready || demoPeers != null) return;
     final addr = devices[fp]?.lastAddress;
     if (addr != null) _discovery.probe(addr);
   }
@@ -1316,7 +1472,11 @@ class AppController extends ChangeNotifier {
     var fresh = false;
     for (final p in peers) {
       if (p.manual) continue;
-      fresh |= devices.seen(p.id, name: p.name, platform: p.platform, address: p.address.address, port: p.port);
+      fresh |= devices.seen(p.id,
+          name: p.name,
+          platform: p.platform,
+          address: p.address.address,
+          port: p.port);
     }
     final now = DateTime.now();
     if (fresh || now.difference(_lastDeviceSave) > const Duration(minutes: 1)) {
@@ -1343,18 +1503,24 @@ class AppController extends ChangeNotifier {
     final now = DateTime.now();
     final pending = [
       for (final m in thread.messages)
-        if (m.outgoing && m.state == ChatState.failed && m.retryable && now.difference(m.at) < const Duration(hours: 24)) m,
+        if (m.outgoing &&
+            m.state == ChatState.failed &&
+            m.retryable &&
+            now.difference(m.at) < const Duration(hours: 24))
+          m,
     ];
     if (pending.isEmpty) return;
     final last = _chatRetryAt[fp];
-    if (last != null && now.difference(last) < const Duration(minutes: 1)) return;
+    if (last != null && now.difference(last) < const Duration(minutes: 1))
+      return;
     _chatRetryAt[fp] = now;
     _chatRetrying.add(fp);
     unawaited(() async {
       try {
         for (final m in pending) {
           await sendChat(fp, thread.peerName, m.text, retry: m);
-          if (m.state == ChatState.failed) break; // still unreachable: stop, try later
+          if (m.state == ChatState.failed)
+            break; // still unreachable: stop, try later
         }
       } finally {
         _chatRetrying.remove(fp);
@@ -1368,7 +1534,9 @@ class AppController extends ChangeNotifier {
     if (!ready) return;
     final known = <String>{
       for (final d in trust.all)
-        if (devices[d.fingerprint]?.lastAddress case final a? when !a.startsWith('192.168.49.')) a,
+        if (devices[d.fingerprint]?.lastAddress case final a?
+            when !a.startsWith('192.168.49.'))
+          a,
     };
     _discovery.extraTargets
       ..removeWhere((a) => !a.startsWith('192.168.49.') && !known.contains(a))
@@ -1404,25 +1572,33 @@ class AppController extends ChangeNotifier {
 
   /// Trust a device until [until] (null = no expiry).
   Future<void> setTrustExpiry(String fingerprint, Duration? length) =>
-      updateDevicePrefs(fingerprint, (d) => d.trustExpires = length == null ? null : DateTime.now().add(length));
+      updateDevicePrefs(
+          fingerprint,
+          (d) => d.trustExpires =
+              length == null ? null : DateTime.now().add(length));
 
   Future<void> block(String fingerprint, String name) async {
     await trust.block(fingerprint, name);
-    audit.add(AuditKind.deviceBlocked, device: _nameOf(fingerprint), detail: fingerprint);
+    audit.add(AuditKind.deviceBlocked,
+        device: _nameOf(fingerprint), detail: fingerprint);
     notifyListeners();
   }
 
   Future<void> trustDevice(String fingerprint, String name) async {
     await trust.add(fingerprint, name);
-    audit.add(AuditKind.deviceTrusted, device: _nameOf(fingerprint), detail: fingerprint);
+    audit.add(AuditKind.deviceTrusted,
+        device: _nameOf(fingerprint), detail: fingerprint);
     _rememberTrustedAddresses();
     notifyListeners();
   }
 
   bool _maySendTo(Peer peer) {
-    if (!trust.isTrusted(peer.id) || settings.prefsFor(peer.id).maySendTo) return true;
+    if (!trust.isTrusted(peer.id) || settings.prefsFor(peer.id).maySendTo)
+      return true;
     _messages.add(t('dir_no_send', {'name': displayName(peer.id, peer.name)}));
-    audit.add(AuditKind.permissionDenied, device: displayName(peer.id, peer.name), detail: 'receive-only device: send blocked');
+    audit.add(AuditKind.permissionDenied,
+        device: displayName(peer.id, peer.name),
+        detail: 'receive-only device: send blocked');
     return false;
   }
 
@@ -1438,7 +1614,8 @@ class AppController extends ChangeNotifier {
     pingDevice(fp);
     final peer = resolvePeer(fp);
     if (peer == null) return t('chat_no_address');
-    final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: false);
+    final result = await FilePicker.platform
+        .pickFiles(allowMultiple: true, withData: false);
     final paths = [
       for (final f in result?.files ?? const <PlatformFile>[])
         if (f.path != null) f.path!,
@@ -1477,7 +1654,8 @@ class AppController extends ChangeNotifier {
       await _markFromNetwork(path);
       final risk = await _riskOf(path);
       if (risk.level != RiskLevel.none) {
-        audit.add(AuditKind.riskyFile, device: who, detail: '${p.basename(path)} · ${risk.reason}');
+        audit.add(AuditKind.riskyFile,
+            device: who, detail: '${p.basename(path)} · ${risk.reason}');
       }
       int size;
       try {
@@ -1497,7 +1675,8 @@ class AppController extends ChangeNotifier {
       final twin = library.add(item);
       if (twin != null) {
         duplicatesFound++;
-        audit.add(AuditKind.duplicateFound, device: who, detail: '${item.name} = ${twin.path}');
+        audit.add(AuditKind.duplicateFound,
+            device: who, detail: '${item.name} = ${twin.path}');
         if (settings.duplicates == 'remove') {
           try {
             await _discard(path);
@@ -1507,12 +1686,15 @@ class AppController extends ChangeNotifier {
         }
         if (settings.notifyDuplicates && settings.notifications) {
           final msg = settings.duplicates == 'remove'
-              ? t('dup_removed', {'name': item.name, 'other': p.basename(twin.path)})
-              : t('dup_found', {'name': item.name, 'other': p.basename(twin.path)});
+              ? t('dup_removed',
+                  {'name': item.name, 'other': p.basename(twin.path)})
+              : t('dup_found',
+                  {'name': item.name, 'other': p.basename(twin.path)});
           if (foreground) {
             _messages.add(msg);
           } else if (Platform.isAndroid) {
-            unawaited(_native.notify('dup-${item.sha256.substring(0, 8)}', t('dup_title'), msg));
+            unawaited(_native.notify(
+                'dup-${item.sha256.substring(0, 8)}', t('dup_title'), msg));
           } else {
             unawaited(desktopNotify(t('dup_title'), msg));
           }
@@ -1539,7 +1721,8 @@ class AppController extends ChangeNotifier {
       ));
       if (twin != null) {
         duplicatesFound++;
-        audit.add(AuditKind.duplicateFound, device: 'Browser', detail: '$name = ${twin.path}');
+        audit.add(AuditKind.duplicateFound,
+            device: 'Browser', detail: '$name = ${twin.path}');
       }
       await library.save();
       notifyListeners();
@@ -1552,10 +1735,13 @@ class AppController extends ChangeNotifier {
   Future<void> _markFromNetwork(String path) async {
     try {
       if (Platform.isWindows) {
-        await File('$path:Zone.Identifier').writeAsString('[ZoneTransfer]\r\nZoneId=3\r\n');
+        await File('$path:Zone.Identifier')
+            .writeAsString('[ZoneTransfer]\r\nZoneId=3\r\n');
       } else if (Platform.isMacOS) {
-        final stamp = (DateTime.now().millisecondsSinceEpoch ~/ 1000).toRadixString(16);
-        await Process.run('xattr', ['-w', 'com.apple.quarantine', '0081;$stamp;SUDOSEND;', path]);
+        final stamp =
+            (DateTime.now().millisecondsSinceEpoch ~/ 1000).toRadixString(16);
+        await Process.run('xattr',
+            ['-w', 'com.apple.quarantine', '0081;$stamp;SUDOSEND;', path]);
       }
     } catch (_) {}
   }
@@ -1598,7 +1784,8 @@ class AppController extends ChangeNotifier {
   }
 
   /// Indexes files already in the inbox (for duplicate checks on old files).
-  Future<int> scanLibrary({void Function(int done, int total)? onProgress}) async {
+  Future<int> scanLibrary(
+      {void Function(int done, int total)? onProgress}) async {
     final dir = saveDir;
     if (dir == null) return 0;
     library.prune();
@@ -1622,12 +1809,14 @@ class AppController extends ChangeNotifier {
       if (!a.isSplit) {
         final path = a.paths.first;
         if (selected.any((s) => s.path == path)) continue;
-        selected.add(FileEntry(name: '$title.apk', size: File(path).lengthSync(), path: path));
+        selected.add(FileEntry(
+            name: '$title.apk', size: File(path).lengthSync(), path: path));
       } else {
         for (final path in a.paths) {
           if (selected.any((s) => s.path == path)) continue;
           final base = p.basename(path);
-          selected.add(FileEntry(name: '$title/$base', size: File(path).lengthSync(), path: path));
+          selected.add(FileEntry(
+              name: '$title/$base', size: File(path).lengthSync(), path: path));
         }
       }
     }
@@ -1645,11 +1834,16 @@ class AppController extends ChangeNotifier {
           .listSync()
           .whereType<File>()
           .map((f) => f.path)
-          .where((x) => p.basename(x) == 'base.apk' || RegExp(r'^split_.*\.apk$').hasMatch(p.basename(x)))
+          .where((x) =>
+              p.basename(x) == 'base.apk' ||
+              RegExp(r'^split_.*\.apk$').hasMatch(p.basename(x)))
           .toList();
       final name = p.basename(path);
-      if (siblings.length > 1 && (name == 'base.apk' || name.startsWith('split_'))) {
-        siblings.sort((a, b) => p.basename(a) == 'base.apk' ? -1 : (p.basename(b) == 'base.apk' ? 1 : a.compareTo(b)));
+      if (siblings.length > 1 &&
+          (name == 'base.apk' || name.startsWith('split_'))) {
+        siblings.sort((a, b) => p.basename(a) == 'base.apk'
+            ? -1
+            : (p.basename(b) == 'base.apk' ? 1 : a.compareTo(b)));
         return siblings;
       }
     } catch (_) {}
@@ -1711,12 +1905,18 @@ class AppController extends ChangeNotifier {
   /// Leftovers of interrupted transfers (they resume automatically when the
   /// same device sends the same file again).
   Future<List<File>> findPartials() async {
-    final roots = <String>{if (saveDir != null) saveDir!.path, for (final s in settings.syncPairs) s.path};
+    final roots = <String>{
+      if (saveDir != null) saveDir!.path,
+      for (final s in settings.syncPairs) s.path
+    };
     final out = <File>[];
     for (final r in roots) {
       try {
-        await for (final e in Directory(r).list(recursive: true, followLinks: false)) {
-          if (e is File && (e.path.endsWith('.sudosend-part') || e.path.endsWith('.web-part'))) out.add(e);
+        await for (final e
+            in Directory(r).list(recursive: true, followLinks: false)) {
+          if (e is File &&
+              (e.path.endsWith('.sudosend-part') ||
+                  e.path.endsWith('.web-part'))) out.add(e);
           if (out.length > 5000) break;
         }
       } catch (_) {}
@@ -1732,35 +1932,53 @@ class AppController extends ChangeNotifier {
         n++;
       } catch (_) {}
     }
-    if (n > 0) audit.add(AuditKind.fileDeleted, detail: '$n partial file(s) from interrupted transfers');
+    if (n > 0)
+      audit.add(AuditKind.fileDeleted,
+          detail: '$n partial file(s) from interrupted transfers');
     await refreshStorage();
     return n;
   }
 
   // ─────────────────────────── Search across devices ───────────────────────────
 
-  List<Map<String, Object?>>? _onRemoteSearch(String fp, Map<String, dynamic> q) {
+  List<Map<String, Object?>>? _onRemoteSearch(
+      String fp, Map<String, dynamic> q) {
     if (!settings.remoteSearch || !settings.prefsFor(fp).search) return null;
     final text = q['q'] is String ? (q['q'] as String) : '';
     final cat = FileCategory.values.where((c) => c.name == q['c']).firstOrNull;
-    final limit = math.min(settings.remoteSearchLimit, q['limit'] is int ? q['limit'] as int : 200);
-    final hits = library.search(LibraryQuery(text: text, category: cat)).where((i) => File(i.path).existsSync()).take(limit);
+    final limit = math.min(settings.remoteSearchLimit,
+        q['limit'] is int ? q['limit'] as int : 200);
+    final hits = library
+        .search(LibraryQuery(text: text, category: cat))
+        .where((i) => File(i.path).existsSync())
+        .take(limit);
     audit.add(AuditKind.remoteSearch, device: _nameOf(fp), detail: '"$text"');
     return [
       for (final i in hits)
-        {'n': i.name, 's': i.size, 'h': i.sha256, 'c': i.category.name, 'at': i.receivedAt.millisecondsSinceEpoch, 'from': i.device},
+        {
+          'n': i.name,
+          's': i.size,
+          'h': i.sha256,
+          'c': i.category.name,
+          'at': i.receivedAt.millisecondsSinceEpoch,
+          'from': i.device
+        },
     ];
   }
 
   bool _onRemoteFetch(String fp, String sha) {
     final d = settings.prefsFor(fp);
     if (!settings.remoteSearch || !d.search || !d.maySendTo) return false;
-    final item = library.items.where((i) => i.sha256 == sha && File(i.path).existsSync()).firstOrNull;
+    final item = library.items
+        .where((i) => i.sha256 == sha && File(i.path).existsSync())
+        .firstOrNull;
     final peer = resolvePeer(fp);
     if (item == null || peer == null) return false;
     audit.add(AuditKind.remoteFetch, device: _nameOf(fp), detail: item.name);
     // The exact original (no metadata scrubbing): it was asked for by hash.
-    unawaited(_sendWithRetry(peer, [FileEntry(name: item.name, size: item.size, path: item.path)], scrub: false));
+    unawaited(_sendWithRetry(
+        peer, [FileEntry(name: item.name, size: item.size, path: item.path)],
+        scrub: false));
     return true;
   }
 
@@ -1770,16 +1988,20 @@ class AppController extends ChangeNotifier {
   bool _isExpectedFetch(IncomingRequest r) {
     _expectedFetches.removeWhere((e) => DateTime.now().isAfter(e.$3));
     if (r.files.length != 1) return false;
-    final i = _expectedFetches.indexWhere((e) => e.$1 == r.fingerprint && e.$2 == r.files.single.name);
+    final i = _expectedFetches.indexWhere(
+        (e) => e.$1 == r.fingerprint && e.$2 == r.files.single.name);
     if (i < 0) return false;
     _expectedFetches.removeAt(i);
     return true;
   }
 
   /// Searches this device and every trusted online device that allows it.
-  Future<List<RemoteHit>> searchEverywhere(String text, {FileCategory? category}) async {
+  Future<List<RemoteHit>> searchEverywhere(String text,
+      {FileCategory? category}) async {
     final out = <RemoteHit>[
-      for (final i in library.search(LibraryQuery(text: text, category: category)).take(200))
+      for (final i in library
+          .search(LibraryQuery(text: text, category: category))
+          .take(200))
         if (File(i.path).existsSync())
           RemoteHit(
             holder: null,
@@ -1793,11 +2015,16 @@ class AppController extends ChangeNotifier {
             localPath: i.path,
           ),
     ];
-    final targets = trustedOnline.where((p) => settings.prefsFor(p.id).search).toList();
+    final targets =
+        trustedOnline.where((p) => settings.prefsFor(p.id).search).toList();
     final answers = await Future.wait([
       for (final peer in targets)
         _engine
-            .searchRemote(peer, {'q': text, if (category != null) 'c': category.name, 'limit': 200})
+            .searchRemote(peer, {
+              'q': text,
+              if (category != null) 'c': category.name,
+              'limit': 200
+            })
             .timeout(const Duration(seconds: 10))
             .then((r) => (peer, r), onError: (Object _) => (peer, null)),
     ]);
@@ -1811,8 +2038,11 @@ class AppController extends ChangeNotifier {
           name: r['n'] as String,
           size: (r['s'] as num?)?.toInt() ?? 0,
           sha256: hash,
-          category: FileCategory.values.where((c) => c.name == r['c']).firstOrNull ?? categorize(r['n'] as String),
-          receivedAt: DateTime.fromMillisecondsSinceEpoch((r['at'] as num?)?.toInt() ?? 0),
+          category:
+              FileCategory.values.where((c) => c.name == r['c']).firstOrNull ??
+                  categorize(r['n'] as String),
+          receivedAt: DateTime.fromMillisecondsSinceEpoch(
+              (r['at'] as num?)?.toInt() ?? 0),
           from: r['from'] as String? ?? '?',
         ));
       }
@@ -1824,10 +2054,12 @@ class AppController extends ChangeNotifier {
   Future<String?> fetchHit(RemoteHit hit) async {
     final peer = hit.holder;
     if (peer == null) return null;
-    _expectedFetches.add((peer.id, hit.name, DateTime.now().add(const Duration(minutes: 3))));
+    _expectedFetches.add(
+        (peer.id, hit.name, DateTime.now().add(const Duration(minutes: 3))));
     try {
       final ok = await _engine.requestFetch(peer, hit.sha256);
-      if (!ok) return t('rs_refused', {'name': displayName(peer.id, peer.name)});
+      if (!ok)
+        return t('rs_refused', {'name': displayName(peer.id, peer.name)});
       tab = 2;
       notifyListeners();
       return null;
@@ -1873,7 +2105,8 @@ class AppController extends ChangeNotifier {
   void _notifyStorage({bool force = false}) {
     if (!settings.notifyStorage || !settings.notifications) return;
     final now = DateTime.now();
-    if (!force && now.difference(_lastStorageNotice) < const Duration(hours: 6)) return;
+    if (!force && now.difference(_lastStorageNotice) < const Duration(hours: 6))
+      return;
     _lastStorageNotice = now;
     final free = disk == null ? '?' : formatBytes(disk!.$1);
     final title = t('storage_low_title');
@@ -1908,7 +2141,8 @@ class AppController extends ChangeNotifier {
   // ─────────────────────────── Smart organization ───────────────────────────
 
   /// Where a received file goes, relative to the inbox.
-  List<String> _placeFile(String peerName, String fingerprint, List<String> segments) {
+  List<String> _placeFile(
+      String peerName, String fingerprint, List<String> segments) {
     if (!settings.organize) return segments;
     final d = fingerprint.isEmpty ? null : settings.devicePrefs[fingerprint];
     final rules = OrganizeRules(
@@ -1916,12 +2150,15 @@ class AppController extends ChangeNotifier {
       byType: d?.byType ?? settings.organizeByType,
       byDate: d?.byDate ?? settings.organizeByDate,
     );
-    return rules.place(d?.folder ?? d?.nickname ?? peerName, segments, DateTime.now());
+    return rules.place(
+        d?.folder ?? d?.nickname ?? peerName, segments, DateTime.now());
   }
 
   /// Example path for the settings screen.
-  String organizeExample() =>
-      p.joinAll(['SUDOSEND', ..._placeFile('Galaxy A52', '', ['photo.jpg'])]);
+  String organizeExample() => p.joinAll([
+        'SUDOSEND',
+        ..._placeFile('Galaxy A52', '', ['photo.jpg'])
+      ]);
 
   // ─────────────────────────── Photo metadata ───────────────────────────
 
@@ -1932,10 +2169,14 @@ class AppController extends ChangeNotifier {
   Future<List<FileEntry>> _scrubFor(Peer peer, List<FileEntry> files) async {
     final mode = metadataModeFrom(settings.metadata);
     if (mode == MetadataMode.off || files.isEmpty) return files;
-    if (trust.isTrusted(peer.id) && settings.prefsFor(peer.id).keepMetadata) return files;
+    if (trust.isTrusted(peer.id) && settings.prefsFor(peer.id).keepMetadata)
+      return files;
     if (!files.any((f) => canScrub(f.name))) return files;
-    final dir = _scrubDir ??= Directory(p.join((await getTemporaryDirectory()).path, 'sudosend-clean'));
-    final batch = await Directory(p.join(dir.path, '${DateTime.now().microsecondsSinceEpoch}')).create(recursive: true);
+    final dir = _scrubDir ??= Directory(
+        p.join((await getTemporaryDirectory()).path, 'sudosend-clean'));
+    final batch = await Directory(
+            p.join(dir.path, '${DateTime.now().microsecondsSinceEpoch}'))
+        .create(recursive: true);
     final out = <FileEntry>[];
     var i = 0;
     for (final f in files) {
@@ -1952,7 +2193,11 @@ class AppController extends ChangeNotifier {
         }
         final copy = File(p.join(batch.path, '${i++}_${p.basename(path)}'));
         await copy.writeAsBytes(cleaned, flush: true);
-        out.add(FileEntry(name: f.name, size: cleaned.length, path: copy.path, mtime: f.mtime));
+        out.add(FileEntry(
+            name: f.name,
+            size: cleaned.length,
+            path: copy.path,
+            mtime: f.mtime));
       } catch (_) {
         out.add(f); // never block a transfer because of metadata
       }
@@ -1963,14 +2208,16 @@ class AppController extends ChangeNotifier {
   /// Removes scrubbed copies from earlier sessions.
   Future<void> _cleanScrubDir() async {
     try {
-      final dir = Directory(p.join((await getTemporaryDirectory()).path, 'sudosend-clean'));
+      final dir = Directory(
+          p.join((await getTemporaryDirectory()).path, 'sudosend-clean'));
       if (await dir.exists()) await dir.delete(recursive: true);
     } catch (_) {}
   }
 
   // ─────────────────────────── Per-device permissions ───────────────────────────
 
-  Future<void> updateDevicePrefs(String fingerprint, void Function(DevicePrefs d) change) async {
+  Future<void> updateDevicePrefs(
+      String fingerprint, void Function(DevicePrefs d) change) async {
     await settings.update((s) {
       final d = s.devicePrefs[fingerprint] ?? DevicePrefs();
       change(d);
@@ -1982,7 +2229,8 @@ class AppController extends ChangeNotifier {
   // ─────────────────────────── Previews ───────────────────────────
 
   Future<Map<int, Uint8List>?> _previewsFor(List<FileEntry> files) async {
-    if (!settings.previewsSend || !files.any((f) => isPreviewable(f.name))) return null;
+    if (!settings.previewsSend || !files.any((f) => isPreviewable(f.name)))
+      return null;
     try {
       return await buildPreviews(files).timeout(const Duration(seconds: 4));
     } catch (_) {
@@ -2000,13 +2248,17 @@ class AppController extends ChangeNotifier {
     job.changes.listen((_) {
       if (finished || job.isActive) return;
       finished = true;
-      if (job.direction == TransferDirection.incoming && job.status == TransferStatus.done) {
+      if (job.direction == TransferDirection.incoming &&
+          job.status == TransferStatus.done) {
         final fp = job.peerFingerprint ?? '';
         final visible = foreground && tab == 3 && openThread == fp;
-        chat.add(fp, job.peerName, job.text ?? '', outgoing: false, unread: !visible);
+        chat.add(fp, job.peerName, job.text ?? '',
+            outgoing: false, unread: !visible);
         if (!visible && settings.notifications) {
           final title = t('chat_from', {'name': job.peerName});
-          final body = (job.text ?? '').length > 160 ? '${job.text!.substring(0, 160)}…' : (job.text ?? '');
+          final body = (job.text ?? '').length > 160
+              ? '${job.text!.substring(0, 160)}…'
+              : (job.text ?? '');
           if (Platform.isAndroid) {
             unawaited(_native.notify(job.id, title, body));
           } else if (!foreground) {
@@ -2022,7 +2274,8 @@ class AppController extends ChangeNotifier {
   }
 
   /// Sends a chat message to a trusted device. Failures are kept and can be retried.
-  Future<void> sendChat(String fingerprint, String name, String text, {ChatMessage? retry}) async {
+  Future<void> sendChat(String fingerprint, String name, String text,
+      {ChatMessage? retry}) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || trimmed.length > kMaxTextLength) return;
     final msg = retry ?? chat.add(fingerprint, name, trimmed, outgoing: true);
@@ -2042,9 +2295,11 @@ class AppController extends ChangeNotifier {
         await rescan();
         await Future<void>.delayed(const Duration(milliseconds: 1500));
         final again = peers.where((p) => p.id == fingerprint).firstOrNull;
-        if (again != null) job = await _engine.send(again, const [], text: msg.text, chat: true);
+        if (again != null)
+          job = await _engine.send(again, const [], text: msg.text, chat: true);
       }
-      msg.state = job.status == TransferStatus.done ? ChatState.sent : ChatState.failed;
+      msg.state =
+          job.status == TransferStatus.done ? ChatState.sent : ChatState.failed;
       msg.retryable = job.status != TransferStatus.declined;
       msg.error = switch (job.status) {
         TransferStatus.done => null,
@@ -2073,7 +2328,10 @@ class AppController extends ChangeNotifier {
     try {
       return (await _engine.speedTest(peer), null);
     } on WraithException catch (e) {
-      return (null, e.message.contains('declined') ? t('speed_declined') : e.message);
+      return (
+        null,
+        e.message.contains('declined') ? t('speed_declined') : e.message
+      );
     } catch (e) {
       return (null, describeError(e));
     }
@@ -2089,14 +2347,17 @@ class AppController extends ChangeNotifier {
   bool get syncSupported => !Platform.isIOS && settings.folderSync;
 
   Directory? _syncFolderFor(String id, String fingerprint) {
-    if (!settings.folderSync || !settings.prefsFor(fingerprint).sync) return null;
+    if (!settings.folderSync || !settings.prefsFor(fingerprint).sync)
+      return null;
     for (final s in settings.syncPairs) {
-      if (s.id == id && s.fingerprint == fingerprint && s.enabled) return Directory(s.path);
+      if (s.id == id && s.fingerprint == fingerprint && s.enabled)
+        return Directory(s.path);
     }
     return null;
   }
 
-  SyncPair? _pairById(String id) => settings.syncPairs.where((s) => s.id == id).firstOrNull;
+  SyncPair? _pairById(String id) =>
+      settings.syncPairs.where((s) => s.id == id).firstOrNull;
 
   void _watchSyncJob(TransferJob job) {
     var finished = false;
@@ -2108,7 +2369,8 @@ class AppController extends ChangeNotifier {
         if (job.status == TransferStatus.done) {
           pair.lastSync = DateTime.now();
           pair.lastError = null;
-          if (job.direction == TransferDirection.outgoing) pair.pushed += job.files.length;
+          if (job.direction == TransferDirection.outgoing)
+            pair.pushed += job.files.length;
         } else {
           pair.lastError = job.error ?? job.status.name;
         }
@@ -2128,7 +2390,12 @@ class AppController extends ChangeNotifier {
     final id = newPairingToken().substring(0, 16);
     final name = p.basename(p.normalize(path));
     // Save first so the partner's first manifest request already finds it.
-    final pair = SyncPair(id: id, name: name, path: dir.path, fingerprint: peer.id, peerName: peer.name);
+    final pair = SyncPair(
+        id: id,
+        name: name,
+        path: dir.path,
+        fingerprint: peer.id,
+        peerName: peer.name);
     await settings.update((s) => s.syncPairs = [...s.syncPairs, pair]);
     try {
       final ok = await _engine.sendSyncInvite(peer, id, name);
@@ -2155,15 +2422,22 @@ class AppController extends ChangeNotifier {
       _messages.add(t('err_not_writable'));
       return false;
     }
-    final pair = SyncPair(id: invite.id, name: invite.name, path: dir.path, fingerprint: r.fingerprint, peerName: r.peerName);
-    await settings.update((s) => s.syncPairs = [...s.syncPairs.where((x) => x.id != invite.id), pair]);
+    final pair = SyncPair(
+        id: invite.id,
+        name: invite.name,
+        path: dir.path,
+        fingerprint: r.fingerprint,
+        peerName: r.peerName);
+    await settings.update((s) =>
+        s.syncPairs = [...s.syncPairs.where((x) => x.id != invite.id), pair]);
     r.respond(true, trust: true); // syncing implies trusting this device
     _applySettings();
     return true;
   }
 
   Future<void> removeSync(String id) async {
-    await settings.update((s) => s.syncPairs = s.syncPairs.where((x) => x.id != id).toList());
+    await settings.update(
+        (s) => s.syncPairs = s.syncPairs.where((x) => x.id != id).toList());
     _applySettings();
     notifyListeners();
   }
@@ -2183,7 +2457,8 @@ class AppController extends ChangeNotifier {
     if (!ready || !settings.folderSync) return;
     for (final pair in List.of(settings.syncPairs)) {
       if (!pair.enabled || _syncBusy.contains(pair.id)) continue;
-      final peer = isRecent(pair.fingerprint) ? resolvePeer(pair.fingerprint) : null;
+      final peer =
+          isRecent(pair.fingerprint) ? resolvePeer(pair.fingerprint) : null;
       if (peer == null || !trust.isTrusted(pair.fingerprint)) continue;
       _syncBusy.add(pair.id);
       try {
@@ -2197,10 +2472,15 @@ class AppController extends ChangeNotifier {
         } else {
           final files = [
             for (final e in push.take(2000))
-              FileEntry(name: e.path, size: e.size, path: p.joinAll([root.path, ...e.path.split('/')]), mtime: e.mtime),
+              FileEntry(
+                  name: e.path,
+                  size: e.size,
+                  path: p.joinAll([root.path, ...e.path.split('/')]),
+                  mtime: e.mtime),
           ];
           final job = await _engine.send(peer, files, syncId: pair.id);
-          if (job.status != TransferStatus.done) pair.lastError = job.error ?? job.status.name;
+          if (job.status != TransferStatus.done)
+            pair.lastError = job.error ?? job.status.name;
         }
       } catch (e) {
         pair.lastError = describeError(e);
@@ -2226,7 +2506,8 @@ class AppController extends ChangeNotifier {
       final newer = Updater.isNewer(info.version, kAppVersion) ? info : null;
       updateAvailable = newer;
       notifyListeners();
-      if (newer != null && silent) _messages.add(t('update_available', {'v': newer.version}));
+      if (newer != null && silent)
+        _messages.add(t('update_available', {'v': newer.version}));
       return (newer, null);
     } catch (e) {
       return (null, e is HttpException ? e.message : describeError(e));
@@ -2235,13 +2516,16 @@ class AppController extends ChangeNotifier {
 
   /// Downloads and starts installing [info]. Returns a user message for the
   /// result, or null when an installer took over.
-  Future<String?> installUpdate(UpdateInfo info, {void Function(double)? onProgress}) async {
+  Future<String?> installUpdate(UpdateInfo info,
+      {void Function(double)? onProgress}) async {
     final method = Updater.method;
-    if (method == UpdateMethod.openPage || method == UpdateMethod.linuxCommand) {
+    if (method == UpdateMethod.openPage ||
+        method == UpdateMethod.linuxCommand) {
       await openUrl(info.page);
       return null;
     }
-    final asset = Updater.pick(info, androidAbi: Platform.isAndroid ? await _native.abi() : '');
+    final asset = Updater.pick(info,
+        androidAbi: Platform.isAndroid ? await _native.abi() : '');
     if (asset == null) {
       await openUrl(info.page);
       return null;
@@ -2249,9 +2533,11 @@ class AppController extends ChangeNotifier {
     try {
       final Directory dir;
       if (method == UpdateMethod.downloadAndReveal) {
-        dir = Directory(p.join((await getDownloadsDirectory())?.path ?? homeDir(), 'SUDOSEND'));
+        dir = Directory(p.join(
+            (await getDownloadsDirectory())?.path ?? homeDir(), 'SUDOSEND'));
       } else {
-        dir = Directory(p.join((await getTemporaryDirectory()).path, 'sudosend-update'));
+        dir = Directory(
+            p.join((await getTemporaryDirectory()).path, 'sudosend-update'));
       }
       final file = await Updater.download(asset, dir, onProgress: onProgress);
       switch (method) {
@@ -2261,7 +2547,8 @@ class AppController extends ChangeNotifier {
           if (r != 'ok') return t('update_failed');
           return null;
         case UpdateMethod.windowsInstaller:
-          await Process.start(file.path, const [], mode: ProcessStartMode.detached);
+          await Process.start(file.path, const [],
+              mode: ProcessStartMode.detached);
           // The installer replaces the running exe, so step aside.
           Future<void>.delayed(const Duration(seconds: 1), () => exit(0));
           return null;
@@ -2284,7 +2571,8 @@ class AppController extends ChangeNotifier {
 
   void _startRinging(String from) {
     if (Platform.isAndroid) {
-      unawaited(_native.ring(from, title: t('ring_title'), stop: t('ring_stop')));
+      unawaited(
+          _native.ring(from, title: t('ring_title'), stop: t('ring_stop')));
     } else {
       _ringer.start();
       if (!foreground) unawaited(desktopNotify(t('ring_title'), from));
@@ -2301,7 +2589,9 @@ class AppController extends ChangeNotifier {
   Future<String?> ringDevice(Peer peer) async {
     final job = await _engine.send(peer, const [], ring: true);
     if (job.status == TransferStatus.done) return null;
-    return job.status == TransferStatus.declined ? t('ring_declined') : (job.error ?? t('ring_declined'));
+    return job.status == TransferStatus.declined
+        ? t('ring_declined')
+        : (job.error ?? t('ring_declined'));
   }
 
   Future<void> setStealth(bool value) async {
@@ -2347,19 +2637,21 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> untrust(String fingerprint) async {
-    audit.add(AuditKind.deviceUntrusted, device: _nameOf(fingerprint), detail: fingerprint);
+    audit.add(AuditKind.deviceUntrusted,
+        device: _nameOf(fingerprint), detail: fingerprint);
     await trust.remove(fingerprint);
     notifyListeners();
   }
 
   Future<void> unblock(String fingerprint) async {
-    audit.add(AuditKind.deviceUnblocked, device: _nameOf(fingerprint), detail: fingerprint);
+    audit.add(AuditKind.deviceUnblocked,
+        device: _nameOf(fingerprint), detail: fingerprint);
     await trust.unblock(fingerprint);
     notifyListeners();
   }
 
   Future<void> rescan() async {
-    if (!ready) return;
+    if (!ready || demoPeers != null) return;
     await _discovery.rescan();
     await _refreshAddresses();
     notifyListeners();
@@ -2367,13 +2659,15 @@ class AppController extends ChangeNotifier {
 
   Future<void> _refreshAddresses() async {
     try {
-      final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4);
+      final interfaces =
+          await NetworkInterface.list(type: InternetAddressType.IPv4);
       final found = [
         for (final i in interfaces)
           for (final a in i.addresses)
             if (!a.isLoopback && !a.isLinkLocal) a,
       ];
-      final changed = found.map((a) => a.address).join(',') != localAddresses.map((a) => a.address).join(',');
+      final changed = found.map((a) => a.address).join(',') !=
+          localAddresses.map((a) => a.address).join(',');
       localAddresses = found;
       if (changed && _pairing != null) refreshPairing(notify: false);
     } catch (_) {
@@ -2383,21 +2677,25 @@ class AppController extends ChangeNotifier {
 
   Future<Directory> _resolveSaveDir() async {
     final custom = settings.saveDir;
-    if (custom != null && await _isWritable(Directory(custom))) return Directory(custom);
+    if (custom != null && await _isWritable(Directory(custom)))
+      return Directory(custom);
     Directory? preferred;
     try {
       if (Platform.isAndroid) {
         await _native.requestPermission('storage');
         final downloads = await _native.downloadsDir();
-        if (downloads != null) preferred = Directory(p.join(downloads, 'SUDOSEND'));
+        if (downloads != null)
+          preferred = Directory(p.join(downloads, 'SUDOSEND'));
       } else if (!Platform.isIOS) {
         final downloads = await getDownloadsDirectory();
-        if (downloads != null) preferred = Directory(p.join(downloads.path, 'SUDOSEND'));
+        if (downloads != null)
+          preferred = Directory(p.join(downloads.path, 'SUDOSEND'));
       }
     } catch (_) {}
     if (preferred != null && await _isWritable(preferred)) return preferred;
 
-    final fallback = Directory(p.join((await getApplicationDocumentsDirectory()).path, 'SUDOSEND'));
+    final fallback = Directory(
+        p.join((await getApplicationDocumentsDirectory()).path, 'SUDOSEND'));
     await fallback.create(recursive: true);
     return fallback;
   }
@@ -2443,7 +2741,8 @@ class AppController extends ChangeNotifier {
 }
 
 /// Runs in a background isolate: reads a photo and strips its metadata.
-Uint8List? _scrubFile((String, int) job) => scrubMetadata(File(job.$1).readAsBytesSync(), MetadataMode.values[job.$2]);
+Uint8List? _scrubFile((String, int) job) =>
+    scrubMetadata(File(job.$1).readAsBytesSync(), MetadataMode.values[job.$2]);
 
 /// A file found by "search across devices".
 class RemoteHit {

@@ -1,7 +1,7 @@
 name: sudosend
 description: "SUDOSEND — secure, local, instant file sharing over the Wraith Protocol."
 publish_to: 'none'
-version: 0.10.2+14
+version: 0.11.0+15
 
 environment:
   sdk: ^3.5.0
@@ -36,6 +36,20 @@ flutter:
   assets:
     - assets/developer/
   fonts:
+    - family: IBMPlexSans
+      fonts:
+        - asset: assets/fonts/IBMPlexSans-Regular.ttf
+        - asset: assets/fonts/IBMPlexSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/IBMPlexSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/IBMPlexSans-Bold.ttf
+          weight: 700
+    - family: IBMPlexMono
+      fonts:
+        - asset: assets/fonts/IBMPlexMono-Regular.ttf
+        - asset: assets/fonts/IBMPlexMono-Medium.ttf
+          weight: 500
     - family: IBMPlexSansArabic
       fonts:
         - asset: assets/fonts/IBMPlexSansArabic-Regular.ttf
@@ -50,7 +64,7 @@ flutter_launcher_icons:
   android: true
   ios: false
   image_path: assets/icon.png
-  adaptive_icon_background: "#060816"
+  adaptive_icon_background: "#0A0B0F"
   adaptive_icon_foreground: assets/icon_foreground.png
   min_sdk_android: 21
   windows:

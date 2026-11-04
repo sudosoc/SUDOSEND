@@ -87,7 +87,8 @@ class _SendTabState extends State<SendTab> {
         _dropPeer.value = null;
         setState(() => _dragging = false);
       },
-      onDragUpdated: (d) => _dropPeer.value = _peerAt(controller, d.globalPosition)?.id,
+      onDragUpdated: (d) =>
+          _dropPeer.value = _peerAt(controller, d.globalPosition)?.id,
       onDragDone: (detail) async {
         _dropPeer.value = null;
         setState(() => _dragging = false);
@@ -97,15 +98,59 @@ class _SendTabState extends State<SendTab> {
         final target = _peerAt(controller, detail.globalPosition);
         final String? error;
         if (target != null) {
-          final sending = context.tr('drop_sending', {'name': controller.displayName(target.id, target.name)});
+          final sending = context.tr('drop_sending',
+              {'name': controller.displayName(target.id, target.name)});
           messenger.showSnackBar(SnackBar(content: Text(sending)));
           error = await controller.sendPathsTo(target, paths);
         } else {
           error = await controller.addPaths(paths);
         }
-        if (error != null) messenger.showSnackBar(SnackBar(content: Text(error)));
+        if (error != null)
+          messenger.showSnackBar(SnackBar(content: Text(error)));
       },
       child: body,
+    );
+  }
+}
+
+/// Small pill used to choose what to send.
+class _Pick extends StatelessWidget {
+  const _Pick(
+      {required this.icon,
+      required this.label,
+      required this.onTap,
+      this.primary = false});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = primary ? AppColors.accent : AppColors.text;
+    return Material(
+      color: primary
+          ? AppColors.accent.withValues(alpha: 0.12)
+          : AppColors.surfaceHi,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        focusColor: AppColors.accent.withValues(alpha: 0.25),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: fg),
+              const SizedBox(width: 7),
+              Text(label,
+                  style: TextStyle(
+                      color: fg, fontWeight: FontWeight.w600, fontSize: 13.5)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -121,58 +166,81 @@ class _FilesCard extends StatelessWidget {
     final text = controller.selectedText;
     if (files.isEmpty && text == null) {
       return Glass(
-        glow: AppColors.cyan,
-        borderColor: dragging ? AppColors.cyan : null,
+        radius: 24,
+        borderColor: dragging ? AppColors.accent : null,
         onTap: controller.pickFiles,
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 30),
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
         child: Column(
           children: [
-            AnimatedScale(
-              scale: dragging ? 1.12 : 1,
-              duration: const Duration(milliseconds: 200),
-              child: Container(
-                width: 78,
-                height: 78,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: kAccentGradient,
-                  boxShadow: [BoxShadow(color: AppColors.cyan.withValues(alpha: 0.5), blurRadius: 36, spreadRadius: -6)],
-                ),
-                child: Icon(dragging ? Icons.file_download_rounded : Icons.upload_rounded,
-                    size: 38, color: AppColors.ink),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(context.tr(dragging ? 'drop_now' : 'choose_title'),
-                textAlign: TextAlign.center, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            Text(
-              context.tr('choose_sub'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.muted, fontSize: 13),
-            ),
-            const SizedBox(height: 20),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              alignment: WrapAlignment.center,
+            Row(
               children: [
-                GlowButton(label: context.tr('files'), icon: Icons.add_rounded, onPressed: controller.pickFiles),
-                GhostButton(
-                    label: context.tr('folder'), icon: Icons.folder_rounded, onPressed: () => _pickFolder(context)),
-                GhostButton(label: context.tr('text'), icon: Icons.notes_rounded, onPressed: () => _editText(context)),
-                if (controller.appSharing)
-                  GhostButton(
-                    label: context.tr('apps'),
-                    icon: Icons.apps_rounded,
-                    color: AppColors.mint,
-                    onPressed: () => openAppPicker(context, controller),
+                AnimatedScale(
+                  scale: dragging ? 1.12 : 1,
+                  duration: const Duration(milliseconds: 200),
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        gradient: kAccentGradient),
+                    child: Icon(
+                        dragging
+                            ? Icons.file_download_rounded
+                            : Icons.north_east_rounded,
+                        size: 26,
+                        color: AppColors.ink),
                   ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(context.tr(dragging ? 'drop_now' : 'choose_title'),
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 3),
+                      Text(
+                        context.tr('choose_sub'),
+                        style: const TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 12.5,
+                            height: 1.35),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _Pick(
+                    icon: Icons.insert_drive_file_rounded,
+                    label: context.tr('files'),
+                    onTap: controller.pickFiles,
+                    primary: true),
+                _Pick(
+                    icon: Icons.folder_rounded,
+                    label: context.tr('folder'),
+                    onTap: () => _pickFolder(context)),
+                _Pick(
+                    icon: Icons.notes_rounded,
+                    label: context.tr('text'),
+                    onTap: () => _editText(context)),
+                if (controller.appSharing)
+                  _Pick(
+                      icon: Icons.apps_rounded,
+                      label: context.tr('apps'),
+                      onTap: () => openAppPicker(context, controller)),
               ],
             ),
             if (isDesktop) ...[
-              const SizedBox(height: 14),
-              Text(context.tr('drop_hint'), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+              const SizedBox(height: 12),
+              Text(context.tr('drop_hint'),
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12)),
             ],
           ],
         ),
@@ -187,15 +255,20 @@ class _FilesCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const IconBadge(icon: Icons.notes_rounded, color: AppColors.violet, size: 42),
+                const IconBadge(
+                    icon: Icons.notes_rounded,
+                    color: AppColors.violet,
+                    size: 42),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(context.tr('text_ready', {'n': text.length}),
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w800, fontSize: 16)),
                 ),
                 TextButton(
                   onPressed: controller.clearSelected,
-                  child: Text(context.tr('clear'), style: const TextStyle(color: AppColors.muted)),
+                  child: Text(context.tr('clear'),
+                      style: const TextStyle(color: AppColors.muted)),
                 ),
               ],
             ),
@@ -209,14 +282,18 @@ class _FilesCard extends StatelessWidget {
             const SizedBox(height: 14),
             Row(
               children: [
-                GhostButton(label: context.tr('edit'), icon: Icons.edit_rounded, onPressed: () => _editText(context)),
+                GhostButton(
+                    label: context.tr('edit'),
+                    icon: Icons.edit_rounded,
+                    onPressed: () => _editText(context)),
                 const SizedBox(width: 8),
                 if (controller.settings.webShare) ...[
                   GhostButton(
                     label: context.tr('web_link'),
                     icon: Icons.public_rounded,
                     color: AppColors.violet,
-                    onPressed: () => openWebShare(context, controller, upload: false, withSelection: true),
+                    onPressed: () => openWebShare(context, controller,
+                        upload: false, withSelection: true),
                   ),
                   const SizedBox(width: 12),
                 ],
@@ -224,7 +301,10 @@ class _FilesCard extends StatelessWidget {
                   child: Text(
                     context.tr('tap_device'),
                     textAlign: TextAlign.end,
-                    style: const TextStyle(color: AppColors.cyan, fontSize: 12.5, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                        color: AppColors.cyan,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -242,7 +322,10 @@ class _FilesCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const IconBadge(icon: Icons.inventory_2_rounded, color: AppColors.cyan, size: 42),
+              const IconBadge(
+                  icon: Icons.inventory_2_rounded,
+                  color: AppColors.cyan,
+                  size: 42),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -252,15 +335,18 @@ class _FilesCard extends StatelessWidget {
                         files.length == 1
                             ? context.tr('one_file_ready')
                             : context.tr('n_files_ready', {'n': files.length}),
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 16)),
                     Text(formatBytes(controller.selectedBytes),
-                        style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+                        style: const TextStyle(
+                            color: AppColors.muted, fontSize: 13)),
                   ],
                 ),
               ),
               TextButton(
                 onPressed: controller.clearSelected,
-                child: Text(context.tr('clear'), style: const TextStyle(color: AppColors.muted)),
+                child: Text(context.tr('clear'),
+                    style: const TextStyle(color: AppColors.muted)),
               ),
             ],
           ),
@@ -270,9 +356,11 @@ class _FilesCard extends StatelessWidget {
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: files.length,
-              separatorBuilder: (_, __) => Divider(height: 1, color: Colors.white.withValues(alpha: 0.06)),
-              itemBuilder: (context, i) =>
-                  _FileRow(file: files[i], onRemove: () => controller.removeSelected(files[i])),
+              separatorBuilder: (_, __) => Divider(
+                  height: 1, color: Colors.white.withValues(alpha: 0.06)),
+              itemBuilder: (context, i) => _FileRow(
+                  file: files[i],
+                  onRemove: () => controller.removeSelected(files[i])),
             ),
           ),
           const SizedBox(height: 14),
@@ -281,8 +369,14 @@ class _FilesCard extends StatelessWidget {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              GhostButton(label: context.tr('add'), icon: Icons.add_rounded, onPressed: controller.pickFiles),
-              GhostButton(label: context.tr('folder'), icon: Icons.folder_rounded, onPressed: () => _pickFolder(context)),
+              GhostButton(
+                  label: context.tr('add'),
+                  icon: Icons.add_rounded,
+                  onPressed: controller.pickFiles),
+              GhostButton(
+                  label: context.tr('folder'),
+                  icon: Icons.folder_rounded,
+                  onPressed: () => _pickFolder(context)),
               if (controller.appSharing)
                 GhostButton(
                   label: context.tr('apps'),
@@ -295,13 +389,17 @@ class _FilesCard extends StatelessWidget {
                   label: context.tr('web_link'),
                   icon: Icons.public_rounded,
                   color: AppColors.violet,
-                  onPressed: () => openWebShare(context, controller, upload: false, withSelection: true),
+                  onPressed: () => openWebShare(context, controller,
+                      upload: false, withSelection: true),
                 ),
               Padding(
                 padding: const EdgeInsetsDirectional.only(start: 4),
                 child: Text(
                   context.tr('tap_device'),
-                  style: const TextStyle(color: AppColors.cyan, fontSize: 12.5, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      color: AppColors.cyan,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -335,9 +433,12 @@ class _FilesCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(context.tr('send_text_title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Text(context.tr('send_text_title'),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
-            Text(context.tr('send_text_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+            Text(context.tr('send_text_sub'),
+                style: const TextStyle(color: AppColors.muted, fontSize: 13)),
             const SizedBox(height: 16),
             TextField(
               controller: field,
@@ -345,16 +446,23 @@ class _FilesCard extends StatelessWidget {
               minLines: 4,
               maxLines: 10,
               maxLength: 65536,
-              decoration: InputDecoration(hintText: context.tr('type_or_paste'), counterText: ''),
+              decoration: InputDecoration(
+                  hintText: context.tr('type_or_paste'), counterText: ''),
             ),
             const SizedBox(height: 18),
             Row(
               children: [
-                Expanded(child: GhostButton(label: context.tr('cancel'), onPressed: () => Navigator.pop(ctx), expand: true)),
+                Expanded(
+                    child: GhostButton(
+                        label: context.tr('cancel'),
+                        onPressed: () => Navigator.pop(ctx),
+                        expand: true)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: GlowButton(
-                      label: context.tr('done'), expand: true, onPressed: () => Navigator.pop(ctx, field.text)),
+                      label: context.tr('done'),
+                      expand: true,
+                      onPressed: () => Navigator.pop(ctx, field.text)),
                 ),
               ],
             ),
@@ -381,12 +489,14 @@ class _FileRow extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(child: Text(file.name, overflow: TextOverflow.ellipsis)),
           const SizedBox(width: 8),
-          Text(formatBytes(file.size), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+          Text(formatBytes(file.size),
+              style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
           IconButton(
             tooltip: context.tr('delete'),
             onPressed: onRemove,
             visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.muted),
+            icon: const Icon(Icons.close_rounded,
+                size: 18, color: AppColors.muted),
           ),
         ],
       ),
@@ -425,8 +535,14 @@ class _DevicesSectionState extends State<_DevicesSection> {
                     _selecting = !_selecting;
                     _chosen.clear();
                   }),
-                  icon: Icon(_selecting ? Icons.close_rounded : Icons.checklist_rounded, size: 17, color: AppColors.cyan),
-                  label: Text(context.tr(_selecting ? 'cancel' : 'select'), style: const TextStyle(color: AppColors.cyan)),
+                  icon: Icon(
+                      _selecting
+                          ? Icons.close_rounded
+                          : Icons.checklist_rounded,
+                      size: 17,
+                      color: AppColors.cyan),
+                  label: Text(context.tr(_selecting ? 'cancel' : 'select'),
+                      style: const TextStyle(color: AppColors.cyan)),
                 ),
               if (controller.settings.clipboardSync && !_selecting)
                 TextButton.icon(
@@ -435,23 +551,32 @@ class _DevicesSectionState extends State<_DevicesSection> {
                     final none = context.tr('clip_none');
                     final sentMsg = context.tr('clip_sent', {'n': '#'});
                     final sent = await controller.pollClipboard(force: true);
-                    messenger.showSnackBar(SnackBar(content: Text(sent == 0 ? none : sentMsg.replaceAll('#', '$sent'))));
+                    messenger.showSnackBar(SnackBar(
+                        content: Text(sent == 0
+                            ? none
+                            : sentMsg.replaceAll('#', '$sent'))));
                   },
-                  icon: const Icon(Icons.content_paste_go_rounded, size: 17, color: AppColors.cyan),
-                  label: Text(context.tr('clipboard'), style: const TextStyle(color: AppColors.cyan)),
+                  icon: const Icon(Icons.content_paste_go_rounded,
+                      size: 17, color: AppColors.cyan),
+                  label: Text(context.tr('clipboard'),
+                      style: const TextStyle(color: AppColors.cyan)),
                 ),
               if (hasCamera && !_selecting)
                 TextButton.icon(
                   onPressed: () => _scan(context),
-                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 17, color: AppColors.cyan),
-                  label: Text(context.tr('scan_qr'), style: const TextStyle(color: AppColors.cyan)),
+                  icon: const Icon(Icons.qr_code_scanner_rounded,
+                      size: 17, color: AppColors.cyan),
+                  label: Text(context.tr('scan_qr'),
+                      style: const TextStyle(color: AppColors.cyan)),
                 ),
               if (!_selecting)
                 TextButton.icon(
-                onPressed: () => _sendToTarget(context),
-                icon: const Icon(Icons.link_rounded, size: 17, color: AppColors.cyan),
-                label: Text(context.tr('by_link'), style: const TextStyle(color: AppColors.cyan)),
-              ),
+                  onPressed: () => _sendToTarget(context),
+                  icon: const Icon(Icons.link_rounded,
+                      size: 17, color: AppColors.cyan),
+                  label: Text(context.tr('by_link'),
+                      style: const TextStyle(color: AppColors.cyan)),
+                ),
             ],
           ),
         ),
@@ -459,7 +584,8 @@ class _DevicesSectionState extends State<_DevicesSection> {
           Builder(builder: (context) {
             final groups = [
               for (final g in controller.settings.deviceGroups)
-                if (controller.peersInGroup(g).isNotEmpty) (g, controller.peersInGroup(g).length),
+                if (controller.peersInGroup(g).isNotEmpty)
+                  (g, controller.peersInGroup(g).length),
             ];
             if (groups.isEmpty) return const SizedBox.shrink();
             return Padding(
@@ -470,11 +596,14 @@ class _DevicesSectionState extends State<_DevicesSection> {
                 children: [
                   for (final (g, n) in groups)
                     ActionChip(
-                      avatar: const Icon(Icons.groups_rounded, size: 17, color: AppColors.violet),
-                      label: Text(context.tr('group_send', {'group': groupLabel(context, g), 'n': n})),
+                      avatar: const Icon(Icons.groups_rounded,
+                          size: 17, color: AppColors.violet),
+                      label: Text(context.tr('group_send',
+                          {'group': groupLabel(context, g), 'n': n})),
                       onPressed: () {
                         if (!controller.hasSelection) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('pick_first'))));
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text(context.tr('pick_first'))));
                           return;
                         }
                         unawaited(controller.sendToGroup(g));
@@ -490,23 +619,29 @@ class _DevicesSectionState extends State<_DevicesSection> {
             child: Glass(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               borderColor: AppColors.mint.withValues(alpha: 0.45),
-              onTap: () => Navigator.of(context)
-                  .push(MaterialPageRoute<void>(builder: (_) => WifiDirectPage(controller: controller))),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => WifiDirectPage(controller: controller))),
               child: Row(
                 children: [
-                  const Icon(Icons.link_rounded, color: AppColors.mint, size: 20),
+                  const Icon(Icons.link_rounded,
+                      color: AppColors.mint, size: 20),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      context.tr('p2p_connected_to', {'name': controller.p2pLink!.peerName ?? '?'}),
+                      context.tr('p2p_connected_to',
+                          {'name': controller.p2pLink!.peerName ?? '?'}),
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: AppColors.mint, fontWeight: FontWeight.w700, fontSize: 13),
+                      style: const TextStyle(
+                          color: AppColors.mint,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13),
                     ),
                   ),
                   IconButton(
                     tooltip: context.tr('p2p_disconnect'),
                     onPressed: controller.p2pDisconnect,
-                    icon: const Icon(Icons.link_off_rounded, size: 20, color: AppColors.muted),
+                    icon: const Icon(Icons.link_off_rounded,
+                        size: 20, color: AppColors.muted),
                   ),
                 ],
               ),
@@ -519,10 +654,13 @@ class _DevicesSectionState extends State<_DevicesSection> {
               children: [
                 const Radar(
                   size: 170,
-                  center: Icon(Icons.wifi_tethering_rounded, color: AppColors.cyan, size: 30),
+                  center: Icon(Icons.wifi_tethering_rounded,
+                      color: AppColors.cyan, size: 30),
                 ),
                 const SizedBox(height: 14),
-                Text(context.tr('scanning'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                Text(context.tr('scanning'),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 15)),
                 const SizedBox(height: 6),
                 Text(
                   context.tr('scanning_sub'),
@@ -535,15 +673,16 @@ class _DevicesSectionState extends State<_DevicesSection> {
                     label: context.tr('p2p_try'),
                     icon: Icons.wifi_tethering_rounded,
                     color: AppColors.cyan,
-                    onPressed: () => Navigator.of(context)
-                        .push(MaterialPageRoute<void>(builder: (_) => WifiDirectPage(controller: controller))),
+                    onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                            builder: (_) =>
+                                WifiDirectPage(controller: controller))),
                   ),
                 ],
               ],
             ),
           )
-        else
-        ...[
+        else ...[
           for (final peer in peers)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -553,10 +692,14 @@ class _DevicesSectionState extends State<_DevicesSection> {
                 group: controller.settings.devicePrefs[peer.id]?.group,
                 peer: peer,
                 trusted: controller.trust.isTrusted(peer.id),
-                onMore: controller.trust.isTrusted(peer.id) ? () => showDeviceActions(context, controller, peer) : null,
+                onMore: controller.trust.isTrusted(peer.id)
+                    ? () => showDeviceActions(context, controller, peer)
+                    : null,
                 selected: _selecting ? _chosen.contains(peer.id) : null,
                 onTap: _selecting
-                    ? () => setState(() => _chosen.contains(peer.id) ? _chosen.remove(peer.id) : _chosen.add(peer.id))
+                    ? () => setState(() => _chosen.contains(peer.id)
+                        ? _chosen.remove(peer.id)
+                        : _chosen.add(peer.id))
                     : () => _send(context, peer),
               ),
             ),
@@ -569,10 +712,12 @@ class _DevicesSectionState extends State<_DevicesSection> {
                   ? null
                   : () {
                       if (!controller.hasSelection) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('pick_first'))));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(context.tr('pick_first'))));
                         return;
                       }
-                      final targets = peers.where((p) => _chosen.contains(p.id)).toList();
+                      final targets =
+                          peers.where((p) => _chosen.contains(p.id)).toList();
                       setState(() {
                         _selecting = false;
                         _chosen.clear();
@@ -581,36 +726,45 @@ class _DevicesSectionState extends State<_DevicesSection> {
                     },
             ),
         ],
-        if (controller.settings.offlineQueue && controller.trustedOffline.isNotEmpty && !_selecting) ...[
+        if (controller.settings.offlineQueue &&
+            controller.trustedOffline.isNotEmpty &&
+            !_selecting) ...[
           const SizedBox(height: 14),
           SectionTitle(context.tr('offline_trusted')),
           for (final d in controller.trustedOffline.take(6))
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Glass(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 onTap: () {
                   if (!controller.hasSelection) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('pick_first'))));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(context.tr('pick_first'))));
                     return;
                   }
                   unawaited(controller.enqueueFor(d));
                 },
                 child: Row(
                   children: [
-                    const Icon(Icons.cloud_off_rounded, size: 20, color: AppColors.muted),
+                    const Icon(Icons.cloud_off_rounded,
+                        size: 20, color: AppColors.muted),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(d.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                          Text(d.name,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700)),
                           Text(context.tr('send_when_online'),
-                              style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                              style: const TextStyle(
+                                  color: AppColors.muted, fontSize: 12)),
                         ],
                       ),
                     ),
-                    const Icon(Icons.schedule_send_rounded, color: AppColors.violet, size: 20),
+                    const Icon(Icons.schedule_send_rounded,
+                        color: AppColors.violet, size: 20),
                   ],
                 ),
               ),
@@ -622,7 +776,8 @@ class _DevicesSectionState extends State<_DevicesSection> {
 
   void _send(BuildContext context, Peer peer) {
     if (!controller.hasSelection) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('pick_first'))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(context.tr('pick_first'))));
       return;
     }
     unawaited(controller.sendTo(peer));
@@ -630,7 +785,8 @@ class _DevicesSectionState extends State<_DevicesSection> {
 
   Future<void> _scan(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
-    final link = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const ScanPage()));
+    final link = await Navigator.of(context)
+        .push<String>(MaterialPageRoute(builder: (_) => const ScanPage()));
     if (link == null || !context.mounted) return;
     if (!controller.hasSelection) {
       // Keep the link: let the user pick what to send, then finish.
@@ -654,9 +810,12 @@ class _DevicesSectionState extends State<_DevicesSection> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(context.tr('target_title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              Text(context.tr('target_title'),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
-              Text(context.tr('target_sub'), style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+              Text(context.tr('target_sub'),
+                  style: const TextStyle(color: AppColors.muted, fontSize: 13)),
               const SizedBox(height: 16),
               TextField(
                 controller: text,
@@ -671,7 +830,8 @@ class _DevicesSectionState extends State<_DevicesSection> {
                     tooltip: context.tr('paste'),
                     icon: const Icon(Icons.content_paste_rounded, size: 18),
                     onPressed: () async {
-                      final clip = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+                      final clip =
+                          (await Clipboard.getData(Clipboard.kTextPlain))?.text;
                       if (clip != null) text.text = clip.trim();
                     },
                   ),
@@ -680,7 +840,11 @@ class _DevicesSectionState extends State<_DevicesSection> {
               const SizedBox(height: 18),
               Row(
                 children: [
-                  Expanded(child: GhostButton(label: context.tr('cancel'), onPressed: () => Navigator.pop(ctx), expand: true)),
+                  Expanded(
+                      child: GhostButton(
+                          label: context.tr('cancel'),
+                          onPressed: () => Navigator.pop(ctx),
+                          expand: true)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: GlowButton(
@@ -741,7 +905,8 @@ class _PeerTile extends StatelessWidget {
       builder: (context, hover, child) => Glass(
         onTap: onTap,
         padding: const EdgeInsets.all(14),
-        borderColor: selected == true || hover == peer.id ? AppColors.cyan : null,
+        borderColor:
+            selected == true || hover == peer.id ? AppColors.cyan : null,
         glow: hover == peer.id ? AppColors.cyan : null,
         child: child!,
       ),
@@ -753,30 +918,47 @@ class _PeerTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                Text(name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 15.5)),
                 const SizedBox(height: 3),
                 Wrap(
                   spacing: 8,
                   runSpacing: 2,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text(peer.manual ? context.tr('manual') : groupFingerprint(peer.id, groups: 2),
-                        textDirection: TextDirection.ltr, style: kMono.copyWith(color: AppColors.muted, fontSize: 11.5)),
+                    Text(
+                        peer.manual
+                            ? context.tr('manual')
+                            : groupFingerprint(peer.id, groups: 2),
+                        textDirection: TextDirection.ltr,
+                        style: kMono.copyWith(
+                            color: AppColors.muted, fontSize: 11.5)),
                     Text(peer.address.address,
-                        textDirection: TextDirection.ltr, style: const TextStyle(color: AppColors.muted, fontSize: 11.5)),
+                        textDirection: TextDirection.ltr,
+                        style: const TextStyle(
+                            color: AppColors.muted, fontSize: 11.5)),
                     if (trusted)
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.verified_user_rounded, size: 14, color: AppColors.mint),
+                          const Icon(Icons.verified_user_rounded,
+                              size: 14, color: AppColors.mint),
                           const SizedBox(width: 3),
                           Text(context.tr('trusted'),
-                              style: const TextStyle(color: AppColors.mint, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                              style: const TextStyle(
+                                  color: AppColors.mint,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700)),
                         ],
                       ),
                     if (group != null)
                       Text(groupLabel(context, group!),
-                          style: const TextStyle(color: AppColors.violet, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                          style: const TextStyle(
+                              color: AppColors.violet,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700)),
                   ],
                 ),
               ],
@@ -786,7 +968,8 @@ class _PeerTile extends StatelessWidget {
             IconButton(
               tooltip: context.tr('device_actions'),
               onPressed: onMore,
-              icon: const Icon(Icons.more_horiz_rounded, size: 22, color: AppColors.amber),
+              icon: const Icon(Icons.more_horiz_rounded,
+                  size: 22, color: AppColors.amber),
             ),
           if (selected != null)
             Checkbox(value: selected, onChanged: (_) => onTap())
@@ -799,7 +982,8 @@ class _PeerTile extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.06),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
               ),
-              child: const Icon(Icons.north_east_rounded, size: 18, color: AppColors.cyan),
+              child: const Icon(Icons.north_east_rounded,
+                  size: 18, color: AppColors.cyan),
             ),
         ],
       ),

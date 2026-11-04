@@ -24,7 +24,9 @@ class MessagesTab extends StatelessWidget {
         : controller.isRecent(fp)
             ? AppColors.amber
             : AppColors.muted;
-    final startable = controller.trust.all.where((d) => !controller.chat.threads.containsKey(d.fingerprint)).toList();
+    final startable = controller.trust.all
+        .where((d) => !controller.chat.threads.containsKey(d.fingerprint))
+        .toList();
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
@@ -33,12 +35,17 @@ class MessagesTab extends StatelessWidget {
           Glass(
             child: Column(
               children: [
-                const IconBadge(icon: Icons.forum_rounded, color: AppColors.cyan, size: 52),
+                const IconBadge(
+                    icon: Icons.forum_rounded, color: AppColors.cyan, size: 52),
                 const SizedBox(height: 12),
-                Text(context.tr('chat_empty'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                Text(context.tr('chat_empty'),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 15.5)),
                 const SizedBox(height: 6),
                 Text(context.tr('chat_empty_sub'),
-                    textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+                    textAlign: TextAlign.center,
+                    style:
+                        const TextStyle(color: AppColors.muted, fontSize: 13)),
               ],
             ),
           ),
@@ -50,7 +57,8 @@ class MessagesTab extends StatelessWidget {
               preview: t.messages.isEmpty ? '' : t.messages.last.text,
               unread: t.unread,
               dot: dot(t.fingerprint),
-              onTap: () => _open(context, t.fingerprint, controller.displayName(t.fingerprint, t.peerName)),
+              onTap: () => _open(context, t.fingerprint,
+                  controller.displayName(t.fingerprint, t.peerName)),
             ),
           ),
         if (startable.isNotEmpty) ...[
@@ -64,7 +72,8 @@ class MessagesTab extends StatelessWidget {
                 preview: context.tr('chat_start'),
                 unread: 0,
                 dot: dot(d.fingerprint),
-                onTap: () => _open(context, d.fingerprint, controller.displayName(d.fingerprint, d.name)),
+                onTap: () => _open(context, d.fingerprint,
+                    controller.displayName(d.fingerprint, d.name)),
               ),
             ),
         ],
@@ -74,7 +83,8 @@ class MessagesTab extends StatelessWidget {
 
   void _open(BuildContext context, String fp, String name) {
     Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => ChatThreadPage(controller: controller, fingerprint: fp, name: name),
+      builder: (_) =>
+          ChatThreadPage(controller: controller, fingerprint: fp, name: name),
     ));
   }
 }
@@ -104,7 +114,8 @@ class _ThreadTile extends StatelessWidget {
           Stack(
             clipBehavior: Clip.none,
             children: [
-              const IconBadge(icon: Icons.person_rounded, color: AppColors.cyan, size: 44),
+              const IconBadge(
+                  icon: Icons.person_rounded, color: AppColors.cyan, size: 44),
               Positioned(
                 right: -2,
                 bottom: -2,
@@ -125,20 +136,29 @@ class _ThreadTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+                Text(name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 2),
                 Text(preview,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                    style: const TextStyle(
+                        color: AppColors.muted, fontSize: 12.5)),
               ],
             ),
           ),
           if (unread > 0)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: AppColors.pink, borderRadius: BorderRadius.circular(10)),
-              child: Text('$unread', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+              decoration: BoxDecoration(
+                  color: AppColors.pink,
+                  borderRadius: BorderRadius.circular(10)),
+              child: Text('$unread',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800)),
             ),
         ],
       ),
@@ -147,7 +167,11 @@ class _ThreadTile extends StatelessWidget {
 }
 
 class ChatThreadPage extends StatefulWidget {
-  const ChatThreadPage({super.key, required this.controller, required this.fingerprint, required this.name});
+  const ChatThreadPage(
+      {super.key,
+      required this.controller,
+      required this.fingerprint,
+      required this.name});
   final AppController controller;
   final String fingerprint;
   final String name;
@@ -168,8 +192,11 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   void initState() {
     super.initState();
     c.openThread = widget.fingerprint;
-    c.markThreadRead(widget.fingerprint);
     c.addListener(_onChange);
+    // Not during build: markThreadRead notifies listeners.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) c.markThreadRead(widget.fingerprint);
+    });
     // Don't trust a missed beacon: knock on the device's last address now and
     // every few seconds while the thread is open.
     c.pingDevice(widget.fingerprint);
@@ -220,10 +247,17 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                     ? context.tr('online')
                     : [
                         context.tr(recent ? 'chat_reachable' : 'chat_offline'),
-                        if (seen != null) context.tr('last_seen', {'t': sinceLabel(context, seen)}),
+                        if (seen != null)
+                          context.tr(
+                              'last_seen', {'t': sinceLabel(context, seen)}),
                       ].join(' · ');
-                final statusColor = online ? AppColors.mint : recent ? AppColors.amber : AppColors.muted;
-                final messages = c.chat.threads[widget.fingerprint]?.messages ?? const <ChatMessage>[];
+                final statusColor = online
+                    ? AppColors.mint
+                    : recent
+                        ? AppColors.amber
+                        : AppColors.muted;
+                final messages = c.chat.threads[widget.fingerprint]?.messages ??
+                    const <ChatMessage>[];
                 return Column(
                   children: [
                     Padding(
@@ -231,7 +265,8 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                       child: Row(
                         children: [
                           IconButton(
-                            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                            tooltip: MaterialLocalizations.of(context)
+                                .backButtonTooltip,
                             onPressed: () => Navigator.of(context).pop(),
                             icon: const BackButtonIcon(),
                             color: AppColors.text,
@@ -242,17 +277,23 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                               children: [
                                 Text(widget.name,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                                    style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w900)),
                                 Text(status,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(color: statusColor, fontSize: 12)),
+                                    style: TextStyle(
+                                        color: statusColor, fontSize: 12)),
                               ],
                             ),
                           ),
                           IconButton(
                             tooltip: context.tr('chat_clear'),
-                            onPressed: messages.isEmpty ? null : () => _confirmClear(context),
-                            icon: const Icon(Icons.delete_sweep_rounded, color: AppColors.muted),
+                            onPressed: messages.isEmpty
+                                ? null
+                                : () => _confirmClear(context),
+                            icon: const Icon(Icons.delete_sweep_rounded,
+                                color: AppColors.muted),
                           ),
                         ],
                       ),
@@ -272,12 +313,16 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                               final bubble = _Bubble(
                                 message: m,
                                 onRetry: m.state == ChatState.failed
-                                    ? () => unawaited(c.sendChat(widget.fingerprint, widget.name, m.text, retry: m))
+                                    ? () => unawaited(c.sendChat(
+                                        widget.fingerprint, widget.name, m.text,
+                                        retry: m))
                                     : null,
                               );
-                              final newDay = idx == 0 || !_sameDay(messages[idx - 1].at, m.at);
+                              final newDay = idx == 0 ||
+                                  !_sameDay(messages[idx - 1].at, m.at);
                               if (!newDay) return bubble;
-                              return Column(children: [_DayChip(at: m.at), bubble]);
+                              return Column(
+                                  children: [_DayChip(at: m.at), bubble]);
                             },
                           ),
                         ),
@@ -289,12 +334,14 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.schedule_send_rounded, size: 14, color: statusColor),
+                            Icon(Icons.schedule_send_rounded,
+                                size: 14, color: statusColor),
                             const SizedBox(width: 6),
                             Flexible(
                               child: Text(context.tr('chat_deliver_later'),
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(color: statusColor, fontSize: 11.5)),
+                                  style: TextStyle(
+                                      color: statusColor, fontSize: 11.5)),
                             ),
                           ],
                         ),
@@ -328,7 +375,8 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                                 IconButton(
                                   tooltip: context.tr('send'),
                                   onPressed: _send,
-                                  icon: const Icon(Icons.send_rounded, color: AppColors.cyan),
+                                  icon: const Icon(Icons.send_rounded,
+                                      color: AppColors.cyan),
                                 ),
                               ],
                             ),
@@ -357,7 +405,11 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: GhostButton(label: context.tr('cancel'), expand: true, onPressed: () => Navigator.pop(ctx, false))),
+                Expanded(
+                    child: GhostButton(
+                        label: context.tr('cancel'),
+                        expand: true,
+                        onPressed: () => Navigator.pop(ctx, false))),
                 const SizedBox(width: 12),
                 Expanded(
                   child: GhostButton(
@@ -377,7 +429,8 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   }
 }
 
-bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+bool _sameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
 
 /// "Today" / "Yesterday" / a date, centred above the first message of a day.
 class _DayChip extends StatelessWidget {
@@ -400,7 +453,11 @@ class _DayChip extends StatelessWidget {
           color: Colors.white.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 11.5, fontWeight: FontWeight.w700)),
+        child: Text(label,
+            style: const TextStyle(
+                color: AppColors.muted,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -422,13 +479,17 @@ class _Bubble extends StatelessWidget {
       ChatState.received => null,
     };
     return Align(
-      alignment: out ? AlignmentDirectional.centerEnd : AlignmentDirectional.centerStart,
+      alignment: out
+          ? AlignmentDirectional.centerEnd
+          : AlignmentDirectional.centerStart,
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.78),
+        constraints:
+            BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.78),
         child: GestureDetector(
           onLongPress: () {
             Clipboard.setData(ClipboardData(text: message.text));
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('copied'))));
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text(context.tr('copied'))));
           },
           onTap: onRetry,
           child: Container(
@@ -438,21 +499,35 @@ class _Bubble extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
               gradient: out ? kAccentGradient : null,
               color: out ? null : Colors.white.withValues(alpha: 0.08),
-              border: out ? null : Border.all(color: Colors.white.withValues(alpha: 0.12)),
+              border: out
+                  ? null
+                  : Border.all(color: Colors.white.withValues(alpha: 0.12)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(message.text,
-                    style: TextStyle(color: out ? AppColors.ink : AppColors.text, fontSize: 14.5, height: 1.35)),
+                    style: TextStyle(
+                        color: out ? AppColors.ink : AppColors.text,
+                        fontSize: 14.5,
+                        height: 1.35)),
                 const SizedBox(height: 4),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(time, style: TextStyle(color: out ? AppColors.ink.withValues(alpha: 0.7) : AppColors.muted, fontSize: 10.5)),
+                    Text(time,
+                        style: TextStyle(
+                            color: out
+                                ? AppColors.ink.withValues(alpha: 0.7)
+                                : AppColors.muted,
+                            fontSize: 10.5)),
                     if (icon != null) ...[
                       const SizedBox(width: 4),
-                      Icon(icon, size: 13, color: message.state == ChatState.failed ? AppColors.danger : AppColors.ink.withValues(alpha: 0.7)),
+                      Icon(icon,
+                          size: 13,
+                          color: message.state == ChatState.failed
+                              ? AppColors.danger
+                              : AppColors.ink.withValues(alpha: 0.7)),
                     ],
                     if (onRetry != null) ...[
                       const SizedBox(width: 4),
@@ -465,12 +540,17 @@ class _Bubble extends StatelessWidget {
                     ],
                   ],
                 ),
-                if (message.state == ChatState.failed && message.error != null) ...[
+                if (message.state == ChatState.failed &&
+                    message.error != null) ...[
                   const SizedBox(height: 2),
                   Text(message.error!,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: out ? AppColors.ink.withValues(alpha: 0.8) : AppColors.muted, fontSize: 10.5)),
+                      style: TextStyle(
+                          color: out
+                              ? AppColors.ink.withValues(alpha: 0.8)
+                              : AppColors.muted,
+                          fontSize: 10.5)),
                 ],
               ],
             ),

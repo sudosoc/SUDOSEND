@@ -13,7 +13,8 @@ const Map<String, Map<String, String>> featureStrings = {
 
     // Settings categories
     's_features': 'Features',
-    's_features_sub': 'Switch any extra on or off · tap (i) to see what it does',
+    's_features_sub':
+        'Switch any extra on or off · tap (i) to see what it does',
     'cat_device_sub': 'Name, fingerprint, where the key is kept',
     'cat_receiving_sub': 'Save folder, auto-accept, notifications, speed cap',
     'cat_privacy_sub': 'Stealth, trusted and blocked devices, audit log',
@@ -28,13 +29,16 @@ const Map<String, Map<String, String>> featureStrings = {
     'f_compression': 'Smart compression',
     'f_compression_sub': 'Squeezes text, code, logs and documents on the fly.',
     'f_previews_send': 'Send image previews',
-    'f_previews_send_sub': 'Attach small thumbnails so the other side sees what is coming.',
+    'f_previews_send_sub':
+        'Attach small thumbnails so the other side sees what is coming.',
     'f_previews_show': 'Show image previews',
-    'f_previews_show_sub': 'Show the thumbnails other devices attach before you accept.',
+    'f_previews_show_sub':
+        'Show the thumbnails other devices attach before you accept.',
     'f_queue': 'Send when online',
     'f_queue_sub': 'Queue files for a trusted device that is off right now.',
     'f_chat': 'Messages',
-    'f_chat_sub': 'Quick encrypted texts with trusted devices, kept as threads.',
+    'f_chat_sub':
+        'Quick encrypted texts with trusted devices, kept as threads.',
     'f_sync': 'Folder sync',
     'f_sync_sub': 'Keep a folder identical on two trusted devices, both ways.',
     'f_speed': 'Allow speed tests',
@@ -94,7 +98,8 @@ const Map<String, Map<String, String>> featureStrings = {
 
     // Messages
     'chat_empty': 'No messages yet',
-    'chat_empty_sub': 'Trust a device (compare the code or scan its QR) to start messaging it.',
+    'chat_empty_sub':
+        'Trust a device (compare the code or scan its QR) to start messaging it.',
     'chat_new': 'Start a conversation',
     'chat_start': 'Tap to send a message',
     'chat_hint': 'Message',
@@ -102,14 +107,16 @@ const Map<String, Map<String, String>> featureStrings = {
     'chat_from': 'Message from {name}',
     'chat_retry': 'tap to retry',
     'chat_clear': 'Clear conversation',
-    'chat_clear_confirm': 'Delete all messages with this device from this device?',
+    'chat_clear_confirm':
+        'Delete all messages with this device from this device?',
     'incoming_chat': 'MESSAGE',
 
     // Speed test
     'speed_test': 'Speed test',
     'speed_running': 'Measuring real encrypted speed…',
     'speed_note': '1 GB would take about {gb}',
-    'speed_declined': 'Refused — the other device must trust you and allow speed tests.',
+    'speed_declined':
+        'Refused — the other device must trust you and allow speed tests.',
 
     // Folder sync
     'sync_title': 'Sync folders',
@@ -152,9 +159,11 @@ const Map<String, Map<String, String>> featureStrings = {
     'update_install': 'Download & install',
     'update_open_page': 'Open download page',
     'update_page': 'Release page',
-    'update_linux': 'On Linux, update with the same one-line installer (it picks .deb or portable for your CPU):',
+    'update_linux':
+        'On Linux, update with the same one-line installer (it picks .deb or portable for your CPU):',
     'update_copy_cmd': 'Copy command',
-    'update_allow_install': 'Allow "Install unknown apps" for SUDOSEND in the screen that just opened, then press Install again.',
+    'update_allow_install':
+        'Allow "Install unknown apps" for SUDOSEND in the screen that just opened, then press Install again.',
     'update_failed': 'The installer could not be opened.',
     'update_downloaded': 'Downloaded to {path}',
     's_downloads': 'Downloads',
@@ -174,7 +183,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'p2p_scan': 'Search again',
     'p2p_searching': 'Searching… keep SUDOSEND open on the other phone too.',
     'p2p_none': 'Nothing found yet. Tap “Search again”.',
-    'p2p_others': 'Other Wi-Fi Direct devices (TVs, printers, phones without SUDOSEND open)',
+    'p2p_others':
+        'Other Wi-Fi Direct devices (TVs, printers, phones without SUDOSEND open)',
     'p2p_st_connected': 'Connected',
     'p2p_st_invited': 'Invitation sent — waiting',
     'p2p_st_failed': 'Declined or failed',
@@ -192,20 +202,27 @@ const Map<String, Map<String, String>> featureStrings = {
     'p2p_go_send': 'Go to Send',
     'p2p_hint':
         'Tips: Wi-Fi must be ON on both phones (no network needed). Android 12 and older also need Location ON. The other phone gets a system pop-up “Invitation to connect” — it must accept. iPhones and computers do not support this; use the hotspot or the same Wi-Fi for them.',
-    'p2p_wifi_off': 'Turn on Wi-Fi on this phone. It does not need to be connected to any network.',
-    'p2p_permission': 'Allow “Nearby devices” (or Location on Android 12 and older) to find phones.',
+    'p2p_wifi_off':
+        'Turn on Wi-Fi on this phone. It does not need to be connected to any network.',
+    'p2p_permission':
+        'Allow “Nearby devices” (or Location on Android 12 and older) to find phones.',
     'p2p_unsupported': 'Wi-Fi Direct is available on Android only.',
     'p2p_failed': 'Could not connect: {reason}',
-    'p2p_reason_busy': 'Wi-Fi Direct is busy. Turn Wi-Fi off and on, then try again.',
+    'p2p_reason_busy':
+        'Wi-Fi Direct is busy. Turn Wi-Fi off and on, then try again.',
     'p2p_reason_unsupported': 'this phone does not support Wi-Fi Direct.',
     'p2p_reason_permission': 'permission missing.',
     'p2p_reason_error': 'the phone refused. Try again in a few seconds.',
     'p2p_err_declined': 'The other phone declined the invitation.',
-    'p2p_err_timeout': 'No answer. Make sure the other phone accepts the “Invitation to connect” pop-up.',
-    'p2p_err_busy': 'Wi-Fi Direct is busy. Turn Wi-Fi off and on, then search again.',
+    'p2p_err_timeout':
+        'No answer. Make sure the other phone accepts the “Invitation to connect” pop-up.',
+    'p2p_err_busy':
+        'Wi-Fi Direct is busy. Turn Wi-Fi off and on, then search again.',
     'p2p_err_unsupported': 'This phone does not support Wi-Fi Direct.',
-    'p2p_err_permission': 'Allow “Nearby devices” (or Location on Android 12 and older), then search again.',
-    'p2p_err_error': 'Search failed. On Android 12 and older, turn Location on and search again.',
+    'p2p_err_permission':
+        'Allow “Nearby devices” (or Location on Android 12 and older), then search again.',
+    'p2p_err_error':
+        'Search failed. On Android 12 and older, turn Location on and search again.',
     'f_wifi_direct': 'Wi-Fi Direct',
     'f_wifi_direct_sub': 'Phone-to-phone link with no router (Android).',
     'i_wifi_direct':
@@ -220,20 +237,26 @@ const Map<String, Map<String, String>> featureStrings = {
         'Every received file is filed automatically:\n\nSUDOSEND / <device> / <type> / <date> / file\n\nTypes: Documents, Pictures, Videos, Audio, Archives, Applications, Code and Other Files (anything unknown goes there, nothing is lost). Each day gets its own date folder, and the same device always uses the same device folder.\n\nA sent folder is kept whole — its own structure matters — under <device>/Folders/<date>/. Files with the same name on the same day get " (1)", " (2)"… instead of overwriting. Browser uploads go under "Browser".\n\nYou can switch each level off, and give any trusted device its own folder name (Privacy → Trusted devices → the device). Folder sync is not affected: synced folders always mirror exactly.',
     // Photo metadata
     'md_title': 'Photo metadata when sending',
-    'md_sub': 'What to strip from JPEG and PNG photos before they leave this device.',
+    'md_sub':
+        'What to strip from JPEG and PNG photos before they leave this device.',
     'md_off': 'Keep',
     'md_location': 'Location',
     'md_all': 'All',
-    'md_off_sub': 'Photos are sent exactly as they are, including GPS location.',
-    'md_location_sub': 'GPS location is removed. Date, camera and orientation stay (recommended).',
-    'md_all_sub': 'Everything is removed except orientation and colour profile.',
+    'md_off_sub':
+        'Photos are sent exactly as they are, including GPS location.',
+    'md_location_sub':
+        'GPS location is removed. Date, camera and orientation stay (recommended).',
+    'md_all_sub':
+        'Everything is removed except orientation and colour profile.',
     'i_metadata':
         'Photos carry hidden data (EXIF/XMP): often the exact GPS spot where they were taken — your home, your work — plus the phone model, serial-like IDs, date and editing software.\n\n• Keep: send originals.\n• Location: removes GPS (and XMP/IPTC blocks, which can repeat it). Date, camera and orientation stay, so galleries still sort and rotate correctly.\n• All: removes everything except orientation and the colour profile.\n\nOnly the header changes; the picture itself is not re-compressed, so there is no quality loss. The original file on your device is never modified — a cleaned copy is sent. Works for JPEG and PNG; HEIC and videos are sent as they are.\n\nFor your own devices (e.g. a backup laptop) you can allow originals per device: Privacy → Trusted devices → the device → "Send photos with metadata".',
     // Per-device
     'dp_open': 'Device settings',
-    'dp_intro': 'What this device may do here. Features switched off in Features stay off for every device.',
+    'dp_intro':
+        'What this device may do here. Features switched off in Features stay off for every device.',
     'dp_folder': 'Folder name',
-    'dp_folder_help': 'Name of this device’s folder when files are organized (e.g. “My Phone”). Empty = its device name.',
+    'dp_folder_help':
+        'Name of this device’s folder when files are organized (e.g. “My Phone”). Empty = its device name.',
     'dp_saved': 'Saved',
     'dp_allow': 'Allow this device to',
     'dp_auto_accept': 'Send files without asking',
@@ -245,7 +268,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'dp_speed': 'Run speed tests',
     'dp_sending': 'When sending to it',
     'dp_keep_metadata': 'Send photos with metadata',
-    'dp_keep_metadata_sub': 'Originals including location — e.g. for your own backup',
+    'dp_keep_metadata_sub':
+        'Originals including location — e.g. for your own backup',
     'dp_global_off': 'Off for all devices (Features / Privacy)',
     // Files tab, preview, search
     'tab_files': 'Files',
@@ -258,7 +282,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'lib_count': '{n} files · {size}',
     'lib_no_match': 'No files match these filters.',
     'lib_empty': 'No received files yet',
-    'lib_empty_sub': 'Everything you receive shows up here — searchable, previewable and checked for duplicates. Already have files in the SUDOSEND folder? Index them once.',
+    'lib_empty_sub':
+        'Everything you receive shows up here — searchable, previewable and checked for duplicates. Already have files in the SUDOSEND folder? Index them once.',
     'lib_scan': 'Index existing files',
     'lib_scanning': 'Indexing… {done}/{total}',
     'lib_all_devices': 'All devices',
@@ -302,20 +327,27 @@ const Map<String, Map<String, String>> featureStrings = {
     'delete_confirm': 'Delete “{name}” from this device?',
     'risk_danger_title': 'This file looks dangerous',
     'risk_caution_title': 'This file can run code',
-    'risk_executable': 'It is a program. Only open it if you trust the sender and expected it.',
+    'risk_executable':
+        'It is a program. Only open it if you trust the sender and expected it.',
     'risk_script': 'It is a script that can run commands on this device.',
-    'risk_macro': 'It is an Office file with macros, which can run code when enabled.',
-    'risk_shortcut': 'Shortcuts and disk images can hide programs. Open only if you expected it.',
-    'risk_double-extension': 'Its name hides the real type (e.g. “invoice.pdf.exe”). This is a classic malware trick.',
-    'risk_disguised': 'Its content is a program even though its name says otherwise. This is a classic malware trick.',
-    'risk_disguised-script': 'Its content is a script even though its name says otherwise.',
+    'risk_macro':
+        'It is an Office file with macros, which can run code when enabled.',
+    'risk_shortcut':
+        'Shortcuts and disk images can hide programs. Open only if you expected it.',
+    'risk_double-extension':
+        'Its name hides the real type (e.g. “invoice.pdf.exe”). This is a classic malware trick.',
+    'risk_disguised':
+        'Its content is a program even though its name says otherwise. This is a classic malware trick.',
+    'risk_disguised-script':
+        'Its content is a script even though its name says otherwise.',
     'risk_open_anyway': 'Open anyway',
     // Duplicates & storage
     'dup_title': 'Duplicate file',
     'dup_found': '{name} is identical to {other} you already have',
     'dup_removed': '{name} was identical to {other} — the new copy was removed',
     'dup_setting': 'Duplicate files',
-    'dup_setting_sub': 'When a received file is byte-for-byte identical to one you have.',
+    'dup_setting_sub':
+        'When a received file is byte-for-byte identical to one you have.',
     'dup_keep': 'Keep both (mark it)',
     'dup_remove': 'Remove the new copy',
     'i_duplicates':
@@ -358,7 +390,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'dash_no_dups': 'No duplicate files found.',
     'dash_dups_sub': '{n} groups of identical files · {size} could be freed',
     'dash_keep_one': 'Keep oldest',
-    'dash_keep_one_confirm': 'Delete {n} extra copies of “{name}” and keep the oldest?',
+    'dash_keep_one_confirm':
+        'Delete {n} extra copies of “{name}” and keep the oldest?',
     'dash_nothing': 'Nothing yet.',
     'dash_reports': 'Reports & logs',
     // Devices
@@ -384,7 +417,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'dp_traffic': 'Data',
     'dp_identity': 'Name & group',
     'dp_nickname': 'Nickname',
-    'dp_nickname_help': 'Shown everywhere in SUDOSEND instead of the device’s own name.',
+    'dp_nickname_help':
+        'Shown everywhere in SUDOSEND instead of the device’s own name.',
     'dp_group': 'Group',
     'dp_no_group': 'No group',
     'dp_permissions': 'Permission profile',
@@ -393,7 +427,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'dir_receive_only': 'Receive only',
     'dir_send_only': 'Send only',
     'dir_both_sub': 'You can send to it and it can send to you.',
-    'dir_receiveOnly_sub': 'It can send to you; SUDOSEND will not send anything to it.',
+    'dir_receiveOnly_sub':
+        'It can send to you; SUDOSEND will not send anything to it.',
     'dir_sendOnly_sub': 'You can send to it; anything it sends you is refused.',
     'dir_no_send': '{name} is set to “receive only” — nothing was sent',
     'i_permissions':
@@ -409,7 +444,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'exp_30d': '30 days',
     'trust_expired': 'Trust in {name} expired — verify it again next time',
     'dp_trust_now': 'Trust',
-    'dp_trust_now_sub': 'Only trust a device after comparing the 6-digit code or scanning its QR.',
+    'dp_trust_now_sub':
+        'Only trust a device after comparing the 6-digit code or scanning its QR.',
     'dp_rules': 'Archiving rules for this device',
     'dp_rules_off': 'File organization is off in Receiving.',
     'rule_default': 'Default ({v})',
@@ -449,7 +485,8 @@ const Map<String, Map<String, String>> featureStrings = {
     // Metadata explorer
     'fg_files': 'Files',
     'f_metadata': 'Metadata explorer',
-    'f_metadata_sub': 'EXIF, document properties and media info in file details.',
+    'f_metadata_sub':
+        'EXIF, document properties and media info in file details.',
     'f_metadata_gps': 'Show GPS positions found in files',
     'i_metadata_explorer':
         'In a file’s details (Files → open a file → ⓘ), SUDOSEND shows what the file says about itself:\n\n• Photos: camera, lens, exposure, date taken, size, and the GPS position if there is one (with a map link).\n• PDF: title, author, creating software, dates — and warnings for JavaScript, auto-actions, embedded files or encryption.\n• Word / Excel / PowerPoint: title, author, last editor, dates, application, page count — and whether it contains macros.\n• Video / audio: recording date, duration, resolution, location, title and artist.\n• File: modified and last-opened times, where it came from and its SHA-256.\n\nNothing is uploaded and files are only read, never changed. Turn off GPS display if other people look at your screen.',
@@ -523,15 +560,18 @@ const Map<String, Map<String, String>> featureStrings = {
     'cat_rec_sub': 'Trash, interrupted transfers, crash repair',
     'rec_healthy': 'Everything is consistent',
     'rec_repaired': 'Repaired {n} item(s) after an interruption',
-    'rec_healthy_sub': 'Checked at every start: unfinished file moves are completed or rolled back, and damaged data files are restored from their backup.',
+    'rec_healthy_sub':
+        'Checked at every start: unfinished file moves are completed or rolled back, and damaged data files are restored from their backup.',
     'i_recovery':
         'Smart Recovery keeps your files safe when something goes wrong:\n\n• Every operation that moves files in more than one step (replacing a synced file, moving to the trash, restoring) is written to a journal first. If the app or device stops in the middle, the next start finishes it or rolls it back — the old copy is never lost.\n• SUDOSEND’s own data (settings, history, files index, devices, messages, outbox) is saved safely: a temporary file, the previous version kept as a backup, then a swap. A damaged file is restored from the backup automatically.\n• Interrupted transfers keep their partial data and continue where they stopped when the same device sends the file again.\n• Deleted files go to the trash first, so a mistake can be undone.\n\nEverything that was repaired is also written to the audit log.',
     'trash_title': 'Trash ({n} · {size})',
     'trash_keep': 'Keep deleted files for',
     'trash_off': 'Delete at once',
     'trash_days': '{n} days',
-    'trash_off_sub': 'Deleted files are removed immediately — they cannot be restored.',
-    'trash_on_sub': 'Deleted files (including removed duplicates) can be restored until then; after that they are removed for good.',
+    'trash_off_sub':
+        'Deleted files are removed immediately — they cannot be restored.',
+    'trash_on_sub':
+        'Deleted files (including removed duplicates) can be restored until then; after that they are removed for good.',
     'trash_restore': 'Restore',
     'trash_restored': '{name} restored',
     'trash_empty': 'Empty trash',
@@ -539,9 +579,11 @@ const Map<String, Map<String, String>> featureStrings = {
     'rec_partials': 'Interrupted transfers',
     'rec_scanning': 'Looking…',
     'rec_partials_found': '{n} partial file(s) · {size}',
-    'rec_partials_sub': 'Pieces of transfers that stopped before the end. They resume automatically when the same device sends the same file again. Clean them if you don’t expect that.',
+    'rec_partials_sub':
+        'Pieces of transfers that stopped before the end. They resume automatically when the same device sends the same file again. Clean them if you don’t expect that.',
     'rec_partials_clean': 'Clean up',
-    'rec_partials_confirm': 'Delete all partial files? Those transfers will start from zero next time.',
+    'rec_partials_confirm':
+        'Delete all partial files? Those transfers will start from zero next time.',
     // Storage map
     'heat_title': 'Storage map',
     'heat_all': 'All',
@@ -562,7 +604,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'rs_asked': 'Asked {name} to send it',
     'rs_refused': '{name} did not allow it',
     'f_remote_search': 'Search across devices',
-    'f_remote_search_sub': 'Trusted devices may search files received here and ask for a copy.',
+    'f_remote_search_sub':
+        'Trusted devices may search files received here and ask for a copy.',
     'f_remote_limit': 'Results per search:',
     'dp_search': 'Search my files and ask for copies',
     'i_remote_search':
@@ -583,15 +626,18 @@ const Map<String, Map<String, String>> featureStrings = {
     'apps_add': 'Add {n} app(s) · {size}',
     'apps_split': 'Split app: {n} APK files, sent and installed together',
     'f_share_apps': 'Share apps',
-    'f_share_apps_sub': 'Send installed apps to another device, and install received ones.',
+    'f_share_apps_sub':
+        'Send installed apps to another device, and install received ones.',
     'i_share_apps':
         'Send any app installed on this phone (Send → Apps), like SHAREit or Xender — but end to end encrypted and SHA-256 verified.\n\n• Simple apps travel as one “Name version.apk”. Modern Play Store apps are split into several APKs; SUDOSEND sends the whole set in a folder and installs it as one app on the other phone.\n• Before installing, SUDOSEND shows what the app is: name, package, version, whether it is new, an update, a downgrade or signed by someone else than the installed one (Android refuses that), its permissions with the sensitive ones highlighted, and the signer’s certificate fingerprint.\n• Android always asks you to confirm the install, and the first time it asks you to allow SUDOSEND to install apps.\n\nOnly share apps you are allowed to share. Apps that use Play licensing or need Play services may not run when installed this way.',
-    'apk_need_permission': 'Allow SUDOSEND to install apps, then tap Install again.',
+    'apk_need_permission':
+        'Allow SUDOSEND to install apps, then tap Install again.',
     'apk_install_failed': 'Install failed: {reason}',
     'apk_installed': 'Installed {name}',
     'apk_invalid': 'This is not a valid APK, or it is damaged.',
     'apk_new': 'Not installed on this device',
-    'apk_other_signer': 'Signed by a different developer than the installed app — Android will refuse it',
+    'apk_other_signer':
+        'Signed by a different developer than the installed app — Android will refuse it',
     'apk_downgrade': 'Older than the installed version ({v})',
     'apk_same': 'Same version as installed ({v})',
     'apk_update': 'Update for the installed version {v}',
@@ -605,15 +651,23 @@ const Map<String, Map<String, String>> featureStrings = {
     'ae_appInstall': 'App install',
     'chat_reachable': 'Reachable',
     'last_seen': 'seen {t}',
-    'chat_no_address': 'This device has never been reached on this network yet — open SUDOSEND on it once.',
+    'chat_no_address':
+        'This device has never been reached on this network yet — open SUDOSEND on it once.',
     'chat_declined': 'The other device has messages turned off for you.',
-    'chat_unreachable': 'Could not reach the device. Make sure SUDOSEND is open on it.',
+    'chat_unreachable':
+        'Could not reach the device. Make sure SUDOSEND is open on it.',
     'dp_send_files': 'Send files',
     'paste': 'Paste',
     'play': 'Play',
     'pause': 'Pause',
     'device_name_hint': 'e.g. Living-room PC',
-    'chat_deliver_later': 'Not online right now — failed messages are re-sent automatically when it comes back.',
+    'chat_deliver_later':
+        'Not online right now — failed messages are re-sent automatically when it comes back.',
+    'tab_nearby': 'Nearby',
+    'my_device': 'My device',
+    'hidden': 'Hidden',
+    'visible': 'Visible',
+    'n_nearby': '{n} nearby',
   },
   'ar': {
     'tab_messages': 'الرسايل',
@@ -623,7 +677,6 @@ const Map<String, Map<String, String>> featureStrings = {
     'online': 'متصل',
     'device_actions': 'المزيد',
     'act_message': 'ابعت رسالة',
-
     's_features': 'المزايا',
     's_features_sub': 'شغّل أو اقفل أي ميزة إضافية · دوس (i) تعرف بتعمل إيه',
     'cat_device_sub': 'الاسم، البصمة، والمفتاح محفوظ فين',
@@ -635,13 +688,15 @@ const Map<String, Map<String, String>> featureStrings = {
     'fg_transfer': 'النقل',
     'fg_devices': 'بين أجهزتك',
     'fg_noapp': 'أجهزة من غير التطبيق',
-
     'f_compression': 'ضغط ذكي',
-    'f_compression_sub': 'بيضغط النصوص والأكواد واللوجات والمستندات وهي بتتبعت.',
+    'f_compression_sub':
+        'بيضغط النصوص والأكواد واللوجات والمستندات وهي بتتبعت.',
     'f_previews_send': 'ابعت معاينة للصور',
-    'f_previews_send_sub': 'صور مصغّرة مع الطلب عشان الطرف التاني يشوف إيه جاي.',
+    'f_previews_send_sub':
+        'صور مصغّرة مع الطلب عشان الطرف التاني يشوف إيه جاي.',
     'f_previews_show': 'اعرض معاينة الصور',
-    'f_previews_show_sub': 'اعرض الصور المصغّرة اللي الأجهزة التانية بتبعتها قبل ما تقبل.',
+    'f_previews_show_sub':
+        'اعرض الصور المصغّرة اللي الأجهزة التانية بتبعتها قبل ما تقبل.',
     'f_queue': 'ابعت أول ما يفتح',
     'f_queue_sub': 'حط ملفات في الطابور لجهاز موثوق مقفول دلوقتي.',
     'f_chat': 'الرسايل',
@@ -652,7 +707,6 @@ const Map<String, Map<String, String>> featureStrings = {
     'f_speed_sub': 'الأجهزة الموثوقة تقدر تقيس السرعة الحقيقية للجهاز ده.',
     'f_web': 'المشاركة بالمتصفح',
     'f_web_sub': 'ابعت واستقبل من أي جهاز فيه متصفح.',
-
     'i_compression':
         'قبل ما كل حتة (256 كيلو) تتشفّر، SUDOSEND بيحاول يضغطها. لو صغرت 10% أو أكتر بتتبعت مضغوطة، غير كده بتتبعت زي ما هي. الملفات المضغوطة أصلاً (صور، فيديو، ZIP، APK، PDF، ملفات أوفيس) مش بيحاول فيها، ولو 3 حتت ورا بعض ما صغروش بيبطّل يحاول في الملف ده.\n\nالنتيجة: النصوص واللوجات والأكواد وCSV وقواعد البيانات والصور غير المضغوطة بتوصل أسرع بكتير على واي فاي ضعيف. فحص SHA-256 بيتعمل على البيانات الأصلية، فمفيش أي حاجة ممكن تضيع.\n\nلازم الجهازين يكونوا مشغّلينها. اقفلها لو الجهاز ده معالجه ضعيف جداً والشبكة سريعة جداً.',
     'i_previews_send':
@@ -669,34 +723,40 @@ const Map<String, Map<String, String>> featureStrings = {
         'اختبار السرعة بيبعت بيانات عشوائية لمدة 6 ثواني جوه القناة المشفّرة الحقيقية ويقولك إيه اللي وصل فعلاً — يعني السرعة اللي نقلك هياخدها بجد، مش رقم سرعة الواي فاي النظري.\n\nلو شغالة، الأجهزة الموثوقة تقدر تعمل اختبار على الجهاز ده، ومش بيكتب أي حاجة على التخزين. الأجهزة غير الموثوقة بتترفض دايماً. تقدر تعمل اختبار بنفسك من قايمة "المزيد" لأي جهاز موثوق.',
     'i_web':
         'أي موبايل أو لابتوب أو تلفزيون فيه متصفح يقدر ينزّل منك أو يرفعلك — من غير تطبيق. بتاخد لينك خاص (وQR) فيه توكن عشوائي، وPIN اختياري، ومدة انتهاء، وحد أقصى للتحميلات.\n\nالنقل ده HTTP عادي على شبكتك المحلية (المتصفحات مش بتتكلم بروتوكول Wraith)، فاستخدم الـ PIN على الواي فاي المشترك. لو قفلتها الزراير بتختفي وأي مشاركة شغالة بتقف.',
-    'i_sender_folders': 'بيحط ملفات كل جهاز في فولدر لوحده، مثلاً "SUDOSEND/Seif-Laptop/". مفيد لو كذا جهاز بيبعتولك.',
+    'i_sender_folders':
+        'بيحط ملفات كل جهاز في فولدر لوحده، مثلاً "SUDOSEND/Seif-Laptop/". مفيد لو كذا جهاز بيبعتولك.',
     'i_auto_accept':
         'الملفات من الأجهزة اللي عاملها موثوقة بتتقبل من غير ما تسأل. الأجهزة الغريبة بيتسألك عنها دايماً مع كود الـ 6 أرقام للمقارنة.\n\nسيبها مقفولة لو ناس تانية ساعات بتستخدم أجهزتك الموثوقة.',
     'i_auto_copy': 'لما حد يبعتلك نص، بيتنسخ على الحافظة على طول عشان تلصقه.',
-    'i_background': 'بيسيب إشعار صغير عشان أندرويد ما يقفلش SUDOSEND، فتقدر تستقبل والتطبيق مقفول. بيصرف بطارية شوية زيادة.',
-    'i_notifications': 'إشعار للطلبات الجاية (بزرار قبول/رفض على أندرويد)، والنقل اللي خلص، والرسايل الجديدة.',
+    'i_background':
+        'بيسيب إشعار صغير عشان أندرويد ما يقفلش SUDOSEND، فتقدر تستقبل والتطبيق مقفول. بيصرف بطارية شوية زيادة.',
+    'i_notifications':
+        'إشعار للطلبات الجاية (بزرار قبول/رفض على أندرويد)، والنقل اللي خلص، والرسايل الجديدة.',
     'i_speed_limit':
         'بيحدد أقصى سرعة الجهاز ده بيبعت بيها. كل حاجة لوكال — الموضوع مش باقة نت. الموضوع وقت الواي فاي: نقل كبير ممكن يخلي مكالمات الفيديو والألعاب تهنّج لكل اللي على نفس الراوتر. حط حد عشان تبقى ذوق، و"من غير حد" هو الأسرع.',
     'i_hot':
         'بيعمل "SUDOSEND Outbox" في الفولدر الرئيسي، فيه فولدر لكل جهاز موثوق. أي حاجة ترميها فيه بتتبعت للجهاز ده لوحدها أول ما يفتح وبعدين تتنقل لـ "Sent". حلو للسكريبتات والسحب والإفلات السريع.',
     'i_clip_sync':
         'انسخ على جهاز والصق على التاني. الحافظة بتتبعت للأجهزة الموثوقة بس ومشفّرة. على الموبايلات النظام بيسمح بقراية الحافظة بس والتطبيق مفتوح.\n\nخلي بالك: الباسوردات اللي بتنسخها بتتزامن هي كمان.',
-    'i_ring': 'أجهزتك الموثوقة تقدر تخلي الجهاز ده يرنّ بصوت عالي — حتى لو صامت — عشان تلاقيه. الأجهزة الموثوقة بس.',
+    'i_ring':
+        'أجهزتك الموثوقة تقدر تخلي الجهاز ده يرنّ بصوت عالي — حتى لو صامت — عشان تلاقيه. الأجهزة الموثوقة بس.',
     'i_stealth':
         'الجهاز ده بيبطّل يعلن عن نفسه. محدش هيشوفه في القايمة، بس لسه بيرد على الأجهزة اللي واثق فيها، وتقدر تبعت منه عادي. مفيد على الواي فاي العام.',
     'i_trusted':
         'الأجهزة اللي وثقت فيها (بعد ما قارنت كود الـ 6 أرقام أو مسحت QR). مفتاح هويتها متثبّت: لو حد انتحل شخصيتها النقل بيتمنع. الغي الثقة لو جهاز ضاع منك.',
-    'i_blocked': 'الأجهزة اللي حظرتها. طلباتها بتترفض في صمت من غير ما يظهرلك حاجة.',
-    'i_audit': 'سجل بكل نقل خلص (الأسماء، الأحجام، الأجهزة، الأوقات — من غير محتوى الرسايل أبداً). صدّره JSON للأرشيف أو المراجعة.',
+    'i_blocked':
+        'الأجهزة اللي حظرتها. طلباتها بتترفض في صمت من غير ما يظهرلك حاجة.',
+    'i_audit':
+        'سجل بكل نقل خلص (الأسماء، الأحجام، الأجهزة، الأوقات — من غير محتوى الرسايل أبداً). صدّره JSON للأرشيف أو المراجعة.',
     'i_rejected':
         'الاتصالات اللي اترفضت من حماية الإغراق أو قايمة الحظر من ساعة ما التطبيق اشتغل. رقم كبير على شبكة البيت ممكن يعني إن في حاجة بتفحص جهازك.',
     'i_effects':
         'كامل: بلور زجاج حي وخلفية متحركة (محتاج كارت شاشة كويس). متوازن: نفس الشكل من غير بلور حي — ناعم على أغلب الأجهزة. خفيف: من غير ظلال ولا أنيميشن، الأحسن للراسبري باي والموبايلات القديمة والتلفزيونات.',
     'i_key_storage':
         'مكان حفظ مفتاح الهوية الخاص بالجهاز ده. Android Keystore وWindows DPAPI بيشفّروه بمفتاح النظام بيحميه، فلو نسخت فولدر التطبيق لجهاز تاني هويتك مش بتتنسخ.',
-
     'chat_empty': 'مفيش رسايل لسه',
-    'chat_empty_sub': 'وثّق جهاز (قارن الكود أو امسح الـ QR بتاعه) عشان تبدأ تراسله.',
+    'chat_empty_sub':
+        'وثّق جهاز (قارن الكود أو امسح الـ QR بتاعه) عشان تبدأ تراسله.',
     'chat_new': 'ابدأ محادثة',
     'chat_start': 'دوس عشان تبعت رسالة',
     'chat_hint': 'رسالة',
@@ -706,15 +766,15 @@ const Map<String, Map<String, String>> featureStrings = {
     'chat_clear': 'امسح المحادثة',
     'chat_clear_confirm': 'تمسح كل الرسايل مع الجهاز ده من على الجهاز ده؟',
     'incoming_chat': 'رسالة',
-
     'speed_test': 'اختبار السرعة',
     'speed_running': 'بنقيس السرعة الحقيقية المشفّرة…',
     'speed_note': '1 جيجا هياخد حوالي {gb}',
-    'speed_declined': 'اترفض — الجهاز التاني لازم يكون واثق فيك ومشغّل اختبار السرعة.',
-
+    'speed_declined':
+        'اترفض — الجهاز التاني لازم يكون واثق فيك ومشغّل اختبار السرعة.',
     'sync_title': 'فولدرات المزامنة',
     'sync_manage': 'إدارة فولدرات المزامنة ({n})',
-    'sync_explain': 'في الاتجاهين: الملفات الجديدة والأحدث بتروح وتيجي. النسخ القديمة بتروح ".sudosend-archive"، والمسح مش بيتزامن.',
+    'sync_explain':
+        'في الاتجاهين: الملفات الجديدة والأحدث بتروح وتيجي. النسخ القديمة بتروح ".sudosend-archive"، والمسح مش بيتزامن.',
     'sync_new': 'زامن فولدر',
     'sync_none': 'مفيش فولدرات متزامنة لسه.',
     'sync_need_device': 'افتح جهاز موثوق على الشبكة عشان تعمل مزامنة.',
@@ -732,9 +792,7 @@ const Map<String, Map<String, String>> featureStrings = {
     'sync_unsupported': 'مش متاحة على iOS لسه.',
     'sync_off': 'مزامنة الفولدرات مقفولة من المزايا.',
     'incoming_sync': 'مزامنة فولدر',
-
     'compressed_saved': 'الضغط وفّر {size}',
-
     'fg_app': 'التطبيق',
     'f_update': 'دوّر على تحديثات',
     'f_update_sub': 'بيشوف في نسخة جديدة مرة واحدة لما التطبيق يفتح.',
@@ -749,13 +807,14 @@ const Map<String, Map<String, String>> featureStrings = {
     'update_install': 'نزّل وثبّت',
     'update_open_page': 'افتح صفحة التحميل',
     'update_page': 'صفحة الإصدار',
-    'update_linux': 'على لينكس حدّث بنفس أمر التثبيت (بيختار .deb أو النسخة المحمولة حسب المعالج):',
+    'update_linux':
+        'على لينكس حدّث بنفس أمر التثبيت (بيختار .deb أو النسخة المحمولة حسب المعالج):',
     'update_copy_cmd': 'انسخ الأمر',
-    'update_allow_install': 'اسمح بـ "تثبيت التطبيقات غير المعروفة" لـ SUDOSEND في الشاشة اللي فتحت، وبعدين دوس تثبيت تاني.',
+    'update_allow_install':
+        'اسمح بـ "تثبيت التطبيقات غير المعروفة" لـ SUDOSEND في الشاشة اللي فتحت، وبعدين دوس تثبيت تاني.',
     'update_failed': 'معرفناش نفتح المثبّت.',
     'update_downloaded': 'اتحمّل في {path}',
     's_downloads': 'التحميلات',
-
     'dev_title': 'المطوّر',
     'dev_email': 'الإيميل',
     'dev_portfolio': 'البورتفوليو',
@@ -769,7 +828,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'p2p_scan': 'دوّر تاني',
     'p2p_searching': 'بندوّر… خلي SUDOSEND مفتوح على الموبايل التاني كمان.',
     'p2p_none': 'مفيش حاجة لسه. دوس "دوّر تاني".',
-    'p2p_others': 'أجهزة واي فاي دايركت تانية (تلفزيونات، طابعات، موبايلات مش فاتحة SUDOSEND)',
+    'p2p_others':
+        'أجهزة واي فاي دايركت تانية (تلفزيونات، طابعات، موبايلات مش فاتحة SUDOSEND)',
     'p2p_st_connected': 'متوصّل',
     'p2p_st_invited': 'الدعوة اتبعتت — مستني',
     'p2p_st_failed': 'اترفض أو فشل',
@@ -782,24 +842,31 @@ const Map<String, Map<String, String>> featureStrings = {
     'p2p_disconnect': 'افصل',
     'p2p_role_owner': 'الموبايل ده هو المضيف (192.168.49.1)',
     'p2p_role_client': 'دخل على وصلة الموبايل التاني',
-    'p2p_next': 'روح على الإرسال: الموبايل التاني هيظهر في قايمة الأجهزة خلال ثواني. النقل مشفّر من الطرف للطرف زي العادة.',
+    'p2p_next':
+        'روح على الإرسال: الموبايل التاني هيظهر في قايمة الأجهزة خلال ثواني. النقل مشفّر من الطرف للطرف زي العادة.',
     'p2p_go_send': 'روح للإرسال',
     'p2p_hint':
         'نصايح: الواي فاي لازم يكون شغال على الموبايلين (مش لازم يكون متوصّل بشبكة). أندرويد 12 وأقدم محتاج الـ Location شغال كمان. الموبايل التاني هيطلعله رسالة من النظام "دعوة للاتصال" — لازم يقبلها. الآيفون والكمبيوتر مش بيدعموا الميزة دي؛ استخدم الهوتسبوت أو نفس الواي فاي معاهم.',
-    'p2p_wifi_off': 'شغّل الواي فاي على الموبايل ده. مش لازم يكون متوصّل بأي شبكة.',
-    'p2p_permission': 'اسمح بـ "الأجهزة القريبة" (أو الـ Location على أندرويد 12 وأقدم) عشان تلاقي الموبايلات.',
+    'p2p_wifi_off':
+        'شغّل الواي فاي على الموبايل ده. مش لازم يكون متوصّل بأي شبكة.',
+    'p2p_permission':
+        'اسمح بـ "الأجهزة القريبة" (أو الـ Location على أندرويد 12 وأقدم) عشان تلاقي الموبايلات.',
     'p2p_unsupported': 'واي فاي دايركت متاح على أندرويد بس.',
     'p2p_failed': 'ماعرفناش نوصّل: {reason}',
-    'p2p_reason_busy': 'واي فاي دايركت مشغول. اقفل الواي فاي وافتحه وجرّب تاني.',
+    'p2p_reason_busy':
+        'واي فاي دايركت مشغول. اقفل الواي فاي وافتحه وجرّب تاني.',
     'p2p_reason_unsupported': 'الموبايل ده مش بيدعم واي فاي دايركت.',
     'p2p_reason_permission': 'ناقص إذن.',
     'p2p_reason_error': 'الموبايل رفض. جرّب تاني بعد ثواني.',
     'p2p_err_declined': 'الموبايل التاني رفض الدعوة.',
-    'p2p_err_timeout': 'مفيش رد. اتأكد إن الموبايل التاني قبل رسالة "دعوة للاتصال".',
+    'p2p_err_timeout':
+        'مفيش رد. اتأكد إن الموبايل التاني قبل رسالة "دعوة للاتصال".',
     'p2p_err_busy': 'واي فاي دايركت مشغول. اقفل الواي فاي وافتحه ودوّر تاني.',
     'p2p_err_unsupported': 'الموبايل ده مش بيدعم واي فاي دايركت.',
-    'p2p_err_permission': 'اسمح بـ "الأجهزة القريبة" (أو الـ Location على أندرويد 12 وأقدم) ودوّر تاني.',
-    'p2p_err_error': 'البحث فشل. على أندرويد 12 وأقدم شغّل الـ Location ودوّر تاني.',
+    'p2p_err_permission':
+        'اسمح بـ "الأجهزة القريبة" (أو الـ Location على أندرويد 12 وأقدم) ودوّر تاني.',
+    'p2p_err_error':
+        'البحث فشل. على أندرويد 12 وأقدم شغّل الـ Location ودوّر تاني.',
     'f_wifi_direct': 'واي فاي دايركت',
     'f_wifi_direct_sub': 'وصلة من موبايل لموبايل من غير راوتر (أندرويد).',
     'i_wifi_direct':
@@ -817,14 +884,17 @@ const Map<String, Map<String, String>> featureStrings = {
     'md_location': 'الموقع',
     'md_all': 'الكل',
     'md_off_sub': 'الصور بتتبعت زي ما هي، ومعاها موقع الـ GPS.',
-    'md_location_sub': 'موقع الـ GPS بيتشال. التاريخ ونوع الكاميرا واتجاه الصورة بيفضلوا (مُقترح).',
+    'md_location_sub':
+        'موقع الـ GPS بيتشال. التاريخ ونوع الكاميرا واتجاه الصورة بيفضلوا (مُقترح).',
     'md_all_sub': 'كل حاجة بتتشال ما عدا اتجاه الصورة وبروفايل الألوان.',
     'i_metadata':
         'الصور جواها بيانات مخفية (EXIF/XMP): كتير بيبقى فيها مكان الـ GPS بالظبط اللي اتصورت فيه — بيتك، شغلك — ونوع الموبايل وأرقام تعريفية والتاريخ وبرنامج التعديل.\n\n• سيبها: الصورة الأصلية.\n• الموقع: بيشيل الـ GPS (وبلوكات XMP/IPTC اللي ممكن تكرره). التاريخ والكاميرا والاتجاه بيفضلوا، فالمعرض لسه بيرتب ويلف الصور صح.\n• الكل: بيشيل كل حاجة ما عدا الاتجاه وبروفايل الألوان.\n\nاللي بيتغير هو الهيدر بس؛ الصورة نفسها مش بتتضغط تاني، فمفيش أي خسارة في الجودة. الملف الأصلي على جهازك عمره ما بيتعدل — نسخة نضيفة هي اللي بتتبعت. بيشتغل مع JPEG وPNG؛ HEIC والفيديو بيتبعتوا زي ما هما.\n\nلأجهزتك إنت (زي لابتوب الباك أب) تقدر تسمح بالأصل لكل جهاز: الخصوصية ← الأجهزة الموثوقة ← الجهاز ← "ابعت الصور ببياناتها".',
     'dp_open': 'إعدادات الجهاز',
-    'dp_intro': 'الجهاز ده مسموحله يعمل إيه هنا. أي ميزة مقفولة من المزايا بتفضل مقفولة لكل الأجهزة.',
+    'dp_intro':
+        'الجهاز ده مسموحله يعمل إيه هنا. أي ميزة مقفولة من المزايا بتفضل مقفولة لكل الأجهزة.',
     'dp_folder': 'اسم الفولدر',
-    'dp_folder_help': 'اسم فولدر الجهاز ده لما الملفات تترتب (مثلاً "موبايلي"). لو فاضي بياخد اسم الجهاز.',
+    'dp_folder_help':
+        'اسم فولدر الجهاز ده لما الملفات تترتب (مثلاً "موبايلي"). لو فاضي بياخد اسم الجهاز.',
     'dp_saved': 'اتحفظ',
     'dp_allow': 'اسمح للجهاز ده إنه',
     'dp_auto_accept': 'يبعت ملفات من غير ما يسألني',
@@ -848,7 +918,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'lib_count': '{n} ملف · {size}',
     'lib_no_match': 'مفيش ملفات بالفلاتر دي.',
     'lib_empty': 'مفيش ملفات مستلمة لسه',
-    'lib_empty_sub': 'كل حاجة بتستلمها بتظهر هنا — تقدر تدوّر فيها وتعاينها، وبتتراجع على التكرار. عندك ملفات قديمة في فولدر SUDOSEND؟ اعملها فهرسة مرة واحدة.',
+    'lib_empty_sub':
+        'كل حاجة بتستلمها بتظهر هنا — تقدر تدوّر فيها وتعاينها، وبتتراجع على التكرار. عندك ملفات قديمة في فولدر SUDOSEND؟ اعملها فهرسة مرة واحدة.',
     'lib_scan': 'فهرس الملفات الموجودة',
     'lib_scanning': 'بنفهرس… {done}/{total}',
     'lib_all_devices': 'كل الأجهزة',
@@ -895,9 +966,12 @@ const Map<String, Map<String, String>> featureStrings = {
     'risk_executable': 'ده برنامج. افتحه بس لو واثق في اللي بعته وكنت مستنيه.',
     'risk_script': 'ده سكريبت يقدر يشغّل أوامر على الجهاز ده.',
     'risk_macro': 'ده ملف أوفيس فيه ماكرو، يقدر يشغّل أكواد لو فعّلته.',
-    'risk_shortcut': 'الاختصارات وصور الديسك ممكن تخبّي برامج. افتحه بس لو كنت مستنيه.',
-    'risk_double-extension': 'اسمه بيخبّي نوعه الحقيقي (زي "invoice.pdf.exe"). دي حيلة مشهورة للفيروسات.',
-    'risk_disguised': 'محتواه برنامج رغم إن اسمه بيقول غير كده. دي حيلة مشهورة للفيروسات.',
+    'risk_shortcut':
+        'الاختصارات وصور الديسك ممكن تخبّي برامج. افتحه بس لو كنت مستنيه.',
+    'risk_double-extension':
+        'اسمه بيخبّي نوعه الحقيقي (زي "invoice.pdf.exe"). دي حيلة مشهورة للفيروسات.',
+    'risk_disguised':
+        'محتواه برنامج رغم إن اسمه بيقول غير كده. دي حيلة مشهورة للفيروسات.',
     'risk_disguised-script': 'محتواه سكريبت رغم إن اسمه بيقول غير كده.',
     'risk_open_anyway': 'افتحه برضه',
     'dup_title': 'ملف مكرر',
@@ -949,7 +1023,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'dash_nothing': 'مفيش حاجة لسه.',
     'dash_reports': 'التقارير والسجلات',
     'devices_title': 'الأجهزة',
-    'cat_devices_sub': 'الملفات التعريفية، الأسماء، المجموعات، الصلاحيات، السجل',
+    'cat_devices_sub':
+        'الملفات التعريفية، الأسماء، المجموعات، الصلاحيات، السجل',
     'devices_all': 'الكل ({n})',
     'devices_none': 'مفيش أجهزة في المجموعة دي لسه.',
     'group_new': 'مجموعة جديدة',
@@ -995,7 +1070,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'exp_30d': '30 يوم',
     'trust_expired': 'الثقة في {name} خلصت — أكده تاني المرة الجاية',
     'dp_trust_now': 'وثّق',
-    'dp_trust_now_sub': 'وثّق الجهاز بس بعد ما تقارن كود الـ 6 أرقام أو تمسح الـ QR بتاعه.',
+    'dp_trust_now_sub':
+        'وثّق الجهاز بس بعد ما تقارن كود الـ 6 أرقام أو تمسح الـ QR بتاعه.',
     'dp_rules': 'قواعد الأرشفة للجهاز ده',
     'dp_rules_off': 'ترتيب الملفات مقفول من الاستقبال.',
     'rule_default': 'الافتراضي ({v})',
@@ -1106,7 +1182,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'cat_rec_sub': 'السلة، النقل اللي اتقطع، إصلاح بعد الأعطال',
     'rec_healthy': 'كل حاجة سليمة',
     'rec_repaired': 'اتصلّح {n} حاجة بعد انقطاع',
-    'rec_healthy_sub': 'بيتراجع في كل تشغيل: أي نقل ملفات ما خلصش بيكمل أو بيرجع، وملفات البيانات اللي باظت بترجع من النسخة الاحتياطية.',
+    'rec_healthy_sub':
+        'بيتراجع في كل تشغيل: أي نقل ملفات ما خلصش بيكمل أو بيرجع، وملفات البيانات اللي باظت بترجع من النسخة الاحتياطية.',
     'i_recovery':
         'الاسترجاع الذكي بيحافظ على ملفاتك لو حصل أي مشكلة:\n\n• أي عملية بتنقل ملفات على أكتر من خطوة (استبدال ملف متزامن، النقل للسلة، الاسترجاع) بتتكتب في سجل الأول. لو التطبيق أو الجهاز وقف في النص، التشغيل اللي بعده بيكمّلها أو يرجّعها — النسخة القديمة عمرها ما بتضيع.\n• بيانات SUDOSEND نفسها (الإعدادات، السجل، فهرس الملفات، الأجهزة، الرسايل، الطابور) بتتحفظ بأمان: ملف مؤقت، والنسخة اللي قبلها بتفضل احتياطي، وبعدين بيتبدلوا. لو ملف باظ بيرجع من الاحتياطي لوحده.\n• النقل اللي اتقطع بيحتفظ باللي وصل، وبيكمّل من مكان ما وقف لما نفس الجهاز يبعت نفس الملف تاني.\n• الملفات اللي بتتمسح بتروح السلة الأول، فأي غلطة تقدر ترجّعها.\n\nكل حاجة اتصلحت بتتسجل كمان في سجل المراجعة.',
     'trash_title': 'السلة ({n} · {size})',
@@ -1114,7 +1191,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'trash_off': 'امسح على طول',
     'trash_days': '{n} يوم',
     'trash_off_sub': 'الملفات الممسوحة بتتشال فوراً — ومينفعش ترجع.',
-    'trash_on_sub': 'الملفات الممسوحة (ومعاها المكرر اللي اتشال) تقدر ترجّعها لحد المدة دي؛ بعدها بتتمسح نهائي.',
+    'trash_on_sub':
+        'الملفات الممسوحة (ومعاها المكرر اللي اتشال) تقدر ترجّعها لحد المدة دي؛ بعدها بتتمسح نهائي.',
     'trash_restore': 'رجّع',
     'trash_restored': '{name} رجع',
     'trash_empty': 'فضّي السلة',
@@ -1122,9 +1200,11 @@ const Map<String, Map<String, String>> featureStrings = {
     'rec_partials': 'نقل اتقطع',
     'rec_scanning': 'بندوّر…',
     'rec_partials_found': '{n} ملف ناقص · {size}',
-    'rec_partials_sub': 'حتت من نقل وقف قبل ما يخلص. بيكمّل لوحده لما نفس الجهاز يبعت نفس الملف تاني. نضّفهم لو مش مستني ده.',
+    'rec_partials_sub':
+        'حتت من نقل وقف قبل ما يخلص. بيكمّل لوحده لما نفس الجهاز يبعت نفس الملف تاني. نضّفهم لو مش مستني ده.',
     'rec_partials_clean': 'نضّف',
-    'rec_partials_confirm': 'تمسح كل الملفات الناقصة؟ النقل ده هيبدأ من الأول المرة الجاية.',
+    'rec_partials_confirm':
+        'تمسح كل الملفات الناقصة؟ النقل ده هيبدأ من الأول المرة الجاية.',
     'heat_title': 'خريطة التخزين',
     'heat_all': 'الكل',
     'heat_by_device': 'الأجهزة',
@@ -1143,7 +1223,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'rs_asked': 'طلبنا من {name} يبعته',
     'rs_refused': '{name} ما سمحش',
     'f_remote_search': 'البحث في كل الأجهزة',
-    'f_remote_search_sub': 'الأجهزة الموثوقة تقدر تدوّر في الملفات اللي وصلتك هنا وتطلب نسخة.',
+    'f_remote_search_sub':
+        'الأجهزة الموثوقة تقدر تدوّر في الملفات اللي وصلتك هنا وتطلب نسخة.',
     'f_remote_limit': 'عدد النتايج في كل بحث:',
     'dp_search': 'يدوّر في ملفاتي ويطلب نسخ',
     'i_remote_search':
@@ -1166,7 +1247,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'f_share_apps_sub': 'ابعت التطبيقات المتسطبة لجهاز تاني، وسطّب اللي يوصلك.',
     'i_share_apps':
         'ابعت أي تطبيق متسطب على الموبايل ده (الإرسال ← تطبيقات)، زي SHAREit وXender — بس مشفّر من الطرف للطرف ومتراجع بالـ SHA-256.\n\n• التطبيقات البسيطة بتتبعت ملف واحد "الاسم النسخة.apk". تطبيقات بلاي ستور الحديثة مقسّمة لكذا APK؛ SUDOSEND بيبعت المجموعة كلها في فولدر وبيسطّبها كتطبيق واحد على الموبايل التاني.\n• قبل التسطيب، SUDOSEND بيوريك التطبيق ده إيه: الاسم، الباكدج، النسخة، وهل هو جديد ولا تحديث ولا نسخة أقدم ولا موقّع من مطوّر غير المتسطب (أندرويد بيرفض ده)، وصلاحياته والحساسة منها متعلّم عليها، وبصمة شهادة التوقيع.\n• أندرويد دايماً بيطلب منك تأكيد التسطيب، وأول مرة بيطلب تسمح لـ SUDOSEND يسطّب تطبيقات.\n\nشارك بس التطبيقات المسموحلك تشاركها. التطبيقات اللي بتعتمد على ترخيص بلاي أو خدمات جوجل ممكن ما تشتغلش لو اتسطبت بالطريقة دي.',
-    'apk_need_permission': 'اسمح لـ SUDOSEND يسطّب تطبيقات، وبعدين دوس تسطيب تاني.',
+    'apk_need_permission':
+        'اسمح لـ SUDOSEND يسطّب تطبيقات، وبعدين دوس تسطيب تاني.',
     'apk_install_failed': 'التسطيب فشل: {reason}',
     'apk_installed': 'اتسطّب {name}',
     'apk_invalid': 'ده مش APK سليم، أو بايظ.',
@@ -1185,7 +1267,8 @@ const Map<String, Map<String, String>> featureStrings = {
     'ae_appInstall': 'تسطيب تطبيق',
     'chat_reachable': 'ممكن يتوصل',
     'last_seen': 'آخر ظهور {t}',
-    'chat_no_address': 'الجهاز ده لسه ماتوصلناش ليه على الشبكة دي — افتح SUDOSEND عليه مرة.',
+    'chat_no_address':
+        'الجهاز ده لسه ماتوصلناش ليه على الشبكة دي — افتح SUDOSEND عليه مرة.',
     'chat_declined': 'الجهاز التاني قافل الرسايل ليك.',
     'chat_unreachable': 'مقدرناش نوصل للجهاز. اتأكد إن SUDOSEND مفتوح عليه.',
     'dp_send_files': 'ابعت ملفات',
@@ -1193,6 +1276,12 @@ const Map<String, Map<String, String>> featureStrings = {
     'play': 'تشغيل',
     'pause': 'إيقاف مؤقت',
     'device_name_hint': 'مثلاً: كمبيوتر الصالة',
-    'chat_deliver_later': 'الجهاز مش أونلاين دلوقتي — الرسايل اللي بتفشل بتتبعت تاني لوحدها أول ما يرجع.',
+    'chat_deliver_later':
+        'الجهاز مش أونلاين دلوقتي — الرسايل اللي بتفشل بتتبعت تاني لوحدها أول ما يرجع.',
+    'tab_nearby': 'حواليك',
+    'my_device': 'جهازي',
+    'hidden': 'مخفي',
+    'visible': 'ظاهر للي حواليك',
+    'n_nearby': '{n} قريب',
   },
 };

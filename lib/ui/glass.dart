@@ -1,19 +1,19 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
-import '../app/scope.dart';
 import 'theme.dart';
 
-/// Frosted-glass surface: backdrop blur + translucent gradient + hairline border.
+/// Solid card on the obsidian background: flat fill, hairline border.
+/// (Still called Glass so every screen picks the new look up; [blur] and
+/// [tint] are accepted for compatibility and ignored. [glow] draws a faint
+/// accent hairline instead of a halo.)
 class Glass extends StatelessWidget {
   const Glass({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(18),
-    this.radius = 24,
-    this.blur = 24,
-    this.tint = 0.07,
+    this.padding = const EdgeInsets.all(16),
+    this.radius = 20,
+    this.blur = 0,
+    this.tint = 0,
     this.borderColor,
     this.glow,
     this.onTap,
@@ -31,64 +31,35 @@ class Glass extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final r = BorderRadius.circular(radius);
-    Widget surface = Container(
+    final border = borderColor ??
+        (glow != null ? glow!.withValues(alpha: 0.28) : AppColors.line);
+    final surface = Container(
       padding: padding,
       decoration: BoxDecoration(
         borderRadius: r,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: tint + 0.06),
-            Colors.white.withValues(alpha: tint * 0.35),
-          ],
-        ),
-        border: Border.all(color: borderColor ?? Colors.white.withValues(alpha: 0.14)),
+        color: AppColors.surface,
+        border: Border.all(color: border),
       ),
       child: child,
     );
-    if (onTap != null) {
-      surface = Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: r,
-          splashColor: AppColors.cyan.withValues(alpha: 0.12),
-          highlightColor: Colors.white.withValues(alpha: 0.04),
-          // Clearly visible focus for TV remotes (D-pad) and keyboards.
-          focusColor: AppColors.cyan.withValues(alpha: 0.22),
-          child: surface,
-        ),
-      );
-    }
-    final g = glow;
-    final level = context.effects;
-    final live = level == 'full';
-    final lite = level == 'lite';
-    return DecoratedBox(
-      decoration: BoxDecoration(
+    if (onTap == null) return surface;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: r,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: r,
-        // Without a live blur, a deep translucent navy gives the frosted look
-        // at a fraction of the GPU cost.
-        color: live ? null : (lite ? const Color(0xF0101631) : const Color(0xB30E1530)),
-        boxShadow: g == null || lite
-            ? const []
-            : [BoxShadow(color: g.withValues(alpha: live ? 0.28 : 0.20), blurRadius: 40, spreadRadius: -10)],
-      ),
-      child: ClipRRect(
-        borderRadius: r,
-        child: live
-            ? BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-                child: surface,
-              )
-            : surface,
+        splashColor: AppColors.accent.withValues(alpha: 0.10),
+        highlightColor: Colors.white.withValues(alpha: 0.03),
+        // Clearly visible focus for TV remotes (D-pad) and keyboards.
+        focusColor: AppColors.accent.withValues(alpha: 0.18),
+        child: surface,
       ),
     );
   }
 }
 
-/// Primary action: gradient pill with a soft neon glow.
+/// Primary action: solid accent, no glow.
 class GlowButton extends StatelessWidget {
   const GlowButton({
     super.key,
@@ -108,32 +79,32 @@ class GlowButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
-    final r = BorderRadius.circular(16);
+    final r = BorderRadius.circular(14);
     final content = Row(
       mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (icon != null) ...[
-          Icon(icon, size: 20, color: AppColors.ink),
+          Icon(icon, size: 19, color: AppColors.ink),
           const SizedBox(width: 8),
         ],
-        Text(
-          label,
-          style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w800, fontSize: 15),
+        Flexible(
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w700,
+                fontSize: 15),
+          ),
         ),
       ],
     );
     return AnimatedOpacity(
-      duration: const Duration(milliseconds: 200),
-      opacity: enabled ? 1 : 0.45,
+      duration: const Duration(milliseconds: 160),
+      opacity: enabled ? 1 : 0.4,
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: r,
-          boxShadow: [
-            BoxShadow(color: AppColors.cyan.withValues(alpha: 0.35), blurRadius: 24, spreadRadius: -6),
-          ],
-        ),
+        decoration: BoxDecoration(gradient: gradient, borderRadius: r),
         child: Material(
           type: MaterialType.transparency,
           child: InkWell(
@@ -151,7 +122,7 @@ class GlowButton extends StatelessWidget {
   }
 }
 
-/// Secondary action: glass outline button.
+/// Secondary action: outlined, quiet.
 class GhostButton extends StatelessWidget {
   const GhostButton({
     super.key,
@@ -170,23 +141,32 @@ class GhostButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Glass(
-      radius: 16,
-      blur: 12,
-      tint: 0.04,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-      borderColor: color.withValues(alpha: 0.28),
-      onTap: onPressed,
-      child: Row(
-        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 19, color: color),
-            const SizedBox(width: 8),
+    final quiet = color == AppColors.text;
+    return Opacity(
+      opacity: onPressed == null ? 0.4 : 1,
+      child: Glass(
+        radius: 14,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        borderColor: quiet ? AppColors.line : color.withValues(alpha: 0.35),
+        onTap: onPressed,
+        child: Row(
+          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 8),
+            ],
+            Flexible(
+              child: Text(label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14.5)),
+            ),
           ],
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 14.5)),
-        ],
+        ),
       ),
     );
   }
@@ -194,7 +174,8 @@ class GhostButton extends StatelessWidget {
 
 /// Rounded icon tile with a tinted halo.
 class IconBadge extends StatelessWidget {
-  const IconBadge({super.key, required this.icon, required this.color, this.size = 46});
+  const IconBadge(
+      {super.key, required this.icon, required this.color, this.size = 46});
 
   final IconData icon;
   final Color color;
@@ -207,12 +188,7 @@ class IconBadge extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(size * 0.32),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [color.withValues(alpha: 0.30), color.withValues(alpha: 0.08)],
-        ),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
+        color: color.withValues(alpha: 0.12),
       ),
       child: Icon(icon, color: color, size: size * 0.5),
     );
@@ -228,16 +204,16 @@ class SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+      padding: const EdgeInsets.fromLTRB(4, 6, 4, 10),
       child: Row(
         children: [
           Text(
-            text.toUpperCase(),
+            text,
             style: const TextStyle(
               color: AppColors.muted,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.6,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
             ),
           ),
           const Spacer(),
@@ -248,7 +224,7 @@ class SectionTitle extends StatelessWidget {
   }
 }
 
-/// Glass dialog shell.
+/// Dialog shell: solid raised surface.
 class GlassDialog extends StatelessWidget {
   const GlassDialog({super.key, required this.child, this.maxWidth = 440});
 
@@ -257,20 +233,28 @@ class GlassDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tiny = MediaQuery.sizeOf(context).width < 300;
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      insetPadding: MediaQuery.sizeOf(context).width < 300
+      insetPadding: tiny
           ? const EdgeInsets.all(6)
           : const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
-        child: Glass(
-          tint: 0.10,
-          blur: 34,
-          radius: 28,
-          padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 300 ? 12 : 22),
-          glow: AppColors.violet,
+        child: Container(
+          padding: EdgeInsets.all(tiny ? 12 : 22),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceHi,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.line),
+            boxShadow: const [
+              BoxShadow(
+                  color: Color(0x80000000),
+                  blurRadius: 40,
+                  offset: Offset(0, 16))
+            ],
+          ),
           // Scrolls on small screens (watches, landscape phones) instead of overflowing.
           child: SingleChildScrollView(child: child),
         ),
