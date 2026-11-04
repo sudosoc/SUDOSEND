@@ -319,6 +319,7 @@ class _MediaPlayerState extends State<_MediaPlayer> {
         Row(
           children: [
             IconButton(
+              tooltip: context.tr(playing ? 'pause' : 'play'),
               iconSize: 36,
               color: Colors.white,
               icon: Icon(playing ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded),

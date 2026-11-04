@@ -39,6 +39,7 @@ class WebSharePage extends StatelessWidget {
                         Row(
                           children: [
                             IconButton(
+                              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
                               onPressed: () => Navigator.of(context).pop(),
                               icon: const BackButtonIcon(),
                               color: AppColors.text,
@@ -96,6 +97,7 @@ class WebSharePage extends StatelessWidget {
                                               style: kMono.copyWith(fontSize: 12, color: AppColors.cyan)),
                                         ),
                                         IconButton(
+                                          tooltip: context.tr('copy'),
                                           icon: const Icon(Icons.copy_rounded, size: 18, color: AppColors.muted),
                                           onPressed: () {
                                             Clipboard.setData(ClipboardData(text: u));

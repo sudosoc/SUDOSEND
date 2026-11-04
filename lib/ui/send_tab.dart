@@ -383,6 +383,7 @@ class _FileRow extends StatelessWidget {
           const SizedBox(width: 8),
           Text(formatBytes(file.size), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
           IconButton(
+            tooltip: context.tr('delete'),
             onPressed: onRemove,
             visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.muted),
@@ -667,6 +668,7 @@ class _DevicesSectionState extends State<_DevicesSection> {
                   hintText: '192.168.1.20  ·  sudosend://pair?…',
                   errorText: error,
                   suffixIcon: IconButton(
+                    tooltip: context.tr('paste'),
                     icon: const Icon(Icons.content_paste_rounded, size: 18),
                     onPressed: () async {
                       final clip = (await Clipboard.getData(Clipboard.kTextPlain))?.text;

@@ -188,6 +188,7 @@ class SubPageHeader extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
+            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
             onPressed: () => Navigator.of(context).pop(),
             icon: const BackButtonIcon(),
             color: AppColors.text,

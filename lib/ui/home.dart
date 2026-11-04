@@ -363,7 +363,7 @@ Future<void> showRenameDialog(BuildContext context, AppController controller) as
               autofocus: true,
               maxLength: 40,
               onSubmitted: (v) => Navigator.pop(ctx, v),
-              decoration: const InputDecoration(hintText: 'e.g. Seif-Laptop', counterText: ''),
+              decoration: InputDecoration(hintText: context.tr('device_name_hint'), counterText: ''),
             ),
             const SizedBox(height: 18),
             Row(
@@ -514,13 +514,19 @@ class _NavButton extends StatelessWidget {
                 children: [icon, if (showLabel) ...[const SizedBox(width: 8), Flexible(child: label)]],
               ),
       );
-    final button = Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        focusColor: AppColors.cyan.withValues(alpha: 0.25),
-        child: body,
+    final button = Semantics(
+      button: true,
+      selected: selected,
+      label: badge > 0 ? '${context.tr(item.labelKey)}, $badge' : context.tr(item.labelKey),
+      excludeSemantics: true,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          focusColor: AppColors.cyan.withValues(alpha: 0.25),
+          child: body,
+        ),
       ),
     );
     return showLabel ? button : Tooltip(message: context.tr(item.labelKey), child: button);

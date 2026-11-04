@@ -1,7 +1,7 @@
 name: wraith_core
 description: "Wraith Protocol v1 — discovery, handshake, encrypted transfer. Pure Dart core of SUDOSEND, plus the sudosend CLI."
 publish_to: 'none'
-version: 0.10.1
+version: 0.10.2
 
 environment:
   sdk: ^3.5.0

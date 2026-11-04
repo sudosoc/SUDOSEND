@@ -609,6 +609,11 @@ const Map<String, Map<String, String>> featureStrings = {
     'chat_declined': 'The other device has messages turned off for you.',
     'chat_unreachable': 'Could not reach the device. Make sure SUDOSEND is open on it.',
     'dp_send_files': 'Send files',
+    'paste': 'Paste',
+    'play': 'Play',
+    'pause': 'Pause',
+    'device_name_hint': 'e.g. Living-room PC',
+    'chat_deliver_later': 'Not online right now — failed messages are re-sent automatically when it comes back.',
   },
   'ar': {
     'tab_messages': 'الرسايل',
@@ -1184,5 +1189,10 @@ const Map<String, Map<String, String>> featureStrings = {
     'chat_declined': 'الجهاز التاني قافل الرسايل ليك.',
     'chat_unreachable': 'مقدرناش نوصل للجهاز. اتأكد إن SUDOSEND مفتوح عليه.',
     'dp_send_files': 'ابعت ملفات',
+    'paste': 'لصق',
+    'play': 'تشغيل',
+    'pause': 'إيقاف مؤقت',
+    'device_name_hint': 'مثلاً: كمبيوتر الصالة',
+    'chat_deliver_later': 'الجهاز مش أونلاين دلوقتي — الرسايل اللي بتفشل بتتبعت تاني لوحدها أول ما يرجع.',
   },
 };

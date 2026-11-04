@@ -24,6 +24,10 @@ class ChatMessage {
   /// Why the last attempt failed (shown under the bubble; not saved).
   String? error;
 
+  /// False when the other side refused (messages off for us): retrying
+  /// automatically would only spam it. A manual tap still works.
+  bool retryable = true;
+
   Map<String, Object> toJson() => {
         'id': id,
         't': text,

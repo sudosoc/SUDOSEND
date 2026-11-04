@@ -99,6 +99,7 @@ class SettingsPage extends StatelessWidget {
               label: context.tr('s_name'),
               value: id.name,
               trailing: IconButton(
+                tooltip: context.tr('edit'),
                 icon: const Icon(Icons.edit_rounded, size: 18, color: AppColors.muted),
                 onPressed: () => showRenameDialog(context, controller),
               ),

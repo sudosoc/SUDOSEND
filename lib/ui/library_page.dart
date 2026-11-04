@@ -92,6 +92,7 @@ class _LibraryTabState extends State<LibraryTab> {
                       suffixIcon: _search.text.isEmpty
                           ? null
                           : IconButton(
+                              tooltip: context.tr('clear'),
                               icon: const Icon(Icons.close_rounded, size: 18),
                               onPressed: () {
                                 _search.clear();

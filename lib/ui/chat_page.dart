@@ -231,6 +231,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                       child: Row(
                         children: [
                           IconButton(
+                            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
                             onPressed: () => Navigator.of(context).pop(),
                             icon: const BackButtonIcon(),
                             color: AppColors.text,
@@ -266,18 +267,38 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                             itemCount: messages.length,
                             itemBuilder: (context, i) {
-                              final m = messages[messages.length - 1 - i];
-                              return _Bubble(
+                              final idx = messages.length - 1 - i;
+                              final m = messages[idx];
+                              final bubble = _Bubble(
                                 message: m,
                                 onRetry: m.state == ChatState.failed
                                     ? () => unawaited(c.sendChat(widget.fingerprint, widget.name, m.text, retry: m))
                                     : null,
                               );
+                              final newDay = idx == 0 || !_sameDay(messages[idx - 1].at, m.at);
+                              if (!newDay) return bubble;
+                              return Column(children: [_DayChip(at: m.at), bubble]);
                             },
                           ),
                         ),
                       ),
                     ),
+                    if (!online)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 2, 20, 0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.schedule_send_rounded, size: 14, color: statusColor),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(context.tr('chat_deliver_later'),
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: statusColor, fontSize: 11.5)),
+                            ),
+                          ],
+                        ),
+                      ),
                     Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 720),
@@ -305,6 +326,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                                   ),
                                 ),
                                 IconButton(
+                                  tooltip: context.tr('send'),
                                   onPressed: _send,
                                   icon: const Icon(Icons.send_rounded, color: AppColors.cyan),
                                 ),
@@ -352,6 +374,35 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
       ),
     );
     if (ok == true) c.clearThread(widget.fingerprint);
+  }
+}
+
+bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+
+/// "Today" / "Yesterday" / a date, centred above the first message of a day.
+class _DayChip extends StatelessWidget {
+  const _DayChip({required this.at});
+  final DateTime at;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final label = _sameDay(at, now)
+        ? context.tr('today')
+        : _sameDay(at, now.subtract(const Duration(days: 1)))
+            ? context.tr('yesterday')
+            : MaterialLocalizations.of(context).formatMediumDate(at);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 11.5, fontWeight: FontWeight.w700)),
+      ),
+    );
   }
 }
 

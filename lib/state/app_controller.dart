@@ -1325,6 +1325,42 @@ class AppController extends ChangeNotifier {
       unawaited(devices.save());
     }
     if (fresh) _rememberTrustedAddresses();
+    if (settings.chat) {
+      for (final p in peers) {
+        if (!p.manual) _retryFailedChat(p.id);
+      }
+    }
+  }
+
+  final Map<String, DateTime> _chatRetryAt = {};
+  final Set<String> _chatRetrying = {};
+
+  /// A device that comes back receives the messages that failed while it was
+  /// away (once a minute at most, last 24 h, never ones it refused).
+  void _retryFailedChat(String fp) {
+    if (_chatRetrying.contains(fp) || !trust.isTrusted(fp)) return;
+    final thread = chat.threads[fp];
+    if (thread == null) return;
+    final now = DateTime.now();
+    final pending = [
+      for (final m in thread.messages)
+        if (m.outgoing && m.state == ChatState.failed && m.retryable && now.difference(m.at) < const Duration(hours: 24)) m,
+    ];
+    if (pending.isEmpty) return;
+    final last = _chatRetryAt[fp];
+    if (last != null && now.difference(last) < const Duration(minutes: 1)) return;
+    _chatRetryAt[fp] = now;
+    _chatRetrying.add(fp);
+    unawaited(() async {
+      try {
+        for (final m in pending) {
+          await sendChat(fp, thread.peerName, m.text, retry: m);
+          if (m.state == ChatState.failed) break; // still unreachable: stop, try later
+        }
+      } finally {
+        _chatRetrying.remove(fp);
+      }
+    }());
   }
 
   /// Auto-reconnect: also announce straight to the last address of every
@@ -2010,6 +2046,7 @@ class AppController extends ChangeNotifier {
         if (again != null) job = await _engine.send(again, const [], text: msg.text, chat: true);
       }
       msg.state = job.status == TransferStatus.done ? ChatState.sent : ChatState.failed;
+      msg.retryable = job.status != TransferStatus.declined;
       msg.error = switch (job.status) {
         TransferStatus.done => null,
         TransferStatus.declined => t('chat_declined'),
