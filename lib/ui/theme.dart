@@ -62,7 +62,7 @@ ThemeData buildTheme({bool arabic = false}) {
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: AppColors.surfaceHi,
-      contentTextStyle: const TextStyle(color: AppColors.text),
+      contentTextStyle: base.textTheme.bodyMedium?.copyWith(color: AppColors.text),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
         side: const BorderSide(color: AppColors.line),
@@ -97,7 +97,7 @@ ThemeData buildTheme({bool arabic = false}) {
       backgroundColor: AppColors.surface,
       side: const BorderSide(color: AppColors.line),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      labelStyle: const TextStyle(color: AppColors.text, fontSize: 13),
+      labelStyle: base.textTheme.labelLarge?.copyWith(color: AppColors.text, fontSize: 13),
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(

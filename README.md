@@ -23,10 +23,62 @@
   <b><a href="https://github.com/sudosoc/SUDOSEND/releases/latest">All downloads</a></b>
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/phone-home.png" width="19%" alt="Nearby">
+  <img src="docs/screenshots/phone-files.png" width="19%" alt="Files">
+  <img src="docs/screenshots/phone-chat.png" width="19%" alt="Chat">
+  <img src="docs/screenshots/phone-device.png" width="19%" alt="Device">
+  <img src="docs/screenshots/phone-dashboard.png" width="19%" alt="Statistics">
+</p>
+
+---
+
+## A quick tour
+
+SUDOSEND has four tabs — **Nearby**, **Files**, **Transfers**, **Messages** — and one place for
+everything about *your own* device (tap the chip in the header). Nothing else to learn.
+
+| | |
+|---|---|
+| <img src="docs/screenshots/phone-home.png" width="260"> | **Nearby** — devices on your network appear within seconds. Tap one to send; pick *Files*, *Folder* or *Text* first, or just drag & drop on desktop. A green dot means it was heard in the last few seconds. |
+| <img src="docs/screenshots/phone-my-device.png" width="260"> | **My device** — your name, IP address and a QR code. The other device scans it to pair instantly, with no code to compare. Also where you switch *Receiving* on or off. |
+| <img src="docs/screenshots/phone-files.png" width="260"> | **Files** — everything you received, searchable, with timeline, previews, duplicate detection and a metadata explorer (EXIF, PDF/Office properties, security flags). |
+| <img src="docs/screenshots/phone-chat.png" width="260"> | **Messages** — encrypted chat with each device. If the other side is briefly unreachable the message waits and is retried automatically; you can tap to retry any failed one. |
+| <img src="docs/screenshots/phone-devices.png" width="260"> | **Devices** — nicknames, trust levels, groups and permission profiles per device. |
+| <img src="docs/screenshots/phone-device.png" width="260"> | **Device page** — what you exchanged with one device, what it's allowed to do, and its fingerprint. |
+| <img src="docs/screenshots/phone-dashboard.png" width="260"> | **Statistics** — sent vs. received, busiest devices, exportable reports (CSV / JSON / PDF). |
+| <img src="docs/screenshots/phone-activity.png" width="260"> | **Activity** — every transfer with status, speed and SHA-256 verification. |
+| <img src="docs/screenshots/phone-storage.png" width="260"> | **Storage** — a map of what SUDOSEND is using, with safe clean-up and a trash you can restore from. |
+| <img src="docs/screenshots/phone-settings.png" width="260"> | **Settings** — every optional feature has an **(i)** button and an on/off switch. |
+
+### Arabic and right-to-left
+
+The whole interface switches to Arabic (Settings → Language) with proper right-to-left layout.
+
+<p align="center">
+  <img src="docs/screenshots/phone-ar-home.png" width="30%" alt="Arabic — Nearby">
+  <img src="docs/screenshots/phone-ar-files.png" width="30%" alt="Arabic — Files">
+  <img src="docs/screenshots/phone-ar-my-device.png" width="30%" alt="Arabic — My device">
+</p>
+
+### Desktop
+
+Windows, Linux and macOS get a wide layout with a side-by-side view.
+
+<p align="center">
+  <img src="docs/screenshots/desktop-home.png" width="49%" alt="Desktop — Nearby">
+  <img src="docs/screenshots/desktop-files.png" width="49%" alt="Desktop — Files">
+  <img src="docs/screenshots/desktop-dashboard.png" width="49%" alt="Desktop — Statistics">
+  <img src="docs/screenshots/desktop-settings.png" width="49%" alt="Desktop — Settings">
+</p>
+
+> Screenshots are rendered from the real app with demo data (no real devices or files shown).
+
 ---
 
 ## Contents
 
+- [A quick tour](#a-quick-tour)
 - [What's new](#whats-new)
 - [Features](#features)
 - [Install](#install) — [which file?](#which-file-do-i-download) · [Android](#android) · [Windows](#windows) · [Linux](#linux--kali-debian-ubuntu-raspberry-pi-os) · [macOS](#macos) · [iPhone](#iphone--ipad) · [one-line Linux](#one-line-install-linux)
@@ -42,6 +94,17 @@
 ---
 
 ## What's new
+
+**0.11 — a new look and a simpler structure.** Four tabs instead of six (Nearby · Files · Transfers ·
+Messages); everything about your own device lives in one *My device* page. New "Obsidian" design: solid
+surfaces, a single green accent, IBM Plex type, no animated background — calmer and faster, in English
+and Arabic, on phone and desktop.
+
+**0.10.2** — polish pass: clearer error messages, retry for failed chat messages, resume handling.
+
+**0.10.1** — fixed chat showing a connected device as *offline*: SUDOSEND now remembers the address a
+device was last heard at (including from a file transfer) and probes it directly, so chat works even if a
+broadcast was missed.
 
 **0.10** — share installed apps (Android), including split Play Store apps, with a safe-install screen
 (version, signer, permissions).
@@ -165,6 +228,8 @@ each labelled with its system, e.g. **SUDOSEND (Android) — arm64-v8a · most p
 
 ### Android
 
+![Install on Android — 4 steps](docs/install/android.png)
+
 1. Download the APK for your phone (almost every phone since 2017 is **arm64-v8a**; unsure → **universal**).
 2. Open it. Allow installs from your browser or file manager when Android asks, go back, tap **Install**.
 3. Open **SUDOSEND**. Received files go to **Download/SUDOSEND**.
@@ -173,6 +238,8 @@ each labelled with its system, e.g. **SUDOSEND (Android) — arm64-v8a · most p
 
 ### Windows
 
+![Install on Windows — 4 steps](docs/install/windows.png)
+
 1. Run `sudosend-windows-x64-setup.exe`. If SmartScreen says *Windows protected your PC*,
    click **More info → Run anyway** (the installer is not code-signed yet).
 2. Keep the defaults: **Allow through Windows Firewall** (otherwise other devices can't find this PC)
@@ -180,6 +247,8 @@ each labelled with its system, e.g. **SUDOSEND (Android) — arm64-v8a · most p
 3. Received files go to **Downloads\SUDOSEND**.
 
 ### Linux — Kali, Debian, Ubuntu, Raspberry Pi OS
+
+![Install on Linux — 4 steps](docs/install/linux.png)
 
 ```bash
 cd ~/Downloads
@@ -204,6 +273,8 @@ menu entry, and offers to open the firewall ports. `--yes` answers everything wi
 
 ### macOS
 
+![Install on macOS — 4 steps](docs/install/macos.png)
+
 1. Unzip `sudosend-macos.zip` and drag **SUDOSEND** into *Applications*.
 2. Not notarized yet: the first time, **right-click → Open → Open**
    (or `xattr -dr com.apple.quarantine /Applications/SUDOSEND.app`).
@@ -211,10 +282,15 @@ menu entry, and offers to open the firewall ports. `--yes` answers everything wi
 
 ### iPhone / iPad
 
+![Install on iPhone — 4 steps](docs/install/ios.png)
+
 No App Store build yet. Sideload `sudosend-ios-unsigned.ipa` with a free Apple ID using
 [AltStore](https://altstore.io) or [Sideloadly](https://sideloadly.io) (refresh every 7 days).
 Apple blocks network discovery for unapproved apps, so on iPhone **scan the other device's QR**
-(Receive tab) or use **IP / link**. Files are in the **Files** app → *On My iPhone → SUDOSEND*.
+(header chip → My device) or use **IP / link**. Files are in the **Files** app → *On My iPhone → SUDOSEND*.
+
+> The install pictures are **illustrations** of the steps; the exact wording of your system's dialogs
+> may differ slightly. The app screenshots above are real renders of the app.
 
 ### One-line install (Linux)
 
@@ -241,16 +317,18 @@ curl -fsSL https://raw.githubusercontent.com/sudosoc/SUDOSEND/main/get.sh | bash
 
 ## First transfer
 
+![Your first transfer — 4 steps](docs/install/first-transfer.png)
+
 1. Open SUDOSEND on **both** devices, on the **same Wi-Fi or hotspot** (or link two phones with Wi-Fi Direct).
-2. On the sender: **Send** tab → **Files**, **Folder** or **Text**.
+2. On the sender: **Nearby** tab → **Files**, **Folder** or **Text**.
 3. Tap the receiver under **Nearby devices**.
 4. Both screens show the same **6-digit code**. Check it on the receiver and tap **Accept**.
    Tick **Trust this device** to skip the code next time.
 5. Done — every file is SHA-256 verified before it is saved.
 
-**Faster: QR pairing.** Receiver → **Receive** tab; phone → **Scan QR** on the Send tab. Both devices
+**Faster: QR pairing.** Receiver → tap the device chip in the header (**My device**); phone → **Scan QR** on the Nearby tab. Both devices
 now trust each other. If a device doesn't appear, use **IP / link** and type the IP shown on the
-receiver's Receive tab.
+receiver's My device page.
 
 ---
 
@@ -328,6 +406,9 @@ sudosend --help
 | A deleted file is needed again | *Settings → Recovery & trash* → **Restore** (kept for the days you chose). |
 | Search across devices finds nothing on a device | It must be trusted, online, and allow *Search across devices* (Features) and *Search my files* (its device permissions). |
 | No video preview on Windows/Linux | Videos open in your system player there; in-app video is on Android, iOS and macOS. |
+| Chat says a device is *offline* | It shows *offline* only if nothing was heard from it for ~15 s. SUDOSEND probes the last known address on opening the chat; if it still fails, the message is queued and sent automatically when the device is back. Check both are on the same network. |
+| A chat message shows a red *failed* mark | Tap it to retry. The reason is shown (device offline, rejected, or timed out). |
+| iPhone doesn't list any devices | Expected for sideloaded apps — scan the other device's QR or use **IP / link**. |
 | Devices ask for the code again after an update | The device key couldn't be unlocked (OS key store reset) and was recreated — pair again. |
 
 ---

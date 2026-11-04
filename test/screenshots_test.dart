@@ -123,13 +123,13 @@ Future<AppController> _demo(Directory dir, {String lang = 'en'}) async {
   await h(TransferDirection.incoming, 'Work-Laptop', 'windows', 3,
       48 * 1024 * 1024, 'Q4-report.pdf', 4);
   await h(TransferDirection.outgoing, 'Galaxy Tab S9', 'android', 12,
-      312 * 1024 * 1024, 'IMG_2041.jpg', 35);
+      312 * 1024 * 1024, 'IMG_2041.heic', 35);
   await h(TransferDirection.incoming, 'Studio-Mac', 'macos', 1,
       1800 * 1024 * 1024, 'demo-reel.mov', 190);
   for (final (name, who, size, mins) in [
     ('Q4-report.pdf', 'Work-Laptop', 4 * 1024 * 1024, 4),
     ('invoice-1042.pdf', 'Work-Laptop', 220 * 1024, 4),
-    ('IMG_2041.jpg', 'Galaxy Tab S9', 3 * 1024 * 1024, 30),
+    ('IMG_2041.heic', 'Galaxy Tab S9', 3 * 1024 * 1024, 30),
     ('demo-reel.mov', 'Studio-Mac', 1800 * 1024 * 1024, 190),
     ('podcast-ep12.mp3', 'Studio-Mac', 42 * 1024 * 1024, 700),
     ('backup.zip', 'raspberrypi', 220 * 1024 * 1024, 2000),

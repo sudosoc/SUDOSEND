@@ -1,0 +1,7 @@
+<!doctype html><meta charset=utf-8><link rel=stylesheet href=base.css><body>
+<h1>Install on Linux</h1><div class=sub>Kali, Debian, Ubuntu, Mint, Raspberry Pi OS — apt installs everything it needs.</div><div class=row><div class="step"><div class="num">1</div><div class="ui"><div class="code">$ uname -m
+x86_64     → _amd64.deb
+aarch64    → _arm64.deb</div></div><div class="cap">Which CPU?<small>x86_64 → amd64. aarch64 → arm64 (every Raspberry Pi 3/4/5 on 64-bit OS).</small></div></div><div class="step"><div class="num">2</div><div class="ui"><div class="code">$ cd ~/Downloads
+$ sudo apt install ./sudosend_*_amd64.deb</div></div><div class="cap">Install the .deb<small>Keep the ./ in front of the file name — it tells apt this is a local file.</small></div></div><div class="step"><div class="num">3</div><div class="ui"><div class="code">$ sudo ufw allow 47823/udp
+$ sudo ufw allow 47824:47833/tcp</div></div><div class="cap">Open the firewall (if you use one)<small>SUDOSEND uses UDP 47823 for discovery and TCP 47824–47833 for transfers.</small></div></div><div class="step"><div class="num">4</div><div class="ui"><div class="code">$ sudosend</div><div class="mut" style="font-size:12.5px">or: curl -fsSL …/get.sh | bash</div></div><div class="cap">Start it<small>From the applications menu, or type the command. Any other distro: tar.gz + ./install.sh</small></div></div></div>
+<div class=note><span>Illustration of the steps — your system's exact wording and look may differ slightly.</span><span>SUDOSEND · github.com/sudosoc/SUDOSEND</span></div></body>
