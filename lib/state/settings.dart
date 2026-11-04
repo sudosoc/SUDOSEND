@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:ffi' show Abi;
 import 'dart:io';
-import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -178,7 +177,7 @@ class SettingsController extends ChangeNotifier {
   /// Upload cap in MB/s (0 = unlimited).
   int uploadLimit = 0;
 
-  /// Desktop: send whatever is dropped into "SUDOSEND Outbox/<device>/".
+  /// Desktop: send whatever is dropped into "SUDOSEND Outbox/&lt;device&gt;/".
   bool hotFolders = false;
 
   /// Let trusted devices make this one ring ("find my device").

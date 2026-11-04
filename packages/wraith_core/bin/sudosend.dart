@@ -186,7 +186,7 @@ Future<int> _run(_Args args) async {
 }
 
 /// `sudosend` with no arguments opens the desktop app when it is installed
-/// next to the CLI (Windows installer puts the CLI in <app>\\cli\\).
+/// next to the CLI (Windows installer puts the CLI in `<app>\\cli\\`).
 Future<bool> _launchApp() async {
   final here = p.dirname(Platform.resolvedExecutable);
   final candidates = Platform.isWindows
