@@ -7,6 +7,7 @@ import '../app/scope.dart';
 import '../state/app_controller.dart';
 import '../state/chat.dart';
 import 'background.dart';
+import 'devices_page.dart' show sinceLabel;
 import 'glass.dart';
 import 'theme.dart';
 
@@ -18,7 +19,11 @@ class MessagesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final threads = controller.chat.sorted;
-    final online = {for (final p in controller.peers) p.id};
+    Color dot(String fp) => controller.isOnline(fp)
+        ? AppColors.mint
+        : controller.isRecent(fp)
+            ? AppColors.amber
+            : AppColors.muted;
     final startable = controller.trust.all.where((d) => !controller.chat.threads.containsKey(d.fingerprint)).toList();
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -41,11 +46,11 @@ class MessagesTab extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: _ThreadTile(
-              name: t.peerName,
+              name: controller.displayName(t.fingerprint, t.peerName),
               preview: t.messages.isEmpty ? '' : t.messages.last.text,
               unread: t.unread,
-              online: online.contains(t.fingerprint),
-              onTap: () => _open(context, t.fingerprint, t.peerName),
+              dot: dot(t.fingerprint),
+              onTap: () => _open(context, t.fingerprint, controller.displayName(t.fingerprint, t.peerName)),
             ),
           ),
         if (startable.isNotEmpty) ...[
@@ -55,11 +60,11 @@ class MessagesTab extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _ThreadTile(
-                name: d.name,
+                name: controller.displayName(d.fingerprint, d.name),
                 preview: context.tr('chat_start'),
                 unread: 0,
-                online: online.contains(d.fingerprint),
-                onTap: () => _open(context, d.fingerprint, d.name),
+                dot: dot(d.fingerprint),
+                onTap: () => _open(context, d.fingerprint, controller.displayName(d.fingerprint, d.name)),
               ),
             ),
         ],
@@ -79,14 +84,14 @@ class _ThreadTile extends StatelessWidget {
     required this.name,
     required this.preview,
     required this.unread,
-    required this.online,
+    required this.dot,
     required this.onTap,
   });
 
   final String name;
   final String preview;
   final int unread;
-  final bool online;
+  final Color dot;
   final VoidCallback onTap;
 
   @override
@@ -108,7 +113,7 @@ class _ThreadTile extends StatelessWidget {
                   height: 12,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: online ? AppColors.mint : AppColors.muted,
+                    color: dot,
                     border: Border.all(color: AppColors.bgTop, width: 2),
                   ),
                 ),
@@ -155,6 +160,8 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   final _text = TextEditingController();
   final _scroll = ScrollController();
 
+  Timer? _knock;
+
   AppController get c => widget.controller;
 
   @override
@@ -163,10 +170,18 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
     c.openThread = widget.fingerprint;
     c.markThreadRead(widget.fingerprint);
     c.addListener(_onChange);
+    // Don't trust a missed beacon: knock on the device's last address now and
+    // every few seconds while the thread is open.
+    c.pingDevice(widget.fingerprint);
+    unawaited(c.rescan());
+    _knock = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!c.isOnline(widget.fingerprint)) c.pingDevice(widget.fingerprint);
+    });
   }
 
   @override
   void dispose() {
+    _knock?.cancel();
     c.removeListener(_onChange);
     if (c.openThread == widget.fingerprint) c.openThread = null;
     _text.dispose();
@@ -198,7 +213,16 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
             child: ListenableBuilder(
               listenable: c,
               builder: (context, _) {
-                final online = c.peers.any((p) => p.id == widget.fingerprint);
+                final online = c.isOnline(widget.fingerprint);
+                final recent = !online && c.isRecent(widget.fingerprint);
+                final seen = c.lastSeenOf(widget.fingerprint);
+                final status = online
+                    ? context.tr('online')
+                    : [
+                        context.tr(recent ? 'chat_reachable' : 'chat_offline'),
+                        if (seen != null) context.tr('last_seen', {'t': sinceLabel(context, seen)}),
+                      ].join(' · ');
+                final statusColor = online ? AppColors.mint : recent ? AppColors.amber : AppColors.muted;
                 final messages = c.chat.threads[widget.fingerprint]?.messages ?? const <ChatMessage>[];
                 return Column(
                   children: [
@@ -218,8 +242,9 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                                 Text(widget.name,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                                Text(context.tr(online ? 'online' : 'chat_offline'),
-                                    style: TextStyle(color: online ? AppColors.mint : AppColors.muted, fontSize: 12)),
+                                Text(status,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: statusColor, fontSize: 12)),
                               ],
                             ),
                           ),
@@ -380,10 +405,22 @@ class _Bubble extends StatelessWidget {
                     ],
                     if (onRetry != null) ...[
                       const SizedBox(width: 4),
-                      Text(context.tr('chat_retry'), style: const TextStyle(color: AppColors.danger, fontSize: 10.5, fontWeight: FontWeight.w800)),
+                      Text(context.tr('chat_retry'),
+                          style: TextStyle(
+                              color: out ? AppColors.ink : AppColors.danger,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w900,
+                              decoration: TextDecoration.underline)),
                     ],
                   ],
                 ),
+                if (message.state == ChatState.failed && message.error != null) ...[
+                  const SizedBox(height: 2),
+                  Text(message.error!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: out ? AppColors.ink.withValues(alpha: 0.8) : AppColors.muted, fontSize: 10.5)),
+                ],
               ],
             ),
           ),

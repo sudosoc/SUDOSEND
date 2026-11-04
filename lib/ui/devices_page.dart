@@ -149,6 +149,7 @@ class _DeviceTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final fp = profile.fingerprint;
     final online = controller.isOnline(fp);
+    final recent = !online && controller.isRecent(fp);
     final trusted = controller.trust.isTrusted(fp);
     final blocked = controller.trust.isBlocked(fp);
     final prefs = controller.settings.devicePrefs[fp];
@@ -174,7 +175,11 @@ class _DeviceTile extends StatelessWidget {
                     height: 12,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: online ? AppColors.mint : AppColors.muted,
+                      color: online
+                          ? AppColors.mint
+                          : recent
+                              ? AppColors.amber
+                              : AppColors.muted,
                       border: Border.all(color: AppColors.bgTop, width: 2),
                     ),
                   ),

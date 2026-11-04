@@ -21,6 +21,9 @@ class ChatMessage {
   final DateTime at;
   ChatState state;
 
+  /// Why the last attempt failed (shown under the bubble; not saved).
+  String? error;
+
   Map<String, Object> toJson() => {
         'id': id,
         't': text,

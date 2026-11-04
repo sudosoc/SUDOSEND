@@ -116,6 +116,11 @@ class TransferJob {
   String peerName;
   String peerPlatform;
   String? peerFingerprint;
+
+  /// IP of the other side (and its Wraith port, outgoing only) — lets the
+  /// app reach a device again even when its discovery beacons are not seen.
+  String? peerAddress;
+  int? peerPort;
   bool peerTrusted = false;
   String? sas;
   TransferStatus status;

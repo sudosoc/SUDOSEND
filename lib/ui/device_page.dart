@@ -7,6 +7,7 @@ import '../app/scope.dart';
 import '../state/app_controller.dart';
 import '../state/settings.dart';
 import 'background.dart';
+import 'chat_page.dart' show ChatThreadPage;
 import 'devices_page.dart' show groupLabel, sinceLabel;
 import 'glass.dart';
 import 'settings_page.dart' show InfoButton;
@@ -73,6 +74,7 @@ class _DevicePageState extends State<DevicePage> {
                 final trusted = c.trust.isTrusted(fp);
                 final blocked = c.trust.isBlocked(fp);
                 final online = c.isOnline(fp);
+                final recent = !online && c.isRecent(fp);
                 final shown = c.displayName(fp, widget.name);
                 final divider = Divider(height: 18, color: Colors.white.withValues(alpha: 0.07));
                 final history = c.history.entries
@@ -123,8 +125,14 @@ class _DevicePageState extends State<DevicePage> {
                                                 runSpacing: 4,
                                                 children: [
                                                   _Chip(
-                                                    online ? context.tr('online') : context.tr('chat_offline'),
-                                                    online ? AppColors.mint : AppColors.muted,
+                                                    online
+                                                        ? context.tr('online')
+                                                        : context.tr(recent ? 'chat_reachable' : 'chat_offline'),
+                                                    online
+                                                        ? AppColors.mint
+                                                        : recent
+                                                            ? AppColors.amber
+                                                            : AppColors.muted,
                                                   ),
                                                   if (blocked)
                                                     _Chip(context.tr('dp_blocked'), AppColors.danger)
@@ -153,6 +161,45 @@ class _DevicePageState extends State<DevicePage> {
                                   ],
                                 ),
                               ),
+                              if (!blocked) ...[
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    if (trusted && s.chat && d.chat) ...[
+                                      Expanded(
+                                        child: GhostButton(
+                                          label: context.tr('act_message'),
+                                          icon: Icons.chat_bubble_rounded,
+                                          color: AppColors.cyan,
+                                          expand: true,
+                                          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                                            builder: (_) => ChatThreadPage(controller: c, fingerprint: fp, name: shown),
+                                          )),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                    ],
+                                    if (d.maySendTo)
+                                      Expanded(
+                                        child: GhostButton(
+                                          label: context.tr('dp_send_files'),
+                                          icon: Icons.upload_file_rounded,
+                                          color: AppColors.mint,
+                                          expand: true,
+                                          onPressed: profile?.lastAddress == null && !online
+                                              ? null
+                                              : () async {
+                                                  final messenger = ScaffoldMessenger.of(context);
+                                                  final error = await c.pickAndSendTo(fp);
+                                                  if (error != null) {
+                                                    messenger.showSnackBar(SnackBar(content: Text(error)));
+                                                  }
+                                                },
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
                               const SizedBox(height: 20),
 
                               // ── Name, group, folder ──

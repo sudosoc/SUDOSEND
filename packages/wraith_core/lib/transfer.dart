@@ -333,7 +333,9 @@ class TransferEngine {
       ..clipboard = clipboard && text != null
       ..ring = ring && files.isEmpty && text == null
       ..chat = chat && text != null
-      ..syncId = syncId;
+      ..syncId = syncId
+      ..peerAddress = peer.address.address
+      ..peerPort = peer.port;
     onJob(job);
 
     Socket? socket;
@@ -745,7 +747,8 @@ class TransferEngine {
         ..peerTrusted = trusted || decision.trust || paired
         ..sas = hs.sas
         ..clipboard = request.clipboard
-        ..ring = request.ring;
+        ..ring = request.ring
+        ..peerAddress = ip;
       job = activeJob;
       onJob(activeJob);
       activeJob.syncId = syncId;

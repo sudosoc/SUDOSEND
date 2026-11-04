@@ -109,7 +109,7 @@ class _PairCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final online = controller.peers.any((p) => p.id == pair.fingerprint);
+    final online = controller.isOnline(pair.fingerprint) || controller.isRecent(pair.fingerprint);
     final busy = controller.isSyncing(pair.id);
     final last = pair.lastSync == null
         ? context.tr('sync_never')

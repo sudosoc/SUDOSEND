@@ -47,7 +47,7 @@ class Discovery {
   static final InternetAddress group = InternetAddress('239.255.77.23');
   static final RegExp _fpPattern = RegExp(r'^[0-9A-F]{32}$');
   static const Duration _interval = Duration(seconds: 3);
-  static const Duration _stale = Duration(seconds: 10);
+  static const Duration _stale = Duration(seconds: 15);
 
   RawDatagramSocket? _socket;
   Timer? _announceTimer;
@@ -89,6 +89,22 @@ class Discovery {
     await _refreshTargets();
     _announce(_beacon);
   }
+
+  /// Unicast "are you there?" to one address. A live device answers with a
+  /// `reply`, which puts it straight back in [peers]. Works where broadcast
+  /// and multicast are filtered (guest Wi-Fi, Android in power-save).
+  void probe(String address) {
+    final socket = _socket;
+    if (socket == null) return;
+    try {
+      socket.send(_payload('probe'), InternetAddress(address), kDiscoveryPort);
+      if (!_quiet) socket.send(_payload('announce'), InternetAddress(address), kDiscoveryPort);
+    } catch (_) {}
+  }
+
+  /// When [id] was last heard, even if it has since gone quiet.
+  DateTime? lastHeard(String id) => _peers[id]?.lastSeen ?? _recent[id];
+  final Map<String, DateTime> _recent = {};
 
   Future<void> stop() async {
     if (!_quiet) _announce('bye');
@@ -174,6 +190,7 @@ class Discovery {
       return;
     }
     if (type == 'bye') {
+      _recent[id] = DateTime.now();
       if (_peers.remove(id) != null) onChanged();
       return;
     }
@@ -208,7 +225,12 @@ class Discovery {
   void _prune() {
     final now = DateTime.now();
     final before = _peers.length;
-    _peers.removeWhere((_, p) => now.difference(p.lastSeen) > _stale);
+    _peers.removeWhere((id, p) {
+      if (now.difference(p.lastSeen) <= _stale) return false;
+      _recent[id] = p.lastSeen;
+      return true;
+    });
+    if (_recent.length > 512) _recent.remove(_recent.keys.first);
     if (_peers.length != before) onChanged();
   }
 }

@@ -160,7 +160,7 @@ class AppController extends ChangeNotifier {
           if (r.ring) return settings.allowRing && d.ring;
           if (r.clipboard) return settings.clipboardSync && d.clipboard;
           if (r.speedTest) return settings.allowSpeedTest && d.speedTest;
-          if (r.chat && settings.chat && d.chat) return true;
+          if (r.chat) return settings.chat && d.chat;
           if (r.syncInvite != null) return false; // always asks: a folder must be chosen
           return d.autoAccept ?? settings.autoAcceptTrusted;
         },
@@ -188,6 +188,10 @@ class AppController extends ChangeNotifier {
         foreground = state == AppLifecycleState.resumed;
         if (foreground) {
           unawaited(_refreshAddresses().then((_) => notifyListeners()));
+          // Back from the background: tell everyone right away instead of
+          // waiting for the next beacon, and retry anything queued.
+          unawaited(_discovery.rescan());
+          unawaited(_flushOutbox());
           // Mobile OSes only allow clipboard reads in the foreground.
           if (!isDesktop && settings.clipboardSync) unawaited(pollClipboard());
         }
@@ -271,6 +275,11 @@ class AppController extends ChangeNotifier {
       r.respond(false);
       return;
     }
+    if (r.chat && (!settings.chat || (r.trusted && !settings.prefsFor(r.fingerprint).chat))) {
+      if (r.trusted) audit.add(AuditKind.permissionDenied, device: label, detail: 'chat');
+      r.respond(false);
+      return;
+    }
     if (r.syncInvite != null && (!syncSupported || (r.trusted && !settings.prefsFor(r.fingerprint).sync))) {
       r.respond(false);
       return;
@@ -319,6 +328,12 @@ class AppController extends ChangeNotifier {
   // ─────────────────────────── Jobs ───────────────────────────
 
   void _addJob(TransferJob job) {
+    var noted = false;
+    job.changes.listen((_) {
+      if (noted || job.isActive) return;
+      noted = true;
+      _noteContact(job);
+    });
     if (job.syncId != null) {
       _watchSyncJob(job);
       return;
@@ -1098,8 +1113,12 @@ class AppController extends ChangeNotifier {
     if (!ready) return;
     for (final item in List.of(outbox.items)) {
       if (_outboxInflight.contains(item.id)) continue;
-      final peer = peers.where((p) => p.id == item.fingerprint).firstOrNull;
-      if (peer == null) continue;
+      final peer = peers.where((p) => p.id == item.fingerprint).firstOrNull ??
+          (isRecent(item.fingerprint) ? resolvePeer(item.fingerprint) : null);
+      if (peer == null) {
+        pingDevice(item.fingerprint);
+        continue;
+      }
       final files = item.files.where((f) => f.path != null && File(f.path!).existsSync()).toList();
       if (files.isEmpty && item.text == null) {
         await outbox.remove(item.id);
@@ -1220,6 +1239,77 @@ class AppController extends ChangeNotifier {
 
   bool isOnline(String fp) => peers.any((p) => p.id == fp);
 
+  static final RegExp _fpRe = RegExp(r'^[0-9A-F]{32}$');
+
+  /// A finished transfer proves where a device is, even if its discovery
+  /// beacons never reach us (Android power-save, client isolation, IP/QR).
+  void _noteContact(TransferJob job) {
+    if (!ready || job.status != TransferStatus.done) return;
+    final fp = job.peerFingerprint;
+    final addr = job.peerAddress;
+    if (fp == null || addr == null || !_fpRe.hasMatch(fp) || trust.isBlocked(fp)) return;
+    final outgoing = job.direction == TransferDirection.outgoing;
+    devices.seen(fp,
+        name: job.peerName,
+        platform: job.peerPlatform,
+        address: addr,
+        port: outgoing ? job.peerPort : (devices[fp]?.lastPort ?? kTransferPort));
+    _lastContact[fp] = DateTime.now();
+    unawaited(devices.save());
+    _rememberTrustedAddresses();
+  }
+
+  final Map<String, DateTime> _lastContact = {};
+
+  /// The device as seen right now by discovery, or — if it went quiet — a peer
+  /// built from its last known address. Not a "manual" peer: the handshake
+  /// still has to prove the fingerprint, so a different device on that IP is
+  /// refused.
+  Peer? resolvePeer(String fp) {
+    final live = peers.where((p) => p.id == fp).firstOrNull;
+    if (live != null) return live;
+    if (!ready || !_fpRe.hasMatch(fp) || trust.isBlocked(fp)) return null;
+    final d = devices[fp];
+    final addr = d?.lastAddress;
+    if (d == null || addr == null) return null;
+    final ip = InternetAddress.tryParse(addr);
+    if (ip == null) return null;
+    return Peer(
+      id: fp,
+      name: d.name,
+      platform: d.platform,
+      address: ip,
+      port: d.lastPort ?? kTransferPort,
+      lastSeen: lastSeenOf(fp) ?? d.lastSeen,
+    );
+  }
+
+  /// Most recent sign of life: a beacon, a finished transfer, or the registry.
+  DateTime? lastSeenOf(String fp) {
+    DateTime? best;
+    for (final t in [
+      if (ready) _discovery.lastHeard(fp),
+      _lastContact[fp],
+      devices[fp]?.lastSeen,
+    ]) {
+      if (t != null && (best == null || t.isAfter(best))) best = t;
+    }
+    return best;
+  }
+
+  /// Reachable without a live beacon: heard from in the last few minutes.
+  bool isRecent(String fp) {
+    final t = lastSeenOf(fp);
+    return t != null && DateTime.now().difference(t) < const Duration(minutes: 5);
+  }
+
+  /// Knock on a device's last address (unicast) — it answers if it is alive.
+  void pingDevice(String fp) {
+    if (!ready) return;
+    final addr = devices[fp]?.lastAddress;
+    if (addr != null) _discovery.probe(addr);
+  }
+
   DateTime _lastDeviceSave = DateTime.fromMillisecondsSinceEpoch(0);
 
   void _trackDevices() {
@@ -1306,6 +1396,21 @@ class AppController extends ChangeNotifier {
       peers.where((p) => settings.devicePrefs[p.id]?.group == group).toList();
 
   Future<void> sendToGroup(String group) => sendToMany(peersInGroup(group));
+
+  /// "Send files" from a device's page: works even when the device is quiet
+  /// on discovery, using its last known address.
+  Future<String?> pickAndSendTo(String fp) async {
+    pingDevice(fp);
+    final peer = resolvePeer(fp);
+    if (peer == null) return t('chat_no_address');
+    final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: false);
+    final paths = [
+      for (final f in result?.files ?? const <PlatformFile>[])
+        if (f.path != null) f.path!,
+    ];
+    if (paths.isEmpty) return null;
+    return sendPathsTo(peer, paths);
+  }
 
   /// Drag & drop onto a device: send those files to it right away, leaving
   /// whatever was already selected untouched.
@@ -1616,7 +1721,7 @@ class AppController extends ChangeNotifier {
     final d = settings.prefsFor(fp);
     if (!settings.remoteSearch || !d.search || !d.maySendTo) return false;
     final item = library.items.where((i) => i.sha256 == sha && File(i.path).existsSync()).firstOrNull;
-    final peer = peers.where((x) => x.id == fp).firstOrNull;
+    final peer = resolvePeer(fp);
     if (item == null || peer == null) return false;
     audit.add(AuditKind.remoteFetch, device: _nameOf(fp), detail: item.name);
     // The exact original (no metadata scrubbing): it was asked for by hash.
@@ -1888,12 +1993,28 @@ class AppController extends ChangeNotifier {
     final msg = retry ?? chat.add(fingerprint, name, trimmed, outgoing: true);
     msg.state = ChatState.sending;
     notifyListeners();
-    final peer = peers.where((p) => p.id == fingerprint).firstOrNull;
+    msg.error = null;
+    pingDevice(fingerprint);
+    final peer = resolvePeer(fingerprint);
     if (peer == null) {
-      msg.state = ChatState.failed;
+      msg
+        ..state = ChatState.failed
+        ..error = t('chat_no_address');
     } else {
-      final job = await _engine.send(peer, const [], text: msg.text, chat: true);
+      var job = await _engine.send(peer, const [], text: msg.text, chat: true);
+      // The address may have changed (DHCP): wait for a fresh beacon, retry once.
+      if (job.status == TransferStatus.failed && !isOnline(fingerprint)) {
+        await rescan();
+        await Future<void>.delayed(const Duration(milliseconds: 1500));
+        final again = peers.where((p) => p.id == fingerprint).firstOrNull;
+        if (again != null) job = await _engine.send(again, const [], text: msg.text, chat: true);
+      }
       msg.state = job.status == TransferStatus.done ? ChatState.sent : ChatState.failed;
+      msg.error = switch (job.status) {
+        TransferStatus.done => null,
+        TransferStatus.declined => t('chat_declined'),
+        _ => job.error ?? t('chat_unreachable'),
+      };
     }
     await chat.save();
     notifyListeners();
@@ -2026,7 +2147,7 @@ class AppController extends ChangeNotifier {
     if (!ready || !settings.folderSync) return;
     for (final pair in List.of(settings.syncPairs)) {
       if (!pair.enabled || _syncBusy.contains(pair.id)) continue;
-      final peer = peers.where((x) => x.id == pair.fingerprint).firstOrNull;
+      final peer = isRecent(pair.fingerprint) ? resolvePeer(pair.fingerprint) : null;
       if (peer == null || !trust.isTrusted(pair.fingerprint)) continue;
       _syncBusy.add(pair.id);
       try {
